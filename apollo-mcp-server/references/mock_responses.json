@@ -1,0 +1,506 @@
+{
+  "_comment": "Apollo MCP Mock 数据 - 模拟生产环境数据，当 MCP_USE_MOCK=true 时使用",
+
+  "_apps": [
+    {"appId": "user-service", "name": "用户服务", "orgName": "用户中心", "orgId": "org-001"},
+    {"appId": "order-service", "name": "订单服务", "orgName": "交易中心", "orgId": "org-002"},
+    {"appId": "payment-service", "name": "支付服务", "orgName": "交易中心", "orgId": "org-003"},
+    {"appId": "rule-engine", "name": "规则引擎", "orgName": "技术中台", "orgId": "org-004"},
+    {"appId": "notification-service", "name": "通知服务", "orgName": "技术中台", "orgId": "org-005"},
+    {"appId": "api-gateway", "name": "API网关", "orgName": "技术中台", "orgId": "org-006"}
+  ],
+
+  "_namespaces": {
+    "user-service": ["application", "datasource", "redis", "logging", "common"],
+    "order-service": ["application", "datasource", "redis", "logging"],
+    "payment-service": ["application", "datasource", "logging", "payment"],
+    "rule-engine": ["application", "datasource", "redis", "logging", "common", "rules"],
+    "notification-service": ["application", "redis", "logging", "sms", "email"],
+    "api-gateway": ["application", "logging", "common", "routes", "ratelimit"]
+  },
+
+  "_namespace_labels": {
+    "application": "应用配置",
+    "datasource": "数据源配置",
+    "redis": "Redis缓存配置",
+    "logging": "日志配置",
+    "common": "公共配置",
+    "payment": "支付配置",
+    "rules": "规则配置",
+    "sms": "短信配置",
+    "email": "邮件配置",
+    "routes": "路由配置",
+    "ratelimit": "限流配置"
+  },
+
+  "_configs": {
+    "user-service": {
+      "application": {
+        "timeout": "5000",
+        "max.retry": "3",
+        "user.cache.enabled": "true",
+        "user.cache.ttl": "3600",
+        "user.login.max-attempts": "5",
+        "user.lock.duration": "300",
+        "user.avatar.upload.max-size": "5242880",
+        "user.avatar.allowed-types": "jpg,png,gif",
+        "user.token.expiry": "7200",
+        "user.token.refresh-expiry": "604800",
+        "user.password.min-length": "8",
+        "user.password.require-uppercase": "true",
+        "user.password.require-number": "true",
+        "user.password.require-special": "false",
+        "user.register.invite-required": "true",
+        "user.register.auto-approve": "false",
+        "user.profile.default-visibility": "PRIVATE",
+        "user.search.max-results": "100",
+        "user.search.enable-fuzzy": "true",
+        "user.api.rate-limit": "1000",
+        "user.api.rate-limit-window": "60"
+      },
+      "datasource": {
+        "spring.datasource.url": "jdbc:mysql://user-db-master:3306/userdb?useSSL=true&serverTimezone=Asia/Shanghai",
+        "spring.datasource.username": "user_app",
+        "spring.datasource.password": "ENC(aB3xK9mF2pL7)",
+        "spring.datasource.driver-class-name": "com.mysql.cj.jdbc.Driver",
+        "spring.datasource.hikari.maximum-pool-size": "50",
+        "spring.datasource.hikari.minimum-idle": "10",
+        "spring.datasource.hikari.idle-timeout": "30000",
+        "spring.datasource.hikari.connection-timeout": "20000",
+        "spring.datasource.hikari.validation-timeout": "5000",
+        "spring.datasource.hikari.max-lifetime": "1800000",
+        "user.datasource.read.url": "jdbc:mysql://user-db-slave:3306/userdb?useSSL=true&serverTimezone=Asia/Shanghai",
+        "user.datasource.read.username": "user_read",
+        "user.datasource.read.password": "ENC(dC4yL8nE1qM6)"
+      },
+      "redis": {
+        "spring.redis.host": "redis-cluster-user",
+        "spring.redis.port": "6379",
+        "spring.redis.password": "ENC(eD5zA7pK3bN8)",
+        "spring.redis.database": "0",
+        "spring.redis.timeout": "5000",
+        "spring.redis.lettuce.pool.max-active": "200",
+        "spring.redis.lettuce.pool.max-idle": "50",
+        "spring.redis.lettuce.pool.min-idle": "10",
+        "spring.redis.cluster.nodes": "redis-cluster-user:6379,redis-cluster-user-2:6379,redis-cluster-user-3:6379",
+        "user.cache.redis.ttl": "1800",
+        "user.session.redis.ttl": "7200"
+      },
+      "logging": {
+        "logging.file.path": "/data/logs/user-service",
+        "logging.file.max-size": "100MB",
+        "logging.file.max-history": "30",
+        "logging.file.total-size-cap": "5GB",
+        "logging.level.root": "INFO",
+        "logging.level.com.company.user": "DEBUG",
+        "logging.level.com.company.user.controller": "INFO",
+        "logging.level.com.company.user.repository": "WARN",
+        "logging.pattern.console": "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n",
+        "logging.pattern.file": "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n",
+        "logging.sentry.enabled": "true",
+        "logging.sentry.dsn": "https://sentry.company.com/user-service"
+      },
+      "common": {
+        "app.env": "PRO",
+        "app.region": "cn-east-1",
+        "app.cluster": "default",
+        "app.version": "2.3.1",
+        "app.build-time": "2026-07-28 14:30:00",
+        "app.deploy.by": "zhangsan",
+        "common.cors.allowed-origins": "https://www.company.com,https://admin.company.com",
+        "common.cors.allowed-methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "common.cors.max-age": "3600",
+        "common.trace.enabled": "true",
+        "common.trace.sample-rate": "0.1",
+        "common.metrics.enabled": "true",
+        "common.metrics.endpoint": "/actuator/prometheus"
+      }
+    },
+    "order-service": {
+      "application": {
+        "timeout": "8000",
+        "max.retry": "3",
+        "order.create.timeout": "10000",
+        "order.pay.timeout": "30000",
+        "order.pay.notify.url": "https://api.company.com/order/notify",
+        "order.max.items": "100",
+        "order.max.quantity-per-item": "999",
+        "order.price.min": "0.01",
+        "order.price.max": "999999.99",
+        "order.currency.default": "CNY",
+        "order.number.prefix": "ORD",
+        "order.number.length": "20",
+        "order.expire.minutes": "30",
+        "order.auto-close.enabled": "true",
+        "order.auto-close.cron": "0 */5 * * * ?",
+        "order.split.merchant.enabled": "true",
+        "order.lock.key.prefix": "order:lock:",
+        "order.lock.expire": "30",
+        "order.api.rate-limit": "500",
+        "order.api.rate-limit-window": "60",
+        "order.search.max-results": "200",
+        "order.stats.cache.enabled": "true",
+        "order.stats.cache.ttl": "600"
+      },
+      "datasource": {
+        "spring.datasource.url": "jdbc:mysql://order-db-master:3306/orderdb?useSSL=true&serverTimezone=Asia/Shanghai",
+        "spring.datasource.username": "order_app",
+        "spring.datasource.password": "ENC(fA6xB4nM9qR2)",
+        "spring.datasource.driver-class-name": "com.mysql.cj.jdbc.Driver",
+        "spring.datasource.hikari.maximum-pool-size": "80",
+        "spring.datasource.hikari.minimum-idle": "20",
+        "order.datasource.sharding.enabled": "true",
+        "order.datasource.sharding.strategy": "MOD",
+        "order.datasource.sharding.count": "8",
+        "order.datasource.read.url": "jdbc:mysql://order-db-slave:3306/orderdb?useSSL=true&serverTimezone=Asia/Shanghai"
+      },
+      "redis": {
+        "spring.redis.host": "redis-cluster-order",
+        "spring.redis.port": "6379",
+        "spring.redis.password": "ENC(gH7xC5pN1sT4)",
+        "spring.redis.cluster.nodes": "redis-cluster-order:6379,redis-cluster-order-2:6379,redis-cluster-order-3:6379",
+        "order.cache.order-info.ttl": "1800",
+        "order.cache.stock.ttl": "30",
+        "order.cache.price.ttl": "60",
+        "order.cache.promo.ttl": "300",
+        "order.lock.wait-time": "5",
+        "order.lock.lease-time": "30"
+      },
+      "logging": {
+        "logging.file.path": "/data/logs/order-service",
+        "logging.level.root": "INFO",
+        "logging.level.com.company.order": "DEBUG",
+        "logging.level.com.company.order.payment": "INFO",
+        "logging.level.com.company.order.stock": "WARN",
+        "logback.async.queue-size": "500",
+        "logback.async.discarding-threshold": "80",
+        "logback.async.max-flush-level": "ERROR",
+        "order.log.slow-query.threshold": "1000"
+      }
+    },
+    "payment-service": {
+      "application": {
+        "timeout": "10000",
+        "max.retry": "5",
+        "payment.channel.default": "alipay",
+        "payment.channel.available": "alipay,wechat,unionpay,applepay",
+        "payment.notify.url": "https://api.company.com/payment/notify",
+        "payment.notify.retry.max": "8",
+        "payment.notify.retry.interval": "60",
+        "payment.sign.method": "RSA2",
+        "payment.sign.charset": "UTF-8",
+        "payment.gateway.alipay.url": "https://openapi.alipay.com/gateway.do",
+        "payment.gateway.wechat.url": "https://api.mch.weixin.qq.com/pay/unifiedorder",
+        "payment.api.rate-limit": "200",
+        "payment.api.rate-limit-window": "60",
+        "payment.sandbox.enabled": "false",
+        "payment.recurring.enabled": "true",
+        "payment.invoice.enabled": "true"
+      },
+      "payment": {
+        "payment.alipay.app-id": "2021000000000001",
+        "payment.alipay.private-key": "ENC(kL8wD3qR5xY7)",
+        "payment.alipay.public-key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz...",
+        "payment.wechat.mch-id": "1600000001",
+        "payment.wechat.api-key": "ENC(mN4xE9sT2uV6)",
+        "payment.wechat.cert-path": "/etc/payment/wechat/apiclient_cert.p12",
+        "payment.wechat.cert-password": "ENC(pQ5yA1wK3zX8)",
+        "payment.unionpay.member-id": "777000000001",
+        "payment.unionpay.private-key": "ENC(rT6zB2nM4cD9)",
+        "payment.unionpay.cert-path": "/etc/payment/unionpay/acp.pfx"
+      },
+      "datasource": {
+        "spring.datasource.url": "jdbc:mysql://payment-db-master:3306/paymentdb?useSSL=true&serverTimezone=Asia/Shanghai",
+        "spring.datasource.username": "payment_app",
+        "spring.datasource.password": "ENC(sU7yC8vL5bN2)",
+        "spring.datasource.hikari.maximum-pool-size": "30",
+        "spring.datasource.hikari.minimum-idle": "5"
+      },
+      "logging": {
+        "logging.file.path": "/data/logs/payment-service",
+        "logging.level.root": "INFO",
+        "logging.level.com.company.payment": "INFO",
+        "logging.level.com.company.payment.channel": "DEBUG",
+        "payment.log.mask.enabled": "true",
+        "payment.log.mask.fields": "cardNo,cvv,expireDate"
+      }
+    },
+    "rule-engine": {
+      "application": {
+        "timeout": "3000",
+        "max.retry": "2",
+        "rule.engine.version": "v2.1",
+        "rule.engine.mode": "REALTIME",
+        "rule.engine.parallel": "true",
+        "rule.engine.thread.pool.size": "16",
+        "rule.engine.thread.pool.queue-capacity": "10000",
+        "rule.engine.hot-reload.enabled": "true",
+        "rule.engine.hot-reload.interval": "60",
+        "rule.engine.drl.compiler": "NATIVE",
+        "rule.engine.stateless": "true",
+        "rule.engine.event.stream.size": "1000",
+        "rule.engine.monitor.enabled": "true",
+        "rule.engine.trace.enabled": "true",
+        "rule.engine.trace.sample-rate": "0.01",
+        "rule.engine.api.rate-limit": "2000",
+        "rule.engine.api.rate-limit-window": "60",
+        "rule.engine.guard.reference.max": "100",
+        "rule.engine.guard.action.max": "50",
+        "rule.engine.guard.condition.max": "200"
+      },
+      "datasource": {
+        "spring.datasource.url": "jdbc:mysql://rule-db-master:3306/ruledb?useSSL=true&serverTimezone=Asia/Shanghai",
+        "spring.datasource.username": "rule_app",
+        "spring.datasource.password": "ENC(vW3xD7yN4aB1)",
+        "spring.datasource.hikari.maximum-pool-size": "20",
+        "spring.datasource.hikari.minimum-idle": "5"
+      },
+      "redis": {
+        "spring.redis.host": "redis-cluster-rule",
+        "spring.redis.port": "6379",
+        "spring.redis.password": "ENC(yX9zA5bC8dE3)",
+        "spring.redis.cluster.nodes": "redis-cluster-rule:6379",
+        "rule.cache.compiled.ttl": "3600",
+        "rule.cache.meta.ttl": "600"
+      },
+      "rules": {
+        "rule.insurance.policy.max-amount": "1000000",
+        "rule.insurance.policy.min-amount": "100",
+        "rule.insurance.age.min": "18",
+        "rule.insurance.age.max": "75",
+        "rule.insurance.health.check.required": "true",
+        "rule.insurance.smoker.surcharge": "0.2",
+        "rule.insurance.occupancy.high-risk": "5,6,7",
+        "rule.claim.approval.threshold": "50000",
+        "rule.claim.review.required": "true",
+        "rule.claim.fraud.detection.enabled": "true",
+        "rule.claim.fraud.score.threshold": "80",
+        "rule.pricing.base-factor": "1.0",
+        "rule.pricing.age-factor": "0.5",
+        "rule.pricing.occupation-factor": "0.3",
+        "rule.pricing.period-factor": "1.0",
+        "rule.promo.code.validity-days": "30",
+        "rule.promo.max-discount-percent": "30",
+        "rule.promo.stackable": "false"
+      },
+      "logging": {
+        "logging.file.path": "/data/logs/rule-engine",
+        "logging.level.root": "WARN",
+        "logging.level.com.company.rule": "INFO",
+        "logging.level.com.company.rule.engine": "DEBUG",
+        "rule.log.decision.enabled": "true",
+        "rule.log.decision.sample-rate": "0.1",
+        "rule.log.hit.rules.enabled": "true"
+      },
+      "common": {
+        "app.env": "PRO",
+        "app.region": "cn-east-1",
+        "common.feature.flags": "rule_v2=true,fraud_detection=true,hot_reload=true",
+        "common.canary.ratio": "0.1"
+      }
+    },
+    "notification-service": {
+      "application": {
+        "timeout": "5000",
+        "max.retry": "3",
+        "notification.sms.enabled": "true",
+        "notification.email.enabled": "true",
+        "notification.push.enabled": "true",
+        "notification.sms.provider": "aliyun",
+        "notification.email.provider": "sendcloud",
+        "notification.push.provider": "getui",
+        "notification.batch.size": "100",
+        "notification.delay.max": "3600",
+        "notification.template.cache.ttl": "7200",
+        "notification.api.rate-limit": "300",
+        "notification.api.rate-limit-window": "60",
+        "notification.user.preference.enabled": "true",
+        "notification.user.opt-in.required": "true"
+      },
+      "sms": {
+        "sms.aliyun.access-key-id": "ENC(zA3bC7dE9fG1)",
+        "sms.aliyun.access-key-secret": "ENC(hB5cD9eF2gA4)",
+        "sms.aliyun.sign-name": "【Company】",
+        "sms.aliyun.templates.register": "SMS_123456789",
+        "sms.aliyun.templates.login": "SMS_234567890",
+        "sms.aliyun.templates.reset-password": "SMS_345678901",
+        "sms.aliyun.endpoint": "dysmsapi.aliyuncs.com",
+        "sms.tencent.access-key-id": "ENC(iC6dE1fG4hB7)",
+        "sms.tencent.sign-name": "【Company】"
+      },
+      "email": {
+        "email.sendcloud.api-key": "ENC(jD7eF2gH5iC8)",
+        "email.sendcloud.from-email": "noreply@company.com",
+        "email.sendcloud.from-name": "Company",
+        "email.smtp.host": "smtp.company.com",
+        "email.smtp.port": "465",
+        "email.smtp.username": "noreply@company.com",
+        "email.smtp.password": "ENC(kE8fG3hI6jD9)",
+        "email.templates.welcome": "tmpl_welcome_001",
+        "email.templates.reset-password": "tmpl_reset_001",
+        "email.templates.order-confirm": "tmpl_order_001"
+      },
+      "redis": {
+        "spring.redis.host": "redis-cluster-notify",
+        "spring.redis.port": "6379",
+        "spring.redis.password": "ENC(lF9gH4iJ7kE1)",
+        "notification.rate-limit.key.prefix": "notify:rl:",
+        "notification.dedupe.ttl": "300"
+      },
+      "logging": {
+        "logging.file.path": "/data/logs/notification-service",
+        "logging.level.root": "INFO",
+        "notification.log.sms.detail": "true",
+        "notification.log.email.detail": "true",
+        "notification.log.push.detail": "false"
+      }
+    },
+    "api-gateway": {
+      "application": {
+        "timeout": "15000",
+        "max.retry": "2",
+        "gateway.version": "3.1.0",
+        "gateway.discovery.enabled": "true",
+        "gateway.discovery.type": "Nacos",
+        "gateway.discovery.server-addr": "http://nacos-cluster:8848",
+        "gateway.discovery.namespace": "PRO",
+        "gateway.discovery.group": "GATEWAY_GROUP",
+        "gateway.filter.cors.enabled": "true",
+        "gateway.filter.auth.enabled": "true",
+        "gateway.filter.auth.jwt-secret": "ENC(mA1bC3dE5fG7)",
+        "gateway.filter.auth.jwt-expiry": "3600",
+        "gateway.filter.log.enabled": "true",
+        "gateway.filter.log.request-body": "true",
+        "gateway.filter.log.response-body": "false",
+        "gateway.filter.ratelimit.enabled": "true",
+        "gateway.filter.ratelimit.strategy": "REDIS",
+        "gateway.filter.ip-blacklist.enabled": "true",
+        "gateway.filter.ip-whitelist.enabled": "false",
+        "gateway.global.fallback.uri": "/fallback",
+        "gateway.global.error.code": "GW_ERROR"
+      },
+      "routes": {
+        "route.user-service.path": "/api/user/**",
+        "route.user-service.uri": "lb://user-service",
+        "route.user-service.strip-prefix": "true",
+        "route.user-service.predicates": "Path=/api/user/**",
+        "route.user-service.filters": "RewritePath=/user/**,${path}",
+        "route.order-service.path": "/api/order/**",
+        "route.order-service.uri": "lb://order-service",
+        "route.order-service.strip-prefix": "true",
+        "route.payment-service.path": "/api/payment/**",
+        "route.payment-service.uri": "lb://payment-service",
+        "route.payment-service.strip-prefix": "true",
+        "route.rule-engine.path": "/api/rule/**",
+        "route.rule-engine.uri": "lb://rule-engine",
+        "route.rule-engine.strip-prefix": "true",
+        "route.notification-service.path": "/api/notify/**",
+        "route.notification-service.uri": "lb://notification-service",
+        "route.notification-service.strip-prefix": "true",
+        "route.admin.path": "/admin/**",
+        "route.admin.uri": "lb://admin-service",
+        "route.admin.whitelist": "true"
+      },
+      "ratelimit": {
+        "ratelimit.default.qps": "1000",
+        "ratelimit.default.burst": "2000",
+        "ratelimit.default.replenish-rate": "100",
+        "ratelimit.user.qps": "100",
+        "ratelimit.user.burst": "200",
+        "ratelimit.order.qps": "500",
+        "ratelimit.order.burst": "1000",
+        "ratelimit.payment.qps": "50",
+        "ratelimit.payment.burst": "100",
+        "ratelimit.rule.qps": "2000",
+        "ratelimit.rule.burst": "5000",
+        "ratelimit.notify.qps": "200",
+        "ratelimit.notify.burst": "500",
+        "ratelimit.ip.blacklist": "10.0.0.5,10.0.0.6,192.168.1.100",
+        "ratelimit.ip.whitelist": "10.0.0.0/24,172.16.0.0/12"
+      },
+      "common": {
+        "app.env": "PRO",
+        "app.region": "cn-east-1",
+        "app.cluster": "gateway-cluster",
+        "gateway.node.count": "6",
+        "gateway.node.role": "mixed",
+        "gateway.sentinel.enabled": "true",
+        "gateway.sentinel.flow-rule.file": "classpath:sentinel-flow-rules.json",
+        "gateway.sentinel.degrade-rule.file": "classpath:sentinel-degrade-rules.json"
+      },
+      "logging": {
+        "logging.file.path": "/data/logs/api-gateway",
+        "logging.level.root": "INFO",
+        "gateway.log.access.log": "true",
+        "gateway.log.access.format": "%d{yyyy-MM-dd HH:mm:ss.SSS} %{traceId} %{method} %{uri} %{status} %{duration}ms",
+        "gateway.log.slow-request.threshold": "3000",
+        "gateway.log.error.stack-trace": "true"
+      }
+    }
+  },
+
+  "_releases": {
+    "user-service": {
+      "application": [
+        {"id": 1, "releaseTitle": "v2.3.1 - 优化登录流程", "releaseComment": "优化登录安全策略，增加密码复杂度校验；优化缓存策略", "releasedBy": "zhangsan", "releaseTime": "2026-07-28 14:30:00"},
+        {"id": 2, "releaseTitle": "v2.3.0 - 用户资料增强", "releaseComment": "新增用户头像上传功能；支持多种图片格式；优化搜索性能", "releasedBy": "lisi", "releaseTime": "2026-07-15 10:00:00"},
+        {"id": 3, "releaseTitle": "v2.2.0 - 安全加固", "releaseComment": "增加密码最小长度和复杂度要求；增加登录失败锁定机制", "releasedBy": "wangwu", "releaseTime": "2026-06-20 16:00:00"},
+        {"id": 4, "releaseTitle": "v2.1.0 - 初始化", "releaseComment": "用户服务首次部署", "releasedBy": "admin", "releaseTime": "2026-05-01 09:00:00"}
+      ],
+      "datasource": [
+        {"id": 1, "releaseTitle": "数据库连接池调优", "releaseComment": "连接池大小调整为50；增加读写分离", "releasedBy": "zhangsan", "releaseTime": "2026-07-28 14:35:00"},
+        {"id": 2, "releaseTitle": "添加从库读取", "releaseComment": "新增只读从库配置", "releasedBy": "lisi", "releaseTime": "2026-06-10 11:00:00"}
+      ]
+    },
+    "order-service": {
+      "application": [
+        {"id": 1, "releaseTitle": "v1.8.0 - 订单分片", "releaseComment": "启用订单分库分表；优化创建订单性能；增加自动关闭功能", "releasedBy": "zhaoliu", "releaseTime": "2026-07-25 11:00:00"},
+        {"id": 2, "releaseTitle": "v1.7.0 - 支付超时优化", "releaseComment": "延长支付超时时间至30分钟；增加支付回调重试", "releasedBy": "qianqi", "releaseTime": "2026-07-10 14:00:00"},
+        {"id": 3, "releaseTitle": "v1.6.0 - 订单创建优化", "releaseComment": "优化订单创建流程；增加分布式锁保护；减少数据库写入", "releasedBy": "zhaoliu", "releaseTime": "2026-06-15 09:30:00"}
+      ],
+      "datasource": [
+        {"id": 1, "releaseTitle": "启用分库分表", "releaseComment": "开启订单库8分片策略", "releasedBy": "zhaoliu", "releaseTime": "2026-07-25 11:05:00"}
+      ]
+    },
+    "payment-service": {
+      "payment": [
+        {"id": 1, "releaseTitle": "v1.5.0 - 微信支付升级", "releaseComment": "升级微信支付API版本；增加Apple Pay支持；优化签名算法", "releasedBy": "sunba", "releaseTime": "2026-07-27 16:00:00"},
+        {"id": 2, "releaseTitle": "v1.4.0 - 增加银联支付", "releaseComment": "新增银联支付渠道；优化支付回调处理", "releasedBy": "zhoujiu", "releaseTime": "2026-07-01 10:00:00"}
+      ],
+      "application": [
+        {"id": 1, "releaseTitle": "v1.5.0 - 支付配置更新", "releaseComment": "更新支付网关配置；增加沙箱模式开关", "releasedBy": "sunba", "releaseTime": "2026-07-27 16:05:00"}
+      ]
+    },
+    "rule-engine": {
+      "rules": [
+        {"id": 1, "releaseTitle": "v2.1 - 增加欺诈检测规则", "releaseComment": "新增保险欺诈检测规则；优化健康检查规则；增加定价因子", "releasedBy": "wushi", "releaseTime": "2026-07-29 10:00:00"},
+        {"id": 2, "releaseTitle": "v2.0 - 规则引擎升级", "releaseComment": "升级至v2.0引擎；支持热加载；支持并行执行", "releasedBy": "wushi", "releaseTime": "2026-07-15 14:00:00"},
+        {"id": 3, "releaseTitle": "v1.5 - 产品规则优化", "releaseComment": "优化定价规则；增加促销叠加限制", "releasedBy": "admin", "releaseTime": "2026-06-20 09:00:00"}
+      ],
+      "application": [
+        {"id": 1, "releaseTitle": "v2.1 - 引擎配置更新", "releaseComment": "增加并行执行线程数；优化规则缓存策略", "releasedBy": "wushi", "releaseTime": "2026-07-29 10:05:00"}
+      ]
+    },
+    "notification-service": {
+      "sms": [
+        {"id": 1, "releaseTitle": "新增腾讯云SMS渠道", "releaseComment": "增加腾讯云短信渠道；优化阿里云模板配置", "releasedBy": "zhenshi", "releaseTime": "2026-07-26 15:00:00"},
+        {"id": 2, "releaseTitle": "阿里云SMS配置更新", "releaseComment": "更新阿里云签名和模板ID", "releasedBy": "zhenshi", "releaseTime": "2026-07-01 09:30:00"}
+      ],
+      "email": [
+        {"id": 1, "releaseTitle": "邮件模板更新", "releaseComment": "新增欢迎邮件模板；更新密码重置模板", "releasedBy": "zhenshi", "releaseTime": "2026-07-26 15:05:00"}
+      ]
+    },
+    "api-gateway": {
+      "routes": [
+        {"id": 1, "releaseTitle": "v3.1 - 增加管理后台路由", "releaseComment": "新增admin-service路由；优化现有路由配置；增加IP黑白名单", "releasedBy": "chenyi", "releaseTime": "2026-07-29 11:00:00"},
+        {"id": 2, "releaseTitle": "v3.0 - 网关全面升级", "releaseComment": "升级Spring Cloud Gateway；增加限流降级；优化认证过滤器", "releasedBy": "chenyi", "releaseTime": "2026-07-10 16:00:00"},
+        {"id": 3, "releaseTitle": "v2.5 - 路由优化", "releaseComment": "优化用户和订单服务路由配置；增加前缀剥离", "releasedBy": "admin", "releaseTime": "2026-06-15 10:00:00"}
+      ],
+      "ratelimit": [
+        {"id": 1, "releaseTitle": "v3.1 - 限流策略优化", "releaseComment": "调整各服务限流阈值；增加IP黑白名单配置", "releasedBy": "chenyi", "releaseTime": "2026-07-29 11:05:00"}
+      ]
+    }
+  },
+
+  "_environments": ["DEV01", "DEV02", "DEV03", "SIT01", "SIT02", "PRE", "PRO"]
+}

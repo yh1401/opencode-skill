@@ -1,51 +1,35 @@
 #!/bin/bash
-# MCP 服务器启动脚本
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-# 检查 Python 版本
-PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
-PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+PYTHON="python3"
 
-echo "📦 Python 版本: $PYTHON_VERSION"
+if ! $PYTHON -c "import requests" 2>/dev/null; then
+    echo "安装依赖..."
+    $PYTHON -m pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
+fi
 
-# 根据版本选择模式
-if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -ge 10 ]; then
-    echo "✅ 支持 MCP 模式"
-    MODE="mcp"
+HOST=${1:-0.0.0.0}
+PORT=${2:-8061}
+DAEMON=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -d|--daemon) DAEMON=true; shift ;;
+        *) shift ;;
+    esac
+done
+
+if $DAEMON; then
+    nohup $PYTHON scripts/mcp_server.py --transport http --host "$HOST" --port "$PORT" > /dev/null 2>&1 &
+    sleep 3
+    if curl -s http://$HOST:$PORT/health > /dev/null; then
+        echo "服务已启动: http://$HOST:$PORT"
+    else
+        echo "启动失败，请查看 logs/mcp_server_error.log"
+        exit 1
+    fi
 else
-    echo "⚠️  Python 版本低于 3.10，使用 HTTP 模式"
-    MODE="http"
-fi
-
-# 检查依赖
-if ! python3 -c "import requests" 2>/dev/null; then
-    echo "⚠️  正在安装依赖..."
-    python3 -m pip install -r requirements.txt -q
-fi
-
-# 解析命令行参数
-TRANSPORT=$1
-HOST=${2:-0.0.0.0}
-PORT=${3:-8000}
-
-# 如果没有指定传输协议，使用自动检测的模式
-if [ -z "$TRANSPORT" ]; then
-    TRANSPORT=$MODE
-fi
-
-echo "🚀 启动模式: $TRANSPORT"
-if [ "$TRANSPORT" = "http" ]; then
-    echo "📍 监听地址: http://$HOST:$PORT"
-    echo "📖 API 文档: http://$HOST:$PORT/docs"
-fi
-echo ""
-
-# 启动服务器
-if [ "$TRANSPORT" = "mcp" ]; then
-    python3 scripts/mcp_server.py --transport mcp
-else
-    python3 scripts/mcp_server.py --transport http --host "$HOST" --port "$PORT"
+    $PYTHON scripts/mcp_server.py --transport http --host "$HOST" --port "$PORT"
 fi

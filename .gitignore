@@ -61,3 +61,19 @@ Thumbs.db
 # MCP Server dependencies (排除依赖，保留源代码)
 mcp-server/__pycache__/
 mcp-server/**/*.pyc
+mcp-server/logs/
+mcp-server/dist/
+.trae/skills/apollo-config-query/_dev/
+apollo-mcp-server/logs/
+apollo-mcp-server/config/auth.json
+
+# Large binary files
+*.zip
+*.jar
+*.gz
+*.pcap
+.trae/skills/skill-agent.zip
+.trae/skills/查询运维信息助手.zip
+
+# Virtual environment
+.venv/

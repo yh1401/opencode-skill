@@ -1,6 +1,11 @@
 {
   "base_url": "https://oss.tech.ctseelink.cn",
   "mock_mode": false,
+  "auth_headers": {},
+  "env_overrides": {
+    "base_url": "MCP_API_BASE_URL",
+    "mock_mode": "MCP_USE_MOCK"
+  },
   "endpoints": {
     "cmdb-server-query": {
       "method": "POST",
