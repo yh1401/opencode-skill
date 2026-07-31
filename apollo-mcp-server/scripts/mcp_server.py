@@ -81,7 +81,7 @@ class ApolloConfig:
         self.openapi_base = "http://localhost:8070"
         self.openapi_token = ""
         self.endpoints = {}
-        self.current_env = os.environ.get('APOLLO_ENV', 'PRO')
+        self.current_env = os.environ.get('APOLLO_ENV', '')  # 先留空，load_config 中从配置文件补充
         self.load_config()
         self.load_auth()
     
@@ -105,6 +105,10 @@ class ApolloConfig:
             # 2. 如果环境变量没设，从配置文件读取对应环境
             if not env_config_host or not env_openapi_host:
                 environments = data.get('environments', {})
+                # 如果 APOLLO_ENV 未设，使用配置文件的 default_env
+                if not self.current_env:
+                    self.current_env = data.get('default_env', 'PRO')
+                    logger.info(f"未设置 APOLLO_ENV，使用默认环境: {self.current_env}")
                 env_key = self.current_env
                 if env_key in environments:
                     env_config = environments[env_key]
@@ -285,6 +289,11 @@ class ApolloAPIClient:
                 result = resp.json()
                 self._success_count += 1
                 logger.info(f"[{tool_id}] 请求成功: {round(duration*1000)}ms")
+                # 统一包装为 {code, message, data} 格式
+                if isinstance(result, list):
+                    return {"code": 200, "message": "success", "data": result}
+                elif isinstance(result, dict) and 'code' not in result:
+                    return {"code": 200, "message": "success", "data": result}
                 return result
             except ValueError:
                 text = resp.text
@@ -304,6 +313,25 @@ class ApolloAPIClient:
             return {"code": 503, "message": "网络连接失败", "data": {}}
             
         except requests.exceptions.RequestException as e:
+            # 提取 HTTP 状态码，提供更有针对性的错误信息
+            status_code = getattr(getattr(e, 'response', None), 'status_code', None)
+            if status_code == 400:
+                # 检查是否是方法不支持（如 GET releases 在某些 Apollo 版本不支持）
+                try:
+                    err_body = e.response.json()
+                    if 'method' in str(err_body).lower() and 'not supported' in str(err_body).lower():
+                        logger.warning(f"[{tool_id}] Apollo OpenAPI 不支持此请求方法: {str(e)}")
+                        return {"code": 501, "message": "Apollo OpenAPI 不支持此端点（可能是 Apollo 版本过低）", "data": {}}
+                except:
+                    pass
+                logger.warning(f"[{tool_id}] 请求参数错误: {str(e)}")
+                return {"code": 400, "message": f"请求参数错误: {str(e)}", "data": {}}
+            elif status_code == 401:
+                logger.warning(f"[{tool_id}] 认证失败，请检查 OpenAPI Token")
+                return {"code": 401, "message": "OpenAPI Token 无效或未配置", "data": {}}
+            elif status_code == 404:
+                logger.warning(f"[{tool_id}] 资源不存在: {str(e)}")
+                return {"code": 404, "message": "请求的资源不存在（应用/Namespace/环境可能不正确）", "data": {}}
             logger.error(f"[{tool_id}] 请求异常: {str(e)}")
             return {"code": 500, "message": f"API 请求失败: {str(e)}", "data": {}}
     
