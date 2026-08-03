@@ -28,7 +28,7 @@ from datetime import datetime
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 _root_dir = os.path.dirname(_script_dir)
 _config_dir = os.path.join(_root_dir, 'config')
-_references_dir = os.path.join(_root_dir, 'references')
+_references_dir = os.path.join(_root_dir, 'mock')
 
 USE_MOCK = os.environ.get('MCP_USE_MOCK', 'false').lower() == 'true'
 if USE_MOCK:

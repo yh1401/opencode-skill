@@ -5,6 +5,10 @@
 # ================================================
 set -e
 
+# 切换到脚本所在目录（deploy/），保证 .env 和 docker-compose.yml 定位正确
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'

@@ -18,6 +18,7 @@ cd "$SCRIPT_DIR"
 VERSION="2.0.0"
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 PKG_NAME="apollo-mcp-server-${VERSION}-${TIMESTAMP}.tar.gz"
+DIST_DIR="dist"
 
 echo -e "${CYAN}╔══════════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║      Apollo MCP Server 打包脚本                ║${NC}"
@@ -29,11 +30,11 @@ echo -e "${YELLOW}[1/4] 检查必需文件${NC}"
 REQUIRED_FILES=(
     "scripts/mcp_server.py"
     "config/api_endpoints.json"
-    "docker-compose.yml"
-    "Dockerfile"
+    "deploy/docker-compose.yml"
+    "deploy/Dockerfile"
     "requirements.txt"
-    "start.sh"
-    "deploy-prod.sh"
+    "deploy/start.sh"
+    "deploy/deploy-prod.sh"
 )
 MISSING=0
 for f in "${REQUIRED_FILES[@]}"; do
@@ -80,9 +81,10 @@ echo -e "  ${GREEN}✅ .env.example 已生成${NC}"
 echo -e "\n${YELLOW}[3/4] 打包安装包${NC}"
 echo "  版本: ${VERSION}"
 echo "  包名: ${PKG_NAME}"
+mkdir -p "$DIST_DIR"
 
 # 排除敏感文件和非必要文件
-tar czf "$PKG_NAME" \
+tar czf "${DIST_DIR}/${PKG_NAME}" \
     --exclude='.env' \
     --exclude='config/auth.json' \
     --exclude='config/auth.json.bak' \
@@ -92,33 +94,33 @@ tar czf "$PKG_NAME" \
     --exclude='.git' \
     --exclude='.gitignore' \
     --exclude='.dockerignore' \
-    --exclude='sql_output' \
-    --exclude='references/mock_responses.json' \
+    --exclude='mock' \
+    --exclude='tools' \
     --exclude='__pycache__' \
     --exclude='*.pyc' \
     --exclude='.DS_Store' \
-    --exclude='test_output_format.py' \
+    --exclude='dist' \
     --exclude='package.sh' \
     --exclude="$PKG_NAME" \
-    scripts config references DEPLOY.md README.md Dockerfile docker-compose.yml requirements.txt start.sh deploy-prod.sh .env.example 2>/dev/null || true
+    scripts config deploy docs requirements.txt .env.example 2>/dev/null || true
 
 # 检查打包结果
-if [ ! -f "$PKG_NAME" ]; then
+if [ ! -f "${DIST_DIR}/${PKG_NAME}" ]; then
     echo -e "${RED}❌ 打包失败${NC}"
     exit 1
 fi
-SIZE=$(du -h "$PKG_NAME" | cut -f1)
-echo -e "  ${GREEN}✅ 打包完成: ${PKG_NAME} (${SIZE})${NC}"
+SIZE=$(du -h "${DIST_DIR}/${PKG_NAME}" | cut -f1)
+echo -e "  ${GREEN}✅ 打包完成: ${DIST_DIR}/${PKG_NAME} (${SIZE})${NC}"
 
 # 4. 汇总
 echo -e "\n${YELLOW}[4/4] 打包汇总${NC}"
 echo -e "${CYAN}═══════════════════════════════════════════════════${NC}"
-echo -e "  安装包: ${GREEN}${PKG_NAME}${NC}"
+echo -e "  安装包: ${GREEN}${DIST_DIR}/${PKG_NAME}${NC}"
 echo -e "  大小:   ${SIZE}"
 echo -e "${CYAN}═══════════════════════════════════════════════════${NC}"
 echo ""
 echo -e "${GREEN}📤 上传到服务器:${NC}"
-echo "  scp ${PKG_NAME} user@server:/opt/"
+echo "  scp ${DIST_DIR}/${PKG_NAME} user@server:/opt/"
 echo ""
 echo -e "${GREEN}🔧 服务器上解压部署:${NC}"
 echo "  cd /opt"
@@ -126,6 +128,6 @@ echo "  tar xzf ${PKG_NAME}"
 echo "  cd apollo-mcp-server"
 echo "  cp .env.example .env   # 然后编辑 .env 填入真实 Token"
 echo "  vim .env"
-echo "  chmod +x deploy-prod.sh && ./deploy-prod.sh"
+echo "  cd deploy && chmod +x deploy-prod.sh && ./deploy-prod.sh"
 echo ""
-echo -e "${YELLOW}⚠️ 注意: 打包已排除 config/auth.json，服务器上需通过 .env 或 auth.json 配置 Token${NC}"
+echo -e "${YELLOW}⚠️ 注意: 打包已排除 config/auth.json 和 mock 数据，服务器上需通过 .env 或 auth.json 配置 Token${NC}"

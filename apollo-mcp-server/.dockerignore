@@ -25,9 +25,9 @@ docs/
 *.swp
 *.tmp
 
-# 数据库脚本（生产环境不需要）
-sql_output/
-references/mock_responses.json
+# 工具脚本和打包产物（镜像内不需要）
+tools/
+dist/
 
 # Python 虚拟环境
 venv/
@@ -39,5 +39,4 @@ __pycache__/
 # 版本相关
 *.zip
 *.tar.gz
-dist/
 build/

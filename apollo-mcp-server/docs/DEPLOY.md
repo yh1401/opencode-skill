@@ -30,6 +30,7 @@ git clone https://github.com/yh1401/opencode-skill.git
 cd opencode-skill/apollo-mcp-server
 
 # 2. 执行部署脚本（会交互式询问 Apollo Token）
+cd deploy
 chmod +x deploy-prod.sh
 ./deploy-prod.sh
 
@@ -48,7 +49,7 @@ chmod +x deploy-prod.sh
 ### 步骤 1: 创建配置
 
 ```bash
-cd /opt/opencode-skill/apollo-mcp-server
+cd /opt/opencode-skill/apollo-mcp-server/deploy
 
 cat > .env << 'EOF'
 MCP_USE_MOCK=false
@@ -60,9 +61,12 @@ EOF
 chmod 600 .env
 ```
 
+> `.env` 必须放在 `deploy/` 目录下（与 `docker-compose.yml` 同级），docker compose 从这里读取。
+
 ### 步骤 2: 构建并启动
 
 ```bash
+# 在 deploy/ 目录下执行
 docker compose up -d
 ```
 
@@ -92,7 +96,11 @@ docker compose logs -f
 
 ## 📋 常用命令
 
+> 以下命令均需在 `deploy/` 目录下执行
+
 ```bash
+cd deploy
+
 # 查看状态
 docker compose ps
 

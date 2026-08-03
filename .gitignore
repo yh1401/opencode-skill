@@ -66,6 +66,8 @@ mcp-server/dist/
 .trae/skills/apollo-config-query/_dev/
 apollo-mcp-server/logs/
 apollo-mcp-server/config/auth.json
+apollo-mcp-server/config/auth.json.bak
+apollo-mcp-server/dist/
 
 # Large binary files
 *.zip

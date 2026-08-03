@@ -30,7 +30,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # 复制应用代码
 COPY scripts/ scripts/
 COPY config/ config/
-COPY references/ references/
+COPY mock/ mock/
 
 # 创建日志目录
 RUN mkdir -p /app/logs && chown -R apollo:apollo /app

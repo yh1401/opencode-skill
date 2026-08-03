@@ -2,11 +2,11 @@
 """
 Apollo Mock 数据 → SQL 转换脚本
 
-将 references/mock_responses.json 中的 Mock 数据转换为 Apollo 数据库 SQL 脚本。
+将 mock/mock_responses.json 中的 Mock 数据转换为 Apollo 数据库 SQL 脚本。
 生成的 SQL 可直接导入 ApolloConfigDB 和 ApolloPortalDB。
 
 使用方法:
-    python3 scripts/generate_apollo_sql.py
+    python3 tools/generate_apollo_sql.py
 """
 
 import json
@@ -16,7 +16,7 @@ from datetime import datetime
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 _root_dir = os.path.dirname(_script_dir)
-_references_dir = os.path.join(_root_dir, 'references')
+_references_dir = os.path.join(_root_dir, 'mock')
 
 
 def escape_sql(value):
@@ -282,7 +282,7 @@ def main():
     portaldb_sql = generate_portaldb_sql(mock_data)
     print()
 
-    output_dir = os.path.join(_root_dir, 'sql_output')
+    output_dir = os.path.join(_root_dir, 'mock')
     os.makedirs(output_dir, exist_ok=True)
 
     configdb_path = os.path.join(output_dir, 'apolloconfigdb-mock-data.sql')
@@ -298,8 +298,8 @@ def main():
     print()
     print("=" * 60)
     print("导入步骤:")
-    print("  mysql -u root -p ApolloConfigDB < sql_output/apolloconfigdb-mock-data.sql")
-    print("  mysql -u root -p ApolloPortalDB < sql_output/apolloportaldb-mock-data.sql")
+    print("  mysql -u root -p ApolloConfigDB < mock/apolloconfigdb-mock-data.sql")
+    print("  mysql -u root -p ApolloPortalDB < mock/apolloportaldb-mock-data.sql")
     print("=" * 60)
 
 

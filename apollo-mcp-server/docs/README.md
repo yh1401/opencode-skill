@@ -60,7 +60,7 @@ docker run -d \
   -e APOLLO_OPENAPI_TOKEN="your_token" \
   -e APOLLO_ENV="PRO" \
   -v $(pwd)/config:/app/config:ro \
-  -v $(pwd)/references:/app/references:ro \
+  -v $(pwd)/mock:/app/mock:ro \
   -v $(pwd)/logs:/app/logs \
   apollo-mcp:latest
 
@@ -221,7 +221,7 @@ APOLLO_OPENAPI_TOKEN="your_token" python3 scripts/mcp_server.py --port 8062
 | 返回 401/403 | Apollo Token 无效 | 检查 `APOLLO_OPENAPI_TOKEN` |
 | 返回 502 | Apollo 后端未启动 | 检查 Apollo 服务状态 |
 | 返回空数据 | appId 或 namespaceName 错误 | 先用 `apollo_app_list` 验证 |
-| Mock 查询失败 | Mock 数据文件格式错误 | 检查 `references/mock_responses.json` |
+| Mock 查询失败 | Mock 数据文件格式错误 | 检查 `mock/mock_responses.json` |
 
 ### 日志
 

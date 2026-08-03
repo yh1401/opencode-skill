@@ -1,10 +1,8 @@
-version: '3.8'
-
 services:
   apollo-mcp:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: deploy/Dockerfile
     container_name: apollo-mcp-server
     restart: unless-stopped
     ports:
@@ -20,9 +18,9 @@ services:
       # 日志级别
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - ./config:/app/config:ro
-      - ./references:/app/references:ro
-      - ./logs:/app/logs
+      - ../config:/app/config:ro
+      - ../mock:/app/mock:ro
+      - ../logs:/app/logs
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8062/health').raise_for_status()"]
       interval: 30s
@@ -40,8 +38,8 @@ services:
   # 开发/测试环境（Mock 模式）
   apollo-mcp-mock:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: deploy/Dockerfile
     container_name: apollo-mcp-mock
     restart: unless-stopped
     ports:
@@ -50,9 +48,9 @@ services:
       - MCP_USE_MOCK=true
       - LOG_LEVEL=DEBUG
     volumes:
-      - ./config:/app/config:ro
-      - ./references:/app/references:ro
-      - ./logs:/app/logs
+      - ../config:/app/config:ro
+      - ../mock:/app/mock:ro
+      - ../logs:/app/logs
     networks:
       - apollo-network
     profiles:
