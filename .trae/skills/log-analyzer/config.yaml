@@ -1,0 +1,85 @@
+# Log Analysis Skill Configuration
+
+# 服务配置
+service:
+  host: 0.0.0.0
+  port: 8080
+  debug: false
+
+# 日志解析配置
+parser:
+  chunk_size: 1000000
+  enable_mmap: true
+  encoding: utf-8
+  error_handling: replace
+
+# 分块处理配置
+processor:
+  enable_checkpoint: true
+  parallel_workers: 4
+  merge_threshold: 5
+  checkpoint_dir: ./checkpoints
+
+# 错误合并配置
+error_merger:
+  semantic_similarity_threshold: 0.75
+  max_examples_per_group: 3
+  max_groups: 10
+  enable_semantic_merging: true
+  merge_by_error_type: true
+  merge_by_message_pattern: true
+
+# 报告生成配置
+report:
+  output_dir: ./output
+  enable_word: true
+  enable_pdf: false
+  pdf_font: Noto Serif SC
+
+# 错误模式配置
+error_patterns:
+  - pattern_type: device_offline
+    regex: "设备不在线|device.*offline|device.*not.*online"
+    description: Device is offline
+    severity: high
+
+  - pattern_type: permission_denied
+    regex: "无设备权限|permission.*denied|access.*denied|无权限"
+    description: Permission denied
+    severity: high
+
+  - pattern_type: null_pointer
+    regex: "NullPointerException|NPE|null.*pointer"
+    description: Null pointer exception
+    severity: critical
+
+  - pattern_type: timeout
+    regex: "timeout|超时|Connection.*timeout|SocketTimeout"
+    description: Timeout error
+    severity: medium
+
+  - pattern_type: validation_error
+    regex: "id不能为空|validation.*error|参数.*错误|必填"
+    description: Validation error
+    severity: medium
+
+  - pattern_type: database_error
+    regex: "SQLException|SQL.*error|数据库.*异常|Database.*error"
+    description: Database error
+    severity: high
+
+  - pattern_type: network_error
+    regex: "Network.*error|网络.*异常|ConnectException|Connection.*refused"
+    description: Network error
+    severity: medium
+
+  - pattern_type: authentication_error
+    regex: "authentication|认证.*失败|token.*invalid|登录.*失败"
+    description: Authentication error
+    severity: high
+
+# 性能配置
+performance:
+  max_file_size_mb: 10240
+  max_concurrent_tasks: 10
+  memory_limit_mb: 8192

@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skill Agent 执行原理与数据流转详解</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            line-height: 1.8;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 60px 40px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        header .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #667eea;
+            font-size: 2em;
+            margin: 40px 0 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        h2 {
+            color: #764ba2;
+            font-size: 1.5em;
+            margin: 30px 0 15px;
+            padding-left: 15px;
+            border-left: 4px solid #764ba2;
+        }
+        
+        h3 {
+            color: #555;
+            font-size: 1.2em;
+            margin: 20px 0 10px;
+        }
+        
+        p {
+            margin: 15px 0;
+            text-align: justify;
+        }
+        
+        .overview {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 25px;
+            border-radius: 12px;
+            margin: 20px 0;
+            border-left: 5px solid #667eea;
+        }
+        
+        .arch-diagram {
+            background: #1a1a2e;
+            color: #0f0;
+            padding: 25px;
+            border-radius: 12px;
+            font-family: "Courier New", monospace;
+            font-size: 0.85em;
+            overflow-x: auto;
+            margin: 20px 0;
+            white-space: pre;
+            line-height: 1.4;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        tr:hover {
+            background: #f5f7fa;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: "Courier New", monospace;
+            color: #e83e8c;
+            font-size: 0.9em;
+        }
+        
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: "Courier New", monospace;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+        
+        pre code {
+            background: none;
+            color: inherit;
+            padding: 0;
+        }
+        
+        .sequence-diagram {
+            background: #fafafa;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: "Courier New", monospace;
+            font-size: 0.85em;
+            white-space: pre;
+        }
+        
+        .flow-chart {
+            background: white;
+            border: 2px solid #667eea;
+            padding: 25px;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+        
+        .flow-step {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin: 10px 0;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%);
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .flow-step .step-num {
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+        
+        .flow-step .step-content {
+            flex: 1;
+        }
+        
+        .flow-arrow {
+            text-align: center;
+            color: #667eea;
+            font-size: 1.5em;
+            padding: 5px 0;
+        }
+        
+        .highlight-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .highlight-box h3 {
+            color: white;
+            margin-top: 0;
+        }
+        
+        .error-flow {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .error-flow h3 {
+            color: #856404;
+        }
+        
+        .json-example {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        
+        .yaml-example {
+            background: #2b2b2b;
+            color: #98c379;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        
+        .http-example {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .http-method {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.85em;
+            margin-right: 10px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        
+        .metric-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .metric-card .label {
+            font-size: 0.95em;
+            opacity: 0.9;
+        }
+        
+        footer {
+            background: #1a1a2e;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        footer .version {
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        @media (max-width: 768px) {
+            .content {
+                padding: 20px;
+            }
+            
+            header {
+                padding: 40px 20px;
+            }
+            
+            header h1 {
+                font-size: 1.8em;
+            }
+            
+            table {
+                font-size: 0.85em;
+            }
+            
+            pre {
+                font-size: 0.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Skill Agent 执行原理与数据流转详解</h1>
+            <p class="subtitle">以 cmdb-server-query 子技能为例的完整技术文档</p>
+        </header>
+        
+        <div class="content">
+            <div class="overview">
+                <h3>📋 概述</h3>
+                <p>本文档以 <code>cmdb-server-query</code> 子技能为例，详细说明 Skill Agent 系统的<strong>执行原理</strong>和<strong>数据流转过程</strong>。</p>
+            </div>
+            
+            <h1>一、系统架构</h1>
+            
+            <h2>1.1 整体架构图</h2>
+            
+            <div class="arch-diagram">┌──────────────────────────────────────────────────────────────────────────────┐
+│                              用户层                                          │
+│                    用户输入: "查找贵州机房的服务器"                           │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                           技能编排层 (主技能)                                 │
+│  ┌────────────────────────────────────────────────────────────────────┐    │
+│  │                        SKILL.md                                     │    │
+│  │  • 意图识别引擎 (基于大模型语义分析)                                 │    │
+│  │  • 技能路由协调器 (遍历注册中心，匹配最优技能)                       │    │
+│  │  • 参数校验与转换                                                   │    │
+│  └────────────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          技能注册中心层                                       │
+│  ┌────────────────────────────────────────────────────────────────────┐    │
+│  │                   registry/skills.json                              │    │
+│  │  • 技能元数据存储 (ID、名称、描述、路径、关键词)                     │    │
+│  │  • 技能启用/禁用状态管理                                            │    │
+│  │  • 技能版本控制                                                     │    │
+│  └────────────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                           子技能执行层                                       │
+│  ┌────────────────────────────────────────────────────────────────────┐    │
+│  │           skills/cmdb-server-query/SKILL.md                       │    │
+│  │  • 解析用户查询意图                                                 │    │
+│  │  • 提取查询参数 (机房、IP、状态等)                                  │    │
+│  │  • 构建 API 请求参数                                                │    │
+│  │  • 格式化输出结果                                                   │    │
+│  └────────────────────────────────────────────────────────────────────┘    │
+│  ┌────────────────────────────────────────────────────────────────────┐    │
+│  │           skills/cmdb-server-query/config/                        │    │
+│  │  • params.yaml: 参数映射规则                                        │    │
+│  │  • api.yaml: API 端点配置                                          │    │
+│  └────────────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                           MCP 适配层                                         │
+│  ┌────────────────────────────────────────────────────────────────────┐    │
+│  │                      mcp_server/                                    │    │
+│  │  • 协议转换 (HTTP ↔ MCP)                                           │    │
+│  │  • 请求路由与分发                                                   │    │
+│  │  • 认证与授权                                                       │    │
+│  │  • 响应格式化                                                       │    │
+│  └────────────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                           数据服务层                                         │
+│  ┌────────────────────────────────────────────────────────────────────┐    │
+│  │                   mcp_server/src/cmdb/                              │    │
+│  │  • client.ts: Mock 数据生成与查询逻辑                               │    │
+│  │  • 数据过滤、分页、排序                                             │    │
+│  │  • 返回 JSON 格式响应                                               │    │
+│  └────────────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────────────┘</div>
+            
+            <h2>1.2 层级职责说明</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>层级</th>
+                        <th>组件</th>
+                        <th>核心职责</th>
+                        <th>示例</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="status-badge status-info">用户层</span></td>
+                        <td>用户</td>
+                        <td>输入自然语言查询</td>
+                        <td>"查找贵州机房的服务器"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="status-badge status-success">技能编排层</span></td>
+                        <td>主技能 SKILL.md</td>
+                        <td>意图识别、技能路由</td>
+                        <td>分析用户想查服务器</td>
+                    </tr>
+                    <tr>
+                        <td><span class="status-badge status-success">注册中心层</span></td>
+                        <td>skills.json</td>
+                        <td>技能元数据管理</td>
+                        <td>查找所有已启用技能</td>
+                    </tr>
+                    <tr>
+                        <td><span class="status-badge status-warning">子技能层</span></td>
+                        <td>子技能 SKILL.md</td>
+                        <td>业务逻辑处理</td>
+                        <td>提取"贵州"→"云公司->贵州"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="status-badge status-info">MCP 适配层</span></td>
+                        <td>mcp_server</td>
+                        <td>协议转换</td>
+                        <td>HTTP POST → MCP 调用</td>
+                    </tr>
+                    <tr>
+                        <td><span class="status-badge status-info">数据服务层</span></td>
+                        <td>client.ts</td>
+                        <td>数据查询</td>
+                        <td>Mock 数据过滤</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h1>二、执行原理详解</h1>
+            
+            <h2>2.1 路由策略</h2>
+            
+            <p>Skill Agent 采用<strong>基于语义理解的智能路由策略</strong>，所有子技能为<strong>平行关系</strong>，不存在层级或优先级划分。</p>
+            
+            <h3>核心路由流程</h3>
+            
+            <div class="flow-chart">
+                <div class="flow-step">
+                    <span class="step-num">1</span>
+                    <span class="step-content">
+                        <strong>语义分析引擎</strong><br>
+                        <small>├─ 提取核心语义 (查询服务器)<br>
+                        ├─ 提取实体信息 (贵州、机房)<br>
+                        └─ 生成置信度分数</small>
+                    </span>
+                </div>
+                <div class="flow-arrow">↓</div>
+                <div class="flow-step">
+                    <span class="step-num">2</span>
+                    <span class="step-content">
+                        <strong>技能匹配引擎</strong><br>
+                        <small>├─ 遍历注册中心所有技能<br>
+                        ├─ 计算匹配置信度<br>
+                        └─ 选择最优匹配技能</small>
+                    </span>
+                </div>
+            </div>
+            
+            <h2>2.2 技能匹配算法</h2>
+            
+            <pre><code># 伪代码示例
+def match_skill(user_input):
+    skills = load_skills_from_registry()  # 从 skills.json 加载
+    best_skill = None
+    highest_score = 0
+    
+    for skill in skills:
+        if not skill.enabled:  # 跳过禁用的技能
+            continue
+        
+        # 语义匹配
+        semantic_score = semantic_match(user_input, skill.description)
+        
+        # 关键词匹配
+        keyword_score = keyword_match(user_input, skill.keywords)
+        
+        # 综合得分 (语义60% + 关键词40%)
+        total_score = semantic_score * 0.6 + keyword_score * 0.4
+        
+        if total_score > highest_score:
+            highest_score = total_score
+            best_skill = skill
+    
+    return best_skill</code></pre>
+            
+            <h2>2.3 歧义处理机制</h2>
+            
+            <p>当多个技能匹配置信度接近时，系统会：</p>
+            
+            <ul style="margin: 15px 0; padding-left: 30px;">
+                <li><strong>触发条件</strong>: 置信度差值 &lt; 0.1</li>
+                <li><strong>处理策略</strong>:
+                    <ul>
+                        <li>追问用户明确意图</li>
+                        <li>提供选项列表供用户选择</li>
+                    </ul>
+                </li>
+            </ul>
+            
+            <h1>三、数据流转详解 (cmdb-server-query)</h1>
+            
+            <h2>3.1 完整数据流序列图</h2>
+            
+            <div class="sequence-diagram">用户                  主技能                注册中心              子技能              MCP服务器             数据服务
+ │                    │                     │                    │                    │                    │
+ │ "查找贵州机房..."   │                     │                    │                    │                    │
+ │───────────────────→│                     │                    │                    │                    │
+ │                    │                     │                    │                    │                    │
+ │                    │ 加载已启用技能列表    │                    │                    │                    │
+ │                    │────────────────────→│                    │                    │                    │
+ │                    │                     │                    │                    │                    │
+ │                    │ 返回技能元数据       │                    │                    │                    │
+ │                    │←────────────────────│                    │                    │                    │
+ │                    │                     │                    │                    │                    │
+ │                    │ 语义分析与技能匹配    │                    │                    │                    │
+ │                    │ ─────────────────────────────→           │                    │                    │
+ │                    │                     │                    │                    │                    │
+ │                    │                     │                    │ 解析 SKILL.md       │
+ │                    │                     │                    │ ────────────────    │
+ │                    │                     │                    │ 加载 params.yaml    │
+ │                    │                     │                    │                    │                    │
+ │                    │                     │                    │ 参数映射转换        │
+ │                    │                     │                    │ "贵州" → node      │
+ │                    │                     │                    │                    │                    │
+ │                    │                     │                    │ 构建 API 参数       │
+ │                    │                     │                    │ {node: "云公司->贵州"}
+ │                    │                     │                    │                    │                    │
+ │                    │                     │                    │ HTTP POST 请求      │
+ │                    │                     │                    │───────────────────→│
+ │                    │                     │                    │                    │                    │
+ │                    │                     │                    │                    │ 查询 Mock 数据      │
+ │                    │                     │                    │                    │ ────────────────    │
+ │                    │                     │                    │                    │                    │
+ │                    │                     │                    │                    │ 返回 JSON 响应      │
+ │                    │                     │                    │                    │←───────────────────│
+ │                    │                     │                    │                    │                    │
+ │                    │                     │                    │ 格式化结果          │
+ │                    │                     │                    │ Markdown 表格       │
+ │                    │                     │                    │                    │                    │
+ │ 返回 Markdown 表格 │                     │                    │                    │                    │
+ │←───────────────────│                     │                    │                    │                    │</div>
+            
+            <h2>3.2 各阶段数据转换详情</h2>
+            
+            <h3>阶段 1: 用户输入 → 语义分析</h3>
+            
+            <div class="highlight-box">
+                <h3>📥 输入</h3>
+                <p style="font-family: monospace; font-size: 1.1em;">"查找贵州机房的服务器"</p>
+            </div>
+            
+            <div class="json-example">
+                <strong>语义分析结果:</strong>
+<pre><code>{
+  "intent": "QUERY_SERVER",
+  "entities": {
+    "location": "贵州",
+    "type": "机房"
+  },
+  "confidence": 0.95
+}</code></pre>
+            </div>
+            
+            <h3>阶段 2: 语义分析 → 技能匹配</h3>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>技能 ID</th>
+                        <th>语义得分 (60%)</th>
+                        <th>关键词得分 (40%)</th>
+                        <th>综合得分</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background: #d4edda;">
+                        <td>cmdb-server-query</td>
+                        <td>0.90</td>
+                        <td>0.85</td>
+                        <td><strong>0.88 ✅</strong></td>
+                    </tr>
+                    <tr>
+                        <td>project-deployment-query</td>
+                        <td>0.30</td>
+                        <td>0.10</td>
+                        <td>0.22</td>
+                    </tr>
+                    <tr>
+                        <td>server-public-ip-query</td>
+                        <td>0.25</td>
+                        <td>0.15</td>
+                        <td>0.21</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="highlight-box">
+                <h3>🎯 匹配结果</h3>
+                <p><code>cmdb-server-query</code> (得分 0.88)</p>
+            </div>
+            
+            <h3>阶段 3: 技能匹配 → 参数提取</h3>
+            
+            <p><strong>子技能加载</strong>: <code>skills/cmdb-server-query/SKILL.md</code></p>
+            
+            <p><strong>参数映射规则</strong>: <code>params.yaml</code></p>
+            
+            <div class="yaml-example">
+<pre><code>mappings:
+  userInput:
+    - patterns: ["机房", "机房名称", "数据中心", "位置"]
+      param: node
+    - patterns: ["贵州", "北京", "上海"]
+      mapping:
+        "贵州": "云公司->贵州"
+        "北京": "云公司->北京"</code></pre>
+            </div>
+            
+            <div class="highlight-box">
+                <h3>⚙️ 参数提取结果</h3>
+                <pre><code>{
+  "node": "云公司->贵州",
+  "currentPage": 1,
+  "pageSize": 15
+}</code></pre>
+            </div>
+            
+            <h3>阶段 4: 参数提取 → API 调用</h3>
+            
+            <p><strong>API 配置</strong>: <code>api.yaml</code></p>
+            
+            <div class="yaml-example">
+<pre><code>api:
+  baseUrl: "http://localhost:3001"
+  endpoints:
+    serverPageList: "/api/v2/cmdbServer/getCmdbServerBaseMessageList"</code></pre>
+            </div>
+            
+            <p><strong>HTTP 请求构建</strong>:</p>
+            
+            <div class="http-example">
+                <span class="http-method">POST</span>
+                <code>http://localhost:3001/api/v2/cmdbServer/getCmdbServerBaseMessageList</code>
+                <br><br>
+                <strong>Headers:</strong><br>
+                <code>Content-Type: application/json</code>
+                <br><br>
+                <strong>Body:</strong>
+                <pre><code>{
+  "node": "云公司->贵州",
+  "currentPage": 1,
+  "pageSize": 15
+}</code></pre>
+            </div>
+            
+            <h3>阶段 5: API 调用 → 数据查询</h3>
+            
+            <p><strong>Mock 数据查询</strong>: <code>client.ts</code></p>
+            
+            <pre><code>// 模拟数据库
+const mockServers = [
+  { hostName: "prod-guizhou-api-01", ip: "192.168.7.201", 
+   node: "云公司->贵州", state: "0", ... },
+  { hostName: "prod-guizhou-web-01", ip: "192.168.7.202", 
+   node: "云公司->贵州", state: "0", ... },
+  // ... 其他服务器
+];
+
+// 查询逻辑
+const results = mockServers.filter(server => {
+  if (params.node && server.node !== params.node) return false;
+  if (params.state && server.state !== params.state) return false;
+  return true;
+});
+
+// 分页
+const paginatedResults = results.slice(
+  (currentPage - 1) * pageSize,
+  currentPage * pageSize
+);</code></pre>
+            
+            <h3>阶段 6: 数据查询 → 响应返回</h3>
+            
+            <div class="json-example">
+<pre><code>{
+  "code": 200,
+  "message": "success",
+  "fail": false,
+  "data": {
+    "records": [
+      {
+        "hostName": "prod-guizhou-api-01",
+        "ip": "192.168.7.201",
+        "node": "云公司->贵州",
+        "state": "0",
+        "osType": "linux",
+        "os": "Linux CentOS 7.9"
+      },
+      {
+        "hostName": "prod-guizhou-web-01",
+        "ip": "192.168.7.202",
+        "node": "云公司->贵州",
+        "state": "0",
+        "osType": "linux",
+        "os": "Linux Ubuntu 18.04"
+      }
+    ],
+    "total": 2,
+    "currentPage": 1,
+    "pageSize": 15,
+    "pages": 1
+  }
+}</code></pre>
+            </div>
+            
+            <h3>阶段 7: 响应 → 格式化输出</h3>
+            
+            <p><strong>输出格式化规则</strong>: <code>SKILL.md</code></p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>服务器名称</th>
+                        <th>IP地址</th>
+                        <th>状态</th>
+                        <th>位置</th>
+                        <th>操作系统</th>
+                        <th>用途</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>prod-guizhou-api-01</td>
+                        <td>192.168.7.201</td>
+                        <td><span class="status-badge status-success">在线</span></td>
+                        <td>云公司-&gt;贵州</td>
+                        <td>Linux CentOS 7.9</td>
+                        <td>API服务</td>
+                    </tr>
+                    <tr>
+                        <td>prod-guizhou-web-01</td>
+                        <td>192.168.7.202</td>
+                        <td><span class="status-badge status-success">在线</span></td>
+                        <td>云公司-&gt;贵州</td>
+                        <td>Linux Ubuntu 18.04</td>
+                        <td>Web服务</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h1>四、关键配置文件说明</h1>
+            
+            <h2>4.1 技能注册中心 (registry/skills.json)</h2>
+            
+            <div class="json-example">
+<pre><code>{
+  "id": "cmdb-server-query",           // 技能唯一标识
+  "name": "CMDB服务器查询2",            // 显示名称
+  "description": "基于MCP接口查询...",    // 功能描述
+  "enabled": true,                       // 启用状态
+  "path": "skills/cmdb-server-query/SKILL.md",  // 技能文件路径
+  "keywords": ["CMDB服务器", "服务器信息", ...],   // 路由关键词
+  "version": "1.0.0"                    // 版本号
+}</code></pre>
+            </div>
+            
+            <h2>4.2 子技能定义 (skills/cmdb-server-query/SKILL.md)</h2>
+            
+            <div class="yaml-example">
+<pre><code>---
+name: cmdb_server_search2
+tool_type: http                    # 工具类型
+http_method: POST                  # HTTP 方法
+url: http://localhost:3001/api/v2/cmdbServer/getCmdbServerBaseMessageList
+params:                            # API 参数定义
+  - name: node
+    type: string
+    label: 节点名称
+    description: Node name (e.g., "云公司->贵州")
+    required: false
+    location: body
+---</code></pre>
+            </div>
+            
+            <h2>4.3 参数映射 (skills/cmdb-server-query/config/params.yaml)</h2>
+            
+            <div class="yaml-example">
+<pre><code>mappings:
+  userInput:
+    - patterns: ["机房", "位置"]
+      param: node                  # 映射到 API 参数
+
+fieldOptions:                      # 字段可选值
+  status:
+    - optionValue: 0
+      displayName: "在线"
+    - optionValue: 1
+      displayName: "库存"</code></pre>
+            </div>
+            
+            <h1>五、错误处理机制</h1>
+            
+            <h2>5.1 异常处理流程</h2>
+            
+            <div class="flow-chart">
+                <div class="flow-step">
+                    <span class="step-num">1</span>
+                    <span class="step-content"><strong>API 调用失败</strong></span>
+                </div>
+                <div class="flow-arrow">↓</div>
+                <div class="flow-step">
+                    <span class="step-num">2</span>
+                    <span class="step-content"><strong>检查错误类型</strong></span>
+                </div>
+                <div class="flow-arrow">↓</div>
+                <div style="display: flex; gap: 20px; margin: 15px 0;">
+                    <div class="flow-step" style="flex: 1;">
+                        <span class="step-num">3a</span>
+                        <span class="step-content"><strong>网络错误</strong><br><small>→ 重试1次</small></span>
+                    </div>
+                    <div class="flow-step" style="flex: 1;">
+                        <span class="step-num">3b</span>
+                        <span class="step-content"><strong>业务错误</strong><br><small>→ 返回错误</small></span>
+                    </div>
+                </div>
+            </div>
+            
+            <h2>5.2 常见错误处理</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>错误类型</th>
+                        <th>错误代码</th>
+                        <th>处理策略</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>连接失败</td>
+                        <td><code>ECONNREFUSED</code></td>
+                        <td>提示检查服务器状态</td>
+                    </tr>
+                    <tr>
+                        <td>请求超时</td>
+                        <td><code>ETIMEDOUT</code></td>
+                        <td>重试1次，仍失败返回超时提示</td>
+                    </tr>
+                    <tr>
+                        <td>参数校验失败</td>
+                        <td><code>VALIDATION_ERROR</code></td>
+                        <td>提示用户修正参数</td>
+                    </tr>
+                    <tr>
+                        <td>无权限</td>
+                        <td><code>401/403</code></td>
+                        <td>返回权限不足提示</td>
+                    </tr>
+                    <tr>
+                        <td>服务器错误</td>
+                        <td><code>500</code></td>
+                        <td>返回服务异常提示</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h1>六、总结</h1>
+            
+            <h2>6.1 数据流转关键点</h2>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0;">
+                <span class="status-badge status-info">1. 用户层: 自然语言输入</span>
+                <span class="status-badge status-success">2. 主技能层: 意图识别 + 技能路由</span>
+                <span class="status-badge status-success">3. 注册中心层: 技能元数据管理</span>
+                <span class="status-badge status-warning">4. 子技能层: 参数提取 + API 调用</span>
+                <span class="status-badge status-info">5. MCP 层: 协议转换</span>
+                <span class="status-badge status-info">6. 数据服务层: Mock 数据查询</span>
+            </div>
+            
+            <h2>6.2 核心设计特点</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>特点</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>平行匹配</strong></td>
+                        <td>所有技能平等，基于语义选择最优</td>
+                    </tr>
+                    <tr>
+                        <td><strong>配置驱动</strong></td>
+                        <td>参数映射通过 YAML 配置管理</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Mock 支持</strong></td>
+                        <td>开发阶段使用 Mock 数据</td>
+                    </tr>
+                    <tr>
+                        <td><strong>统一输出</strong></td>
+                        <td>所有结果以 Markdown 表格返回</td>
+                    </tr>
+                    <tr>
+                        <td><strong>层次清晰</strong></td>
+                        <td>职责分离，易于维护</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h2>6.3 性能指标</h2>
+            
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <div class="value">&lt;100ms</div>
+                    <div class="label">路由匹配时间</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value">&lt;200ms</div>
+                    <div class="label">API 调用时间</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value">&lt;500ms</div>
+                    <div class="label">端到端延迟</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value">100+</div>
+                    <div class="label">并发能力 (QPS)</div>
+                </div>
+            </div>
+            
+            <h1>附录</h1>
+            
+            <h2>A. 相关文件路径</h2>
+            
+            <pre><code>skill-agent/
+├── SKILL.md                                    # 主技能入口
+├── registry/skills.json                        # 技能注册中心
+├── skills/cmdb-server-query/
+│   ├── SKILL.md                              # 子技能定义
+│   ├── config/
+│   │   ├── api.yaml                         # API 配置
+│   │   └── params.yaml                      # 参数映射
+│   └── references/
+│       ├── cmdb-fields.md                    # 字段映射表
+│       ├── cmdb-operators.md                 # 操作符参考
+│       └── cmdb-json-to-params.md            # JSON 参数转换
+└── mcp_server/
+    └── src/cmdb/client.ts                    # Mock 数据实现</code></pre>
+        </div>
+        
+        <footer>
+            <p><strong>文档版本</strong>: 1.0.0</p>
+            <p><strong>创建日期</strong>: 2026-05-23</p>
+            <p><strong>适用版本</strong>: <span class="version">Skill Agent v1.1.0+</span></p>
+        </footer>
+    </div>
+</body>
+</html>

@@ -1,0 +1,60 @@
+{
+  "_comment": "统一响应字段映射（解决各 API 字段名不一致的问题）",
+  "_usage": "AI 处理响应时，用此文件将各 API 的字段名统一为标准名",
+  "standard_fields": {
+    "page": "currentPage",
+    "page_size": "pageSize",
+    "total": "total",
+    "pages": "pages",
+    "current": "current",
+    "size": "size",
+    "records": "records"
+  },
+  "per_skill": {
+    "cmdb-server-query": {
+      "standard_to_api": {
+        "currentPage": "currentPage",
+        "pageSize": "pageSize",
+        "total": "total"
+      },
+      "api_response_alias": {
+        "currentPage": "currentPage",
+        "pageSize": "pageSize",
+        "total": "total",
+        "size": "pageSize",
+        "current": "currentPage"
+      }
+    },
+    "server-public-ip-query": {
+      "api_response_alias": {
+        "current": "currentPage",
+        "size": "pageSize",
+        "currentPage": "currentPage",
+        "pageSize": "pageSize"
+      }
+    },
+    "project-deployment-query": {
+      "api_response_alias": {
+        "currentPage": "currentPage",
+        "pageSize": "pageSize",
+        "total": "total"
+      }
+    },
+    "product-query": {
+      "api_response_alias": {
+        "current": "currentPage",
+        "size": "pageSize",
+        "currentPage": "currentPage",
+        "pageSize": "pageSize"
+      }
+    },
+    "project-basis-query": {
+      "api_response_alias": {
+        "current": "currentPage",
+        "size": "pageSize",
+        "currentPage": "currentPage",
+        "pageSize": "pageSize"
+      }
+    }
+  }
+}

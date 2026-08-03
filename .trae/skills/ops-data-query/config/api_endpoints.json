@@ -1,0 +1,36 @@
+{
+  "_comment": "API 端点统一配置（所有子技能共用此文件）",
+  "base_url": "https://oss.tech.ctseelink.cn",
+  "endpoints": {
+    "cmdb-server-query": {
+      "method": "POST",
+      "path": "/api/v2/cmdbServer/getCmdbServerPageList",
+      "full_url": "https://oss.tech.ctseelink.cn/api/v2/cmdbServer/getCmdbServerPageList",
+      "description": "CMDB 服务器分页查询"
+    },
+    "server-public-ip-query": {
+      "method": "POST",
+      "path": "/a/cmdb/serverPublicIp/",
+      "full_url": "https://oss.tech.ctseelink.cn/a/cmdb/serverPublicIp/",
+      "description": "服务器公网 IP 查询"
+    },
+    "project-deployment-query": {
+      "method": "POST",
+      "path": "/a/cmdb/baseProject/",
+      "full_url": "https://oss.tech.ctseelink.cn/a/cmdb/baseProject/",
+      "description": "项目部署记录查询"
+    },
+    "product-query": {
+      "method": "POST",
+      "path": "/a/cmdb/baseProduct/",
+      "full_url": "https://oss.tech.ctseelink.cn/a/cmdb/baseProduct/",
+      "description": "产品信息查询"
+    },
+    "project-basis-query": {
+      "method": "POST",
+      "path": "/a/cmdb/baseProjectBasis/",
+      "full_url": "https://oss.tech.ctseelink.cn/a/cmdb/baseProjectBasis/",
+      "description": "工程项目基础信息查询"
+    }
+  }
+}

@@ -1,0 +1,43 @@
+# Apollo MCP Server .dockerignore
+# 防止敏感文件和不必要的文件打包进镜像
+
+# 环境变量和认证（严禁打包）
+.env
+config/auth.json
+
+# 日志文件
+logs/
+*.log
+
+# Git 相关
+.git/
+.gitignore
+.gitattributes
+
+# 文档
+*.md
+docs/
+
+# 编辑器和系统文件
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.tmp
+
+# 数据库脚本（生产环境不需要）
+sql_output/
+references/mock_responses.json
+
+# Python 虚拟环境
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# 版本相关
+*.zip
+*.tar.gz
+dist/
+build/

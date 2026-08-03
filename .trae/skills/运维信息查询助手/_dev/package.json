@@ -1,0 +1,6 @@
+{
+  "name": "ops-data-query-skill",
+  "version": "5.0.0",
+  "description": "运维信息查询技能 - 当前支持 CMDB 服务器配置信息查询",
+  "type": "module"
+}

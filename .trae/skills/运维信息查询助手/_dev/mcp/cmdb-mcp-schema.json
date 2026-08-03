@@ -1,0 +1,75 @@
+{
+  "name": "cmdb_server_query",
+  "description": "查询CMDB服务器信息",
+  "api": {
+    "method": "POST",
+    "url": "https://oss.tech.ctseelink.cn/api/v2/cmdbServer/getCmdbServerPageList",
+    "contentType": "application/json"
+  },
+  "request": {
+    "type": "object",
+    "properties": {
+      "node": {"type": "string", "description": "机房位置"},
+      "state": {"type": "string", "description": "服务器状态", "enum": ["0", "1", "2", "3", "4", "5", "6"]},
+      "osType": {"type": "string", "description": "操作系统", "enum": ["linux", "windows"]},
+      "type": {"type": "string", "description": "服务器类型", "enum": ["0", "1", "2"]},
+      "hostName": {"type": "string", "description": "主机名（模糊匹配）"},
+      "ip": {"type": "string", "description": "内网IP（模糊匹配）"},
+      "assetNo": {"type": "string", "description": "资产编号"},
+      "serial": {"type": "string", "description": "序列号"},
+      "belong": {"type": "integer", "description": "归属类型"},
+      "isFromOutside": {"type": "string", "description": "信创标识", "enum": ["0", "1"]},
+      "isReplaceForChinaProduction": {"type": "string", "description": "国产化替换状态", "enum": ["0", "1"]},
+      "currentPage": {"type": "integer", "description": "页码", "minimum": 1},
+      "pageSize": {"type": "integer", "description": "每页条数", "minimum": 1, "maximum": 100}
+    },
+    "required": ["node"]
+  },
+  "response": {
+    "type": "object",
+    "properties": {
+      "code": {"type": "integer", "description": "状态码"},
+      "message": {"type": "string", "description": "响应消息"},
+      "data": {
+        "type": "object",
+        "properties": {
+          "records": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {"type": "string"},
+                "hostName": {"type": "string"},
+                "ip": {"type": "string"},
+                "publicIp": {"type": "string"},
+                "vip": {"type": "string"},
+                "node": {"type": "string"},
+                "state": {"type": "string"},
+                "serverType": {"type": "string"},
+                "cpuCores": {"type": "string"},
+                "memory": {"type": "string"},
+                "os": {"type": "string"},
+                "environment": {"type": "string"},
+                "productName": {"type": "string"},
+                "projectName": {"type": "string"},
+                "assetNo": {"type": "string"},
+                "rack": {"type": "string"}
+              }
+            }
+          },
+          "total": {"type": "integer"},
+          "currentPage": {"type": "integer"},
+          "pageSize": {"type": "integer"}
+        }
+      }
+    }
+  },
+  "mock": {
+    "enabled": true,
+    "response": {
+      "code": 200,
+      "message": "success",
+      "_mock": true
+    }
+  }
+}

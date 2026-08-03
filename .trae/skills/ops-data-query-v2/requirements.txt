@@ -1,0 +1,14 @@
+# Skill Agent - 依赖包
+# LangChain 集成相关
+
+# LangChain 核心库
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-community>=0.0.20
+
+# 可选：LLM 集成（根据需要选择）
+# openai>=1.0.0
+
+# 其他工具库
+python-dotenv>=1.0.0
+pydantic>=2.0.0

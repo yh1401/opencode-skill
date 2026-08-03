@@ -1,0 +1,70 @@
+{
+  "name": "project_deployment_query",
+  "description": "查询项目部署信息",
+  "api": {
+    "method": "POST",
+    "url": "https://oss.tech.ctseelink.cn/a/cmdb/baseProject/",
+    "contentType": "application/json"
+  },
+  "request": {
+    "type": "object",
+    "properties": {
+      "name": {"type": "string", "description": "项目名称"},
+      "deployEnv": {"type": "integer", "description": "部署环境", "enum": [1, 2, 3, 4]},
+      "status": {"type": "integer", "description": "部署状态", "enum": [0, 1, 2, 3]},
+      "startTime": {"type": "string", "description": "开始时间"},
+      "endTime": {"type": "string", "description": "结束时间"},
+      "currentPage": {"type": "integer", "description": "页码", "minimum": 1},
+      "pageSize": {"type": "integer", "description": "每页条数", "minimum": 1, "maximum": 1000}
+    },
+    "required": []
+  },
+  "response": {
+    "type": "object",
+    "properties": {
+      "code": {"type": "integer"},
+      "message": {"type": "string"},
+      "data": {
+        "type": "object",
+        "properties": {
+          "records": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {"type": "string"},
+                "projectName": {"type": "string"},
+                "environment": {"type": "string"},
+                "environmentCode": {"type": "integer"},
+                "deploymentStatus": {"type": "string"},
+                "statusCode": {"type": "integer"},
+                "startTime": {"type": "string"},
+                "endTime": {"type": "string"},
+                "duration": {"type": "integer"},
+                "deployer": {"type": "string"},
+                "version": {"type": "string"},
+                "gitBranch": {"type": "string"},
+                "gitCommit": {"type": "string"},
+                "serverList": {"type": "array"},
+                "errorMessage": {"type": "string"},
+                "logUrl": {"type": "string"},
+                "progress": {"type": "integer"}
+              }
+            }
+          },
+          "total": {"type": "integer"},
+          "currentPage": {"type": "integer"},
+          "pageSize": {"type": "integer"}
+        }
+      }
+    }
+  },
+  "mock": {
+    "enabled": true,
+    "response": {
+      "code": 200,
+      "message": "success",
+      "_mock": true
+    }
+  }
+}

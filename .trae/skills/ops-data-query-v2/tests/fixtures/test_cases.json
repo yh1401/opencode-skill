@@ -1,0 +1,188 @@
+{
+  "routing_test_cases": [
+    {
+      "name": "查询贵州机房的服务器",
+      "input": "查询贵州机房的服务器",
+      "expected_skill": "cmdb-server-query",
+      "priority": 5,
+      "reason": "匹配服务器关键词"
+    },
+    {
+      "name": "查询服务器的公网IP",
+      "input": "查询服务器的公网IP",
+      "expected_skill": "server-public-ip-query",
+      "priority": 1,
+      "reason": "明确提到公网IP，优先级最高"
+    },
+    {
+      "name": "查询项目部署记录",
+      "input": "查询项目部署记录",
+      "expected_skill": "project-deployment-query",
+      "priority": 2,
+      "reason": "明确提到部署，优先级第二"
+    },
+    {
+      "name": "查询产品信息",
+      "input": "查询产品信息",
+      "expected_skill": "product-query",
+      "priority": 3,
+      "reason": "明确提到产品"
+    },
+    {
+      "name": "查询项目代码仓库",
+      "input": "查询项目代码仓库",
+      "expected_skill": "project-basis-query",
+      "priority": 4,
+      "reason": "明确提到代码仓库"
+    },
+    {
+      "name": "查询项目部署的服务器",
+      "input": "查询项目部署的服务器",
+      "expected_skill": "project-deployment-query",
+      "priority": 2,
+      "reason": "部署优先级高于服务器"
+    },
+    {
+      "name": "查询公网IP对应的服务器",
+      "input": "查询公网IP对应的服务器",
+      "expected_skill": "server-public-ip-query",
+      "priority": 1,
+      "reason": "公网IP优先级最高"
+    }
+  ],
+  "param_extraction_test_cases": [
+    {
+      "name": "简单机房查询",
+      "input": "查询贵州机房的服务器",
+      "skill": "cmdb-server-query",
+      "expected_params": {
+        "node": "云公司->贵州",
+        "state": "0",
+        "currentPage": 1,
+        "pageSize": 15
+      }
+    },
+    {
+      "name": "多条件查询",
+      "input": "找一台贵州机房的在线物理机",
+      "skill": "cmdb-server-query",
+      "expected_params": {
+        "node": "云公司->贵州",
+        "state": "0",
+        "type": "0",
+        "pageSize": 1
+      }
+    },
+    {
+      "name": "模糊查询主机名",
+      "input": "查询主机名包含 prod 的服务器",
+      "skill": "cmdb-server-query",
+      "expected_params": {
+        "hostName": "prod",
+        "currentPage": 1,
+        "pageSize": 15
+      }
+    },
+    {
+      "name": "公网IP查询",
+      "input": "查询贵州机房的公网IP",
+      "skill": "server-public-ip-query",
+      "expected_params": {
+        "node": "云公司->贵州",
+        "currentPage": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "name": "部署记录查询",
+      "input": "查询guizh-rules-api的生产部署",
+      "skill": "project-deployment-query",
+      "expected_params": {
+        "name": "guizh-rules-api",
+        "deployEnv": 3,
+        "currentPage": 1,
+        "pageSize": 40
+      }
+    }
+  ],
+  "output_format_test_cases": [
+    {
+      "name": "标准输出格式",
+      "skill": "cmdb-server-query",
+      "input": "查询贵州机房的服务器",
+      "api_response": {
+        "code": 200,
+        "message": "success",
+        "data": {
+          "records": [
+            {
+              "hostName": "gz-server-01",
+              "ip": "192.168.7.101",
+              "node": "云公司->贵州",
+              "state": "0",
+              "serverType": "物理机",
+              "cpuCores": "32",
+              "memory": "128",
+              "os": "CentOS 7.9",
+              "environment": "生产",
+              "productName": "规则引擎平台",
+              "projectName": "guizh-rules-api"
+            }
+          ],
+          "total": 1,
+          "currentPage": 1,
+          "pageSize": 15
+        }
+      },
+      "expected_output_contains": [
+        "## 服务器查询结果",
+        "查询条件",
+        "匹配技能",
+        "查询参数",
+        "结果摘要",
+        "主机名",
+        "IP地址",
+        "说明"
+      ]
+    },
+    {
+      "name": "无结果输出",
+      "skill": "cmdb-server-query",
+      "input": "查询火星机房的服务器",
+      "api_response": {
+        "code": 200,
+        "message": "success",
+        "data": {
+          "records": [],
+          "total": 0,
+          "currentPage": 1,
+          "pageSize": 15
+        }
+      },
+      "expected_output_contains": [
+        "未查询到符合条件",
+        "说明"
+      ]
+    },
+    {
+      "name": "大数据量输出",
+      "skill": "cmdb-server-query",
+      "input": "查询贵州机房的所有服务器",
+      "api_response": {
+        "code": 200,
+        "message": "success",
+        "data": {
+          "records": [],
+          "total": 256,
+          "currentPage": 1,
+          "pageSize": 100
+        }
+      },
+      "expected_output_contains": [
+        "显示前 20 条",
+        "导航提示",
+        "筛选建议"
+      ]
+    }
+  ]
+}

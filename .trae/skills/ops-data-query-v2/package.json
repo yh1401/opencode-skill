@@ -1,0 +1,35 @@
+{
+  "name": "skill-agent",
+  "version": "3.0.0",
+  "description": "CMDB Skill Agent - Dify and LangChain compatible skill system",
+  "main": "lib/index.js",
+  "scripts": {
+    "test": "npx vitest run",
+    "test:watch": "npx vitest",
+    "test:coverage": "npx vitest run --coverage",
+    "lint": "npx eslint . --ext .ts",
+    "build": "npx tsc"
+  },
+  "keywords": [
+    "skill",
+    "agent",
+    "cmdb",
+    "dify",
+    "langchain"
+  ],
+  "author": "Skill Agent Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "dependencies": {
+    "yaml": "^2.3.0"
+  },
+  "type": "module"
+}
