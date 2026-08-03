@@ -14,18 +14,26 @@ Apollo MCP Server 为 Apollo 配置中心提供标准化的 MCP (Model Context P
 
 ### 方式一：Docker Compose 部署（推荐）
 
+> `docker-compose.yml` 与 `.env` 均位于 `deploy/` 目录下，以下命令需在 `deploy/` 下执行。
+
 #### 生产环境
 
 ```bash
 # 克隆或上传代码到服务器
 cd apollo-mcp-server
 
-# 配置 Apollo OpenAPI Token（必须）
-export APOLLO_OPENAPI_TOKEN="your_openapi_token_here"
+# 进入部署目录（docker-compose.yml 与 .env 均位于此）
+cd deploy
 
-# 配置 Apollo 生产环境地址（可选，默认使用配置文件中的 PRO 环境）
-export APOLLO_CONFIG_HOST="http://apollo-config.tech.ctseelink.cn:8080"
-export APOLLO_OPENAPI_HOST="http://apollo-config.tech.ctseelink.cn:8070"
+# 创建 .env 配置文件（生产环境必须关闭 Mock 并填写 Token）
+cat > .env << 'EOF'
+MCP_USE_MOCK=false
+APOLLO_CONFIG_HOST=http://apollo-config.tech.ctseelink.cn:8080
+APOLLO_OPENAPI_HOST=http://apollo-config.tech.ctseelink.cn:8070
+APOLLO_OPENAPI_TOKEN=your_openapi_token_here
+LOG_LEVEL=INFO
+EOF
+chmod 600 .env
 
 # 构建并启动
 docker compose up -d
@@ -40,7 +48,7 @@ curl http://localhost:8062/health
 #### Mock 模式（开发/测试）
 
 ```bash
-# Mock 模式容器（端口 8063）
+# 在 deploy/ 目录下启动 Mock 模式容器（端口 8063）
 docker compose --profile mock up -d
 
 # 健康检查
@@ -50,15 +58,17 @@ curl http://localhost:8063/health
 ### 方式二：Docker 命令部署
 
 ```bash
-# 构建镜像
-docker build -t apollo-mcp:latest .
+# 在项目根目录（apollo-mcp-server）构建镜像，Dockerfile 位于 deploy/ 下
+docker build -t apollo-mcp:latest -f deploy/Dockerfile .
 
-# 生产模式运行
+# 生产模式运行（Dockerfile 默认 Mock 模式，必须显式关闭）
 docker run -d \
   --name apollo-mcp \
   -p 8062:8062 \
+  -e MCP_USE_MOCK=false \
   -e APOLLO_OPENAPI_TOKEN="your_token" \
-  -e APOLLO_ENV="PRO" \
+  -e APOLLO_CONFIG_HOST="http://apollo-config.tech.ctseelink.cn:8080" \
+  -e APOLLO_OPENAPI_HOST="http://apollo-config.tech.ctseelink.cn:8070" \
   -v $(pwd)/config:/app/config:ro \
   -v $(pwd)/mock:/app/mock:ro \
   -v $(pwd)/logs:/app/logs \
@@ -75,6 +85,7 @@ docker run -d \
 ### 方式三：Python 直接运行
 
 ```bash
+# 在项目根目录（apollo-mcp-server）下执行
 # 安装依赖
 pip install -r requirements.txt
 
@@ -225,7 +236,12 @@ APOLLO_OPENAPI_TOKEN="your_token" python3 scripts/mcp_server.py --port 8062
 
 ### 日志
 
+> 以下命令需在 `deploy/` 目录下执行（docker-compose.yml 位于此处）。
+
 ```bash
+# 进入部署目录
+cd deploy
+
 # Docker 日志
 docker compose logs -f apollo-mcp
 
@@ -243,9 +259,9 @@ tail -f logs/apollo-mcp.log
 1. 登录 Apollo Portal（`http://apollo-config.tech.ctseelink.cn:8070`）
 2. 进入 **管理员工具** → **开放平台授权**
 3. 创建授权，记录生成的 Token
-4. 将 Token 配置到环境变量 `APOLLO_OPENAPI_TOKEN`
+4. 将 Token 配置到 `deploy/.env` 的 `APOLLO_OPENAPI_TOKEN`（Compose 部署）或环境变量（`docker run` / Python 直接运行）
 
-**注意**：Token 不要写入代码或 Git 仓库，通过环境变量或 Docker Secrets 注入。
+**注意**：Token 不要写入代码或 Git 仓库。`deploy/.env` 已加入忽略规则，且需设置权限 `chmod 600 .env`。
 
 ---
 

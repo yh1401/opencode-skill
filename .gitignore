@@ -67,6 +67,7 @@ mcp-server/dist/
 apollo-mcp-server/logs/
 apollo-mcp-server/config/auth.json
 apollo-mcp-server/config/auth.json.bak
+apollo-mcp-server/deploy/.env
 apollo-mcp-server/dist/
 
 # Large binary files

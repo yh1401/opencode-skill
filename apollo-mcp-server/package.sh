@@ -83,7 +83,7 @@ echo "  版本: ${VERSION}"
 echo "  包名: ${PKG_NAME}"
 mkdir -p "$DIST_DIR"
 
-# 排除敏感文件和非必要文件
+# 排除敏感文件和非必要文件（保留 mock_responses.json，Dockerfile 构建需要 mock/ 目录）
 tar czf "${DIST_DIR}/${PKG_NAME}" \
     --exclude='.env' \
     --exclude='config/auth.json' \
@@ -94,7 +94,7 @@ tar czf "${DIST_DIR}/${PKG_NAME}" \
     --exclude='.git' \
     --exclude='.gitignore' \
     --exclude='.dockerignore' \
-    --exclude='mock' \
+    --exclude='mock/*.sql' \
     --exclude='tools' \
     --exclude='__pycache__' \
     --exclude='*.pyc' \
@@ -102,7 +102,7 @@ tar czf "${DIST_DIR}/${PKG_NAME}" \
     --exclude='dist' \
     --exclude='package.sh' \
     --exclude="$PKG_NAME" \
-    scripts config deploy docs requirements.txt .env.example 2>/dev/null || true
+    scripts config deploy docs mock requirements.txt .env.example 2>/dev/null || true
 
 # 检查打包结果
 if [ ! -f "${DIST_DIR}/${PKG_NAME}" ]; then
@@ -124,10 +124,8 @@ echo "  scp ${DIST_DIR}/${PKG_NAME} user@server:/opt/"
 echo ""
 echo -e "${GREEN}🔧 服务器上解压部署:${NC}"
 echo "  cd /opt"
+echo "  mkdir -p apollo-mcp-server && cd apollo-mcp-server"
 echo "  tar xzf ${PKG_NAME}"
-echo "  cd apollo-mcp-server"
-echo "  cp .env.example .env   # 然后编辑 .env 填入真实 Token"
-echo "  vim .env"
 echo "  cd deploy && chmod +x deploy-prod.sh && ./deploy-prod.sh"
 echo ""
-echo -e "${YELLOW}⚠️ 注意: 打包已排除 config/auth.json 和 mock 数据，服务器上需通过 .env 或 auth.json 配置 Token${NC}"
+echo -e "${YELLOW}⚠️ 注意: 打包已排除 config/auth.json，服务器上通过 deploy-prod.sh 交互输入或 .env 配置 Token${NC}"
