@@ -1,34 +1,25 @@
 #!/bin/bash
-# ================================================
-# cmdb-mcp-server - 生产/测试环境一键部署脚本
-# 使用方法: chmod +x deploy-prod.sh && ./deploy-prod.sh
-# ================================================
+# cmdb-mcp-server 一键部署脚本（支持 Compose V1/V2）
+# 用法: chmod +x deploy-prod.sh && ./deploy-prod.sh
 set -e
 
-# 切换到脚本所在目录，保证 .env 和 docker-compose.yml 定位正确
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+# 1. 检测 Compose 版本
+if docker compose version >/dev/null 2>&1; then
+    dc="docker compose"
+    echo "[Compose V2] $(docker compose version)"
+elif command -v docker-compose >/dev/null 2>&1; then
+    dc="docker-compose"
+    echo "[Compose V1] $(docker-compose --version)"
+else
+    echo "错误: 未检测到 Docker Compose"; exit 1
+fi
 
-echo -e "${CYAN}╔══════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║       cmdb-mcp-server 一键部署脚本             ║${NC}"
-echo -e "${CYAN}╚══════════════════════════════════════════════════╝${NC}"
-echo ""
+command -v docker >/dev/null 2>&1 || { echo "错误: 未检测到 Docker"; exit 1; }
 
-# 1. 前置检查
-echo -e "${YELLOW}[1/5] 环境检查${NC}"
-command -v docker >/dev/null 2>&1 || { echo -e "${RED}❌ 请先安装 Docker${NC}"; exit 1; }
-docker compose version >/dev/null 2>&1 || { echo -e "${RED}❌ 请先安装 Docker Compose${NC}"; exit 1; }
-echo -e "✅ Docker: $(docker --version)"
-echo -e "✅ Docker Compose: $(docker compose version)"
-
-# 2. 配置 .env (如果不存在则创建默认配置)
-echo -e "\n${YELLOW}[2/5] 配置环境变量${NC}"
+# 2. 配置 .env
 if [ ! -f .env ]; then
     cat > .env << 'EOF'
 MCP_USE_MOCK=false
@@ -36,42 +27,31 @@ MCP_API_BASE_URL=https://oss.tech.ctseelink.cn
 LOG_LEVEL=INFO
 EOF
     chmod 600 .env
-    echo -e "✅ .env 文件已创建（默认关闭 Mock，使用生产 API）"
+    echo ".env 已创建"
 else
-    echo -e "✅ .env 文件已存在，跳过配置"
+    echo ".env 已存在，跳过"
 fi
 
-# 3. 构建与启动
-echo -e "\n${YELLOW}[3/5] 构建并启动服务${NC}"
-docker compose build -q
-docker compose up -d
+# 3. 停旧容器、构建并启动
+$dc down 2>/dev/null || true
+$dc up -d --build
 
-# 4. 等待启动
-echo -e "\n${YELLOW}[4/5] 等待服务启动${NC}"
+# 4. 等待启动并查看日志
 sleep 3
+echo "--- 启动日志 ---"
+$dc logs --tail=30 cmdb-mcp
+echo "----------------"
 
 # 5. 健康检查
-echo -e "\n${YELLOW}[5/5] 健康检查${NC}"
 HEALTH=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:8061/health || echo "000")
 
 if [ "$HEALTH" = "200" ]; then
-    IP=$(hostname -I | awk '{print $1}')
+    IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
     echo ""
-    echo -e "${GREEN}╔══════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║             🎉 部署成功！                       ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "  服务地址: ${CYAN}http://${IP}:8061${NC}"
-    echo -e "  MCP 端点: ${CYAN}http://${IP}:8061/mcp${NC}"
-    echo -e "  健康检查: ${CYAN}http://localhost:8061/health${NC}"
-    echo ""
-    echo -e "${YELLOW}下一步:${NC}"
-    echo "  1. 查看日志: docker compose logs -f"
-    echo "  2. 注册 MCP: 在 StarAgent 平台填写服务地址"
-    echo "  3. 绑定 Skill: 将 ops-data-query 技能绑定到此 MCP"
+    echo "部署成功: http://${IP}:8061"
+    echo "MCP 端点: http://${IP}:8061/mcp"
 else
-    echo -e "${RED}❌ 健康检查失败 (HTTP $HEALTH)${NC}"
-    echo "查看日志排查:"
-    echo "  docker compose logs cmdb-mcp"
+    echo "错误: 健康检查失败 (HTTP $HEALTH)"
+    echo "查看日志: $dc logs cmdb-mcp"
     exit 1
 fi

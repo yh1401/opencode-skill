@@ -21,6 +21,7 @@ import json
 import os
 import sys
 import argparse
+import asyncio
 import time
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
@@ -165,15 +166,11 @@ class CMDBAPIClient:
             return {"code": 500, "message": error_msg, "data": {"records": [], "total": 0}}
         
         try:
+            start_time = time.time()
             self._ensure_session()
-            
-            request_headers = {**self._session.headers}
-            if self.config.auth_headers:
-                request_headers.update(self.config.auth_headers)
             
             logger.log_info(f"[API] [{skill_id}] 请求开始: method={method}, url={url}, params_keys={list(params.keys())}, description={description}")
             
-            start_time = time.time()
             resp = self._session.request(
                 method, url,
                 json=params,
@@ -206,7 +203,7 @@ class CMDBAPIClient:
                 return {"code": 500, "message": "API 响应解析失败", "data": {"records": [], "total": 0}}
                 
         except requests.exceptions.Timeout as e:
-            duration = time.time() - start_time if 'start_time' in dir() else 0
+            duration = time.time() - start_time
             logger.log_api_response(skill_id, None, duration, False, "Timeout")
             logger.log_error(f"[API] [{skill_id}] 请求超时: {str(e)}, duration_ms={round(duration*1000, 2)}, url={url}")
             
@@ -234,7 +231,7 @@ class CMDBAPIClient:
             return {"code": 503, "message": "网络连接失败", "data": {"records": [], "total": 0}}
             
         except requests.exceptions.RequestException as e:
-            duration = time.time() - start_time if 'start_time' in dir() else 0
+            duration = time.time() - start_time
             logger.log_api_response(skill_id, None, duration, False, str(e))
             logger.log_error(f"[API] [{skill_id}] 请求异常: {str(e)}, duration_ms={round(duration*1000, 2)}, url={url}")
             
