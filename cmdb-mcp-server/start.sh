@@ -5,10 +5,14 @@ cd "$SCRIPT_DIR"
 
 PYTHON="python3"
 
-if ! $PYTHON -c "import requests" 2>/dev/null; then
-    echo "安装依赖..."
-    $PYTHON -m pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
-fi
+# 检查并安装所有必需依赖
+for pkg in requests fastapi uvicorn pydantic; do
+    if ! $PYTHON -c "import ${pkg}" 2>/dev/null; then
+        echo "安装依赖: ${pkg}..."
+        $PYTHON -m pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
+        break
+    fi
+done
 
 HOST=${1:-0.0.0.0}
 PORT=${2:-8061}
@@ -27,7 +31,7 @@ if $DAEMON; then
     if curl -s http://$HOST:$PORT/health > /dev/null; then
         echo "服务已启动: http://$HOST:$PORT"
     else
-        echo "启动失败，请查看 logs/mcp_server_error.log"
+        echo "启动失败，请查看 logs/ 目录下的日志"
         exit 1
     fi
 else

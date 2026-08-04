@@ -1,0 +1,40 @@
+# cmdb-mcp-server .dockerignore
+
+# 环境变量和认证（严禁打包）
+.env
+
+# 日志文件
+logs/
+*.log
+
+# Git 相关
+.git/
+.gitignore
+.gitattributes
+
+# 文档
+*.md
+docs/
+
+# 编辑器和系统文件
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.tmp
+
+# 工具脚本和打包产物（镜像内不需要）
+dist/
+package.sh
+
+# Python 虚拟环境
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# 版本相关
+*.zip
+*.tar.gz
+build/

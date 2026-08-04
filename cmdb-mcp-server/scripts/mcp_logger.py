@@ -24,7 +24,7 @@ class MCPLogger:
         
         os.makedirs(log_dir, exist_ok=True)
         
-        self.logger = logging.getLogger('ops-data-query-mcp')
+        self.logger = logging.getLogger('cmdb-mcp-server')
         self.logger.setLevel(getattr(logging, self.log_level))
         self.logger.propagate = False
         

@@ -296,7 +296,7 @@ author: Skill Agent Team
                             ▼ MCP 工具调用
 ┌─────────────────────────────────────────────────────────────┐
 │                   MCP Server (独立服务)                      │
-│  位置: mcp-server/scripts/mcp_server.py                     │
+│  位置: cmdb-mcp-server/scripts/mcp_server.py                     │
 │  ├── cmdb_server_query          (数据获取)                  │
 │  ├── server_public_ip_query     (数据获取)                  │
 │  ├── project_deployment_query   (数据获取)                  │
@@ -324,19 +324,19 @@ author: Skill Agent Team
 **启动命令**：
 
 ```bash
-cd mcp-server
+cd cmdb-mcp-server
 
 # 安装依赖
 pip install -r requirements.txt
 
 # 启动 MCP 服务器 (HTTP 模式，供 StarAgent 注册)
-python3 scripts/mcp_server.py --transport http --port 8000
+python3 scripts/mcp_server.py --transport http --port 8061
 
-# 或启动 MCP stdio 模式
-python3 scripts/mcp_server.py --transport mcp
+# 或使用启动脚本
+./start.sh -d
 ```
 
-**默认端口**：8000
+**默认端口**：8061
 
 ### 注册的工具列表
 
@@ -356,7 +356,7 @@ python3 scripts/mcp_server.py --transport mcp
 {
   "name": "ops-data-query",
   "type": "mcp",
-  "url": "http://localhost:8000",
+  "url": "http://localhost:8061",
   "description": "企业 CMDB 运维数据综合查询"
 }
 ```

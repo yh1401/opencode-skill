@@ -1,6 +1,10 @@
-# ops-data-query MCP 服务器
+# cmdb-mcp-server
 
 企业 CMDB 运维数据综合查询 MCP 服务器，遵循标准 MCP 协议规范实现。
+
+**版本**：v2.0.0  
+**协议**：MCP Streamable HTTP (JSON-RPC 2.0)  
+**端口**：8061
 
 ## 什么是 MCP
 
@@ -62,7 +66,7 @@ MCP (Model Context Protocol) 是一个开放协议，用于标准化应用程序
                               │ MCP Tool Call
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              ops-data-query MCP 服务器 (独立部署)                │
+│              cmdb-mcp-server (独立部署)                │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │  MCP 协议层（工具注册 & 参数定义）                        │  │
 │  │    • cmdb_server_query                                    │  │
@@ -133,9 +137,9 @@ python3 scripts/mcp_server.py --port 8000
 
 ### 3. 访问文档
 
-- API 文档：http://localhost:8000/docs
-- 服务信息：http://localhost:8000/
-- 健康检查：http://localhost:8000/health
+- API 文档：http://localhost:8061/docs
+- 服务信息：http://localhost:8061/
+- 健康检查：http://localhost:8061/health
 
 ## 标准 MCP 协议接口
 
@@ -225,7 +229,7 @@ Agent 平台                  MCP 服务器
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "name": "ops-data-query-mcp",
+    "name": "cmdb-mcp-server",
     "version": "2.0.0",
     "capabilities": {
       "tools/list": {},
@@ -328,7 +332,7 @@ Agent 平台                  MCP 服务器
   "name": "ops-data-query",
   "type": "mcp",
   "transport": "http",
-  "url": "http://localhost:8000",
+  "url": "http://localhost:8061",
   "description": "企业 CMDB 运维数据综合查询",
   "enabled": true
 }
@@ -351,17 +355,17 @@ Agent 平台                  MCP 服务器
 
 ```bash
 # 查询服务器信息
-curl -X POST http://localhost:8000/api/cmdb-server-query \
+curl -X POST http://localhost:8061/api/cmdb-server-query \
   -H "Content-Type: application/json" \
   -d '{"ip": "192.168.7.101", "currentPage": 1, "pageSize": 10}'
 
 # 查询公网 IP
-curl -X POST http://localhost:8000/api/server-public-ip-query \
+curl -X POST http://localhost:8061/api/server-public-ip-query \
   -H "Content-Type: application/json" \
   -d '{"ip": "192.168.7.101"}'
 
 # 查询部署记录
-curl -X POST http://localhost:8000/api/project-deployment-query \
+curl -X POST http://localhost:8061/api/project-deployment-query \
   -H "Content-Type: application/json" \
   -d '{"projectName": "guizh-rules-api"}'
 ```
@@ -378,17 +382,17 @@ MCP_USE_MOCK=true python3 scripts/mcp_server.py --port 8000
 
 ```bash
 # 1. 初始化握手
-curl -X POST http://localhost:8000/messages \
+curl -X POST http://localhost:8061/messages \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
 
 # 2. 获取工具列表
-curl -X POST http://localhost:8000/messages \
+curl -X POST http://localhost:8061/messages \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 
 # 3. 调用工具
-curl -X POST http://localhost:8000/messages \
+curl -X POST http://localhost:8061/messages \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"cmdb_server_query","arguments":{"ip":"192.168.7.101"}}}'
 ```
@@ -397,59 +401,66 @@ curl -X POST http://localhost:8000/messages \
 
 ```bash
 # 健康检查
-curl http://localhost:8000/health
+curl http://localhost:8061/health
 
 # API 端点
-curl -X POST http://localhost:8000/api/cmdb-server-query \
+curl -X POST http://localhost:8061/api/cmdb-server-query \
   -H "Content-Type: application/json" \
   -d '{"ip": "192.168.7.101"}'
 ```
 
 ## 部署
 
-### 简化部署（推荐）
+### 方式一：Docker Compose 部署（推荐）
 
 ```bash
-# 1. 解压部署包
-tar -xzf ops-data-query-mcp.tar.gz
-cd ops-data-query-mcp
+# 1. 上传/解压部署包到服务器
+cd /opt
+mkdir -p cmdb-mcp-server && cd cmdb-mcp-server
+tar xzf cmdb-mcp-server-*.tar.gz
 
-# 2. 启动（自动安装依赖）
+# 2. 进入 deploy 目录，按需修改 .env
+cd deploy
+cp .env.example .env
+# 编辑 .env：MCP_USE_MOCK=false, MCP_API_BASE_URL=...
+
+# 3. 一键部署
+chmod +x deploy-prod.sh
+./deploy-prod.sh
+```
+
+### 方式二：Python 直接运行
+
+```bash
+cd cmdb-mcp-server
+
+# 安装依赖
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 启动（默认端口 8061）
 ./start.sh -d
+
+# 或指定端口
+./start.sh 0.0.0.0 8061
 ```
 
-### Docker 部署
+### 方式三：Systemd 部署
 
-```dockerfile
-FROM python:3.9-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-
-COPY . .
-
-EXPOSE 8000
-CMD ["python3", "scripts/mcp_server.py", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### Systemd 部署
-
-创建 `/etc/systemd/system/ops-data-query-mcp.service`:
+创建 `/etc/systemd/system/cmdb-mcp-server.service`:
 
 ```ini
 [Unit]
-Description=ops-data-query MCP Server
+Description=cmdb-mcp-server
 After=network.target
 
 [Service]
 Type=simple
 User=appuser
-WorkingDirectory=/opt/ops-data-query-mcp
-ExecStart=/usr/bin/python3 /opt/ops-data-query-mcp/scripts/mcp_server.py --transport http --port 8000
+WorkingDirectory=/opt/cmdb-mcp-server
+ExecStart=/usr/bin/python3 /opt/cmdb-mcp-server/scripts/mcp_server.py --transport http --port 8061
 Restart=always
 RestartSec=10
-Environment=MCP_USE_MOCK=true
+Environment=MCP_USE_MOCK=false
 
 [Install]
 WantedBy=multi-user.target
@@ -459,36 +470,53 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable ops-data-query-mcp
-sudo systemctl start ops-data-query-mcp
+sudo systemctl enable cmdb-mcp-server
+sudo systemctl start cmdb-mcp-server
 ```
+
+## 环境变量说明
+
+| 变量 | 必填 | 默认值 | 说明 |
+|------|------|--------|------|
+| `MCP_USE_MOCK` | 否 | `false` | Mock 模式开关（API 失败时也会自动降级） |
+| `MCP_API_BASE_URL` | 否 | `https://oss.tech.ctseelink.cn` | CMDB API 基础地址 |
+| `LOG_LEVEL` | 否 | `INFO` | 日志级别：DEBUG/INFO/WARNING/ERROR |
 
 ## 配置文件
 
 - `config/api_endpoints.json` - API 端点配置
-- `references/mock_responses.json` - Mock 数据文件
+- `config/field_mappings.json` - 响应字段映射配置
+- `config/param_mappings.json` - 参数映射与路由规则
+- `mock/mock_responses.json` - Mock 数据文件
 
 ## 目录结构
 
 ```
-mcp-server/
-├── config/
-│   └── api_endpoints.json       # API 端点配置
-├── references/
-│   └── mock_responses.json      # Mock 数据
-├── logs/                        # 日志目录（自动创建）
-│   ├── 2026-07-03/              # 按日期组织的日志目录
-│   │   ├── mcp_server.log       # 主日志文件
-│   │   └── mcp_server_error.log # 错误日志文件
-│   └── ...
-├── scripts/
-│   ├── mcp_server.py           # 主服务器代码（标准 MCP 实现）
-│   ├── mcp_logger.py           # 日志模块（结构化日志）
-│   ├── formatters.py           # 格式化模块
-│   └── test_client.py          # 测试客户端
-├── requirements.txt             # Python 依赖
-├── start.sh                    # 启动脚本
-└── README.md                   # 本文档
+cmdb-mcp-server/
+├── config/                # 配置
+│   ├── api_endpoints.json
+│   ├── field_mappings.json
+│   └── param_mappings.json
+├── mock/                  # Mock 数据
+│   └── mock_responses.json
+├── scripts/               # 主程序
+│   ├── mcp_server.py
+│   ├── mcp_logger.py
+│   └── test_client.py
+├── deploy/                # 部署文件
+│   ├── deploy-prod.sh
+│   └── docker-compose.yml
+├── docs/                  # 文档
+│   ├── README.md
+│   └── DEPLOY.md
+├── logs/                  # 日志目录（自动创建）
+├── requirements.txt
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+├── .dockerignore
+├── package.sh
+└── start.sh
 ```
 
 ## 日志功能

@@ -1,0 +1,34 @@
+services:
+  cmdb-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cmdb-mcp-server
+    restart: unless-stopped
+    ports:
+      - "8061:8061"
+    environment:
+      - MCP_USE_MOCK=${MCP_USE_MOCK:-false}
+      - MCP_API_BASE_URL=${MCP_API_BASE_URL:-https://oss.tech.ctseelink.cn}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./config:/app/config:ro
+      - ./mock:/app/mock:ro
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8061/health').raise_for_status()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - cmdb-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+networks:
+  cmdb-network:
+    driver: bridge

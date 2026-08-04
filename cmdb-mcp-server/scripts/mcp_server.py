@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-标准 MCP 服务器 - ops-data-query-mcp
+标准 MCP 服务器 - cmdb-mcp-server
 为企业 CMDB 运维数据提供标准化的 MCP 工具调用接口
 
 遵循标准 MCP 协议规范：
@@ -28,7 +28,7 @@ from datetime import datetime
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 _root_dir = os.path.dirname(_script_dir)
 _config_dir = os.path.join(_root_dir, 'config')
-_references_dir = os.path.join(_root_dir, 'references')
+_references_dir = os.path.join(_root_dir, 'mock')
 
 sys.path.insert(0, _script_dir)
 from mcp_logger import get_logger
@@ -455,7 +455,7 @@ class MCPProtocolHandler:
             if method == "initialize":
                 logger.log_mcp_request(method, request_id)
                 response = self._build_response(request_id, {
-                    "name": "ops-data-query-mcp",
+                    "name": "cmdb-mcp-server",
                     "version": "2.0.0",
                     "capabilities": MCP_CAPABILITIES
                 })
@@ -536,7 +536,7 @@ mcp_handler = MCPProtocolHandler()
 
 if HAS_FASTAPI:
     app = FastAPI(
-        title="ops-data-query-mcp",
+        title="cmdb-mcp-server",
         description="企业 CMDB 运维数据综合查询服务 - 标准 MCP 协议实现",
         version="2.0.0"
     )
@@ -591,7 +591,7 @@ if HAS_FASTAPI:
     @app.get("/", tags=["基础"])
     def root():
         return {
-            "service": "ops-data-query-mcp",
+            "service": "cmdb-mcp-server",
             "version": "2.0.0",
             "description": "企业 CMDB 运维数据综合查询服务 - 标准 MCP 协议实现",
             "mcp_protocol": "standard",
@@ -618,7 +618,7 @@ if HAS_FASTAPI:
     def health():
         return {
             "status": "healthy",
-            "service": "ops-data-query-mcp",
+            "service": "cmdb-mcp-server",
             "version": "2.0.0",
             "mock_enabled": USE_MOCK,
             "protocol": "standard_mcp",
@@ -865,14 +865,12 @@ def run_http(host: str, port: int):
     logger.log_info(f"📤 MCP 消息: http://{host}:{port}/messages")
     logger.log_info(f"✅ 注册工具: {[tool['name'] for tool in MCP_TOOLS]}")
     
-    import asyncio
-    asyncio.get_event_loop().run_until_complete(
-        uvicorn.run(app, host=host, port=port, log_level="info")
-    )
+    # 直接使用 uvicorn.run，避免 get_event_loop 在 Python 3.12+ 的兼容性问题
+    uvicorn.run(app, host=host, port=port, log_level="info")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="ops-data-query MCP 服务器")
+    parser = argparse.ArgumentParser(description="cmdb-mcp-server - CMDB 运维数据 MCP 服务器")
     parser.add_argument("--transport", default="http", choices=["http"], help="传输模式")
     parser.add_argument("--host", default="0.0.0.0", help="监听地址")
     parser.add_argument("--port", type=int, default=8061, help="监听端口")

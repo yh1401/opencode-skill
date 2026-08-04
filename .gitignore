@@ -59,10 +59,11 @@ Thumbs.db
 .trae/skills/test-file/
 
 # MCP Server dependencies (排除依赖，保留源代码)
-mcp-server/__pycache__/
-mcp-server/**/*.pyc
-mcp-server/logs/
-mcp-server/dist/
+cmdb-mcp-server/__pycache__/
+cmdb-mcp-server/**/*.pyc
+cmdb-mcp-server/logs/
+cmdb-mcp-server/dist/
+cmdb-mcp-server/deploy/.env
 .trae/skills/apollo-config-query/_dev/
 apollo-mcp-server/logs/
 apollo-mcp-server/config/auth.json

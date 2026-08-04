@@ -14,7 +14,7 @@ except ImportError:
     sys.exit(1)
 
 
-def test_server_info(base_url="http://localhost:8000"):
+def test_server_info(base_url="http://localhost:8061"):
     """测试服务器信息接口"""
     print("📋 测试服务器信息接口...")
     try:
@@ -29,7 +29,7 @@ def test_server_info(base_url="http://localhost:8000"):
         return False
 
 
-def test_cmdb_server_query(base_url="http://localhost:8000"):
+def test_cmdb_server_query(base_url="http://localhost:8061"):
     """测试 CMDB 服务器查询"""
     print("\n📋 测试 CMDB 服务器查询...")
     try:
@@ -53,7 +53,7 @@ def test_cmdb_server_query(base_url="http://localhost:8000"):
         return False
 
 
-def test_public_ip_query(base_url="http://localhost:8000"):
+def test_public_ip_query(base_url="http://localhost:8061"):
     """测试公网 IP 查询"""
     print("\n📋 测试公网 IP 查询...")
     try:
@@ -75,7 +75,7 @@ def test_public_ip_query(base_url="http://localhost:8000"):
         return False
 
 
-def test_deployment_query(base_url="http://localhost:8000"):
+def test_deployment_query(base_url="http://localhost:8061"):
     """测试部署记录查询"""
     print("\n📋 测试部署记录查询...")
     try:
@@ -97,7 +97,7 @@ def test_deployment_query(base_url="http://localhost:8000"):
         return False
 
 
-def test_product_query(base_url="http://localhost:8000"):
+def test_product_query(base_url="http://localhost:8061"):
     """测试产品信息查询"""
     print("\n📋 测试产品信息查询...")
     try:
@@ -119,7 +119,7 @@ def test_product_query(base_url="http://localhost:8000"):
         return False
 
 
-def test_project_basis_query(base_url="http://localhost:8000"):
+def test_project_basis_query(base_url="http://localhost:8061"):
     """测试项目基础信息查询"""
     print("\n📋 测试项目基础信息查询...")
     try:
@@ -142,7 +142,7 @@ def test_project_basis_query(base_url="http://localhost:8000"):
 
 
 def main():
-    base_url = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000"
+    base_url = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8061"
     
     print("=" * 60)
     print("  MCP 服务器测试客户端")
