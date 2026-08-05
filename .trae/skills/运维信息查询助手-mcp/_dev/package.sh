@@ -3,7 +3,7 @@
 # ==============================================================================
 # Skill Agent 打包脚本（MCP 版）- 用于 Dify/StarAgent 平台
 # 本技能通过 MCP 服务 (cmdb-mcp-server) 获取数据，需先在平台注册 MCP 服务
-# 打包产物输出到 release/ops-data-query-mcp-v{n}.zip（自动递增版本号）
+# 打包产物输出到 release/cmdb-query-mcp-v{n}.zip（自动递增版本号）
 # ==============================================================================
 # 使用方法:
 #   ./_dev/package.sh                    # 默认 production 环境
@@ -33,9 +33,9 @@ BUILD_DIR="${DEV_DIR}/build"
 SKILL_AGENT_BUILD_DIR="${BUILD_DIR}/skill-agent"
 RELEASE_DIR="${SKILL_AGENT_DIR}/release"
 
-# 自动生成版本号：检测 release/ 目录下已存在的 ops-data-query-mcp-v{n}.zip
+# 自动生成版本号：检测 release/ 目录下已存在的 cmdb-query-mcp-v{n}.zip
 find_next_version() {
-    local base_name="ops-data-query-mcp"
+    local base_name="cmdb-query-mcp"
     local version=1
     local pattern="${base_name}-v*.zip"
 
@@ -51,7 +51,7 @@ find_next_version() {
 }
 
 VERSION=$(find_next_version)
-ZIP_NAME="ops-data-query-mcp-v${VERSION}.zip"
+ZIP_NAME="cmdb-query-mcp-v${VERSION}.zip"
 
 echo "=========================================="
 echo "  Skill Agent 打包脚本（MCP 版）"

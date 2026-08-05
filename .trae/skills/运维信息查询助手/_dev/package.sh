@@ -4,7 +4,7 @@
 # Skill Agent 打包脚本 - 用于 Dify/StarAgent 平台
 # 当前仅 cmdb-server-query 可用，其余技能开发中
 # 本脚本位于 _dev/ 目录，打包时自动排除 _dev/ 目录（不在复制列表中）
-# 打包产物输出到 _dev/ops-data-query-v{n}.zip（自动递增版本号）
+# 打包产物输出到 _dev/cmdb-query-v{n}.zip（自动递增版本号）
 # ==============================================================================
 # 使用方法:
 #   ./_dev/package.sh                    # 默认 production 环境
@@ -34,9 +34,9 @@ BUILD_DIR="${DEV_DIR}/build"
 SKILL_AGENT_BUILD_DIR="${BUILD_DIR}/skill-agent"
 RELEASE_DIR="${SKILL_AGENT_DIR}/release"
 
-# 自动生成版本号：检测 release/ 目录下已存在的 ops-data-query-v{n}.zip
+# 自动生成版本号：检测 release/ 目录下已存在的 cmdb-query-v{n}.zip
 find_next_version() {
-    local base_name="ops-data-query"
+    local base_name="cmdb-query"
     local version=1
     local pattern="${base_name}-v*.zip"
     
@@ -52,7 +52,7 @@ find_next_version() {
 }
 
 VERSION=$(find_next_version)
-ZIP_NAME="ops-data-query-v${VERSION}.zip"
+ZIP_NAME="cmdb-query-v${VERSION}.zip"
 
 echo "=========================================="
 echo "  Skill Agent 打包脚本 (Dify)"

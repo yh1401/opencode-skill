@@ -1,5 +1,5 @@
 {
-  "name": "ops-data-query-mcp-skill",
+  "name": "cmdb-query-mcp-skill",
   "version": "1.0.0",
   "description": "运维信息查询助手（MCP 版）- 通过 cmdb-mcp-server 获取 CMDB 服务器配置信息",
   "type": "module"
