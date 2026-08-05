@@ -34,17 +34,7 @@ EXPOSE 8061
 
 # 健康检查: 使用 Python 标准库避免对 requests 的依赖
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "
-import socket, sys
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.settimeout(2)
-try:
-    s.connect(('localhost', 8061))
-    s.close()
-    sys.exit(0)
-except:
-    sys.exit(1)
-"
+    CMD python -c "import socket,sys; s=socket.socket(socket.AF_INET,socket.SOCK_STREAM); s.settimeout(2); sys.exit(0 if s.connect_ex(('localhost',8061))==0 else 1)"
 
 ENV MCP_USE_MOCK=false
 ENV PYTHONUNBUFFERED=1
