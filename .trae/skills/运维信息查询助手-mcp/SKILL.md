@@ -12,7 +12,7 @@ author: Skill Agent Team
 本技能是 **「查询运维信息助手」的 MCP 版本**，用于 **CMDB 服务器配置信息查询**（cmdb-server-query）。
 
 与直接调用 CMDB 业务系统的旧版本不同，**本版本通过 MCP 服务（cmdb-mcp-server）获取数据**：
-- 平台侧：在 StarAgent 平台注册 MCP 服务 `cmdb-mcp-server`（服务地址 `http://localhost:5235/gateway/cmdb/mcp`）
+- 平台侧：在 StarAgent 平台注册 MCP 服务 `cmdb-mcp-server`（服务地址 `http://180.101.21.13:8080/gateway/cmdb/mcp`）
 - 技能侧：本技能只声明"调用哪个 MCP 工具 + 传什么参数"，由平台路由到已注册的 MCP 服务执行
 - 数据源：MCP 服务内部转发到 CMDB 业务系统（`https://oss.tech.ctseelink.cn`），并处理超时、异常降级等
 
@@ -27,7 +27,7 @@ author: Skill Agent Team
 > 部署 cmdb-mcp-server 并注册到平台后，本技能才能生效。部署步骤见 [cmdb-mcp-server 部署文档](../../../cmdb-mcp-server/deploy/deploy-guide.md)。
 
 1. **部署服务**：在服务器执行 `./deploy-prod.sh`，确认健康检查返回 200
-2. **平台注册**：在 StarAgent 平台注册 MCP 服务，填写服务地址 `http://localhost:5235/gateway/cmdb/mcp`
+2. **平台注册**：在 StarAgent 平台注册 MCP 服务，填写服务地址 `http://180.101.21.13:8080/gateway/cmdb/mcp`
 3. **验证工具**：平台应能发现 `cmdb_server_query` 工具（通过 MCP `tools/list`）
 
 ---
