@@ -149,13 +149,16 @@ class ApolloConfig:
             return
         
         if os.path.exists(auth_path):
-            with open(auth_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                self.openapi_token = data.get('openapi_token', '')
-                if self.openapi_token:
-                    logger.info("从配置文件加载 Apollo OpenAPI Token")
-                else:
-                    logger.warning("Apollo OpenAPI Token 未配置（发布历史和应用列表查询可能失败）")
+            try:
+                with open(auth_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.openapi_token = data.get('openapi_token', '')
+                    if self.openapi_token:
+                        logger.info("从配置文件加载 Apollo OpenAPI Token")
+                    else:
+                        logger.warning("Apollo OpenAPI Token 未配置（发布历史和应用列表查询可能失败）")
+            except Exception as e:
+                logger.warning(f"auth.json 读取失败，忽略配置文件: {e}")
 
 
 class ApolloAPIClient:
@@ -525,7 +528,7 @@ class MCPProtocolHandler:
                 print(f"[MCP] initialize")
                 response = self._build_response(request_id, {
                     "name": "apollo-config-query-mcp",
-                    "version": "1.0.0",
+                    "version": "2.0.0",
                     "capabilities": MCP_CAPABILITIES
                 })
                 return response, True

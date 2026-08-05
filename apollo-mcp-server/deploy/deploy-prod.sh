@@ -1,7 +1,8 @@
 #!/bin/bash
 # ================================================
-# Apollo MCP Server - 生产一键部署脚本
+# Apollo MCP Server - 生产/测试环境一键部署脚本
 # 使用方法: chmod +x deploy-prod.sh && ./deploy-prod.sh
+# 支持 Docker Compose V1(docker-compose) / V2(docker compose)
 # ================================================
 set -e
 
@@ -9,78 +10,76 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+# 1. 检测 Compose 命令（V1/V2 兼容）
+if docker compose version >/dev/null 2>&1; then
+    DC="docker compose"
+    echo "[Compose V2] $(docker compose version | head -1)"
+elif command -v docker-compose >/dev/null 2>&1; then
+    DC="docker-compose"
+    echo "[Compose V1] $(docker-compose --version)"
+else
+    echo "错误: 未检测到 Docker Compose"
+    echo "安装方式: yum install -y docker-compose-plugin  (或 apt install -y docker-compose-v2)"
+    exit 1
+fi
 
-echo -e "${CYAN}╔══════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║     Apollo MCP Server  生产一键部署脚本         ║${NC}"
-echo -e "${CYAN}╚══════════════════════════════════════════════════╝${NC}"
-echo ""
-
-# 1. 前置检查
-echo -e "${YELLOW}[1/5] 环境检查${NC}"
-command -v docker >/dev/null 2>&1 || { echo -e "${RED}❌ 请先安装 Docker${NC}"; exit 1; }
-docker compose version >/dev/null 2>&1 || { echo -e "${RED}❌ 请先安装 Docker Compose${NC}"; exit 1; }
-echo -e "✅ Docker: $(docker --version)"
-echo -e "✅ Docker Compose: $(docker compose version)"
-
-# 2. 配置 .env (如果不存在则交互式创建)
-echo -e "\n${YELLOW}[2/5] 配置环境变量${NC}"
+# 2. 配置 .env (不存在则从 .env.example 生成，Token 需手动填写)
 if [ ! -f .env ]; then
-    echo "请输入 Apollo OpenAPI Token (格式: mcp-token-xxx):"
-    read -r TOKEN
-    if [ -z "$TOKEN" ]; then
-        echo -e "${RED}❌ Token 不能为空${NC}"
-        exit 1
-    fi
-    
-    cat > .env << EOF
+    if [ -f ../.env.example ]; then
+        cp ../.env.example .env
+    else
+        cat > .env << 'EOF'
 MCP_USE_MOCK=false
 APOLLO_CONFIG_HOST=http://apollo-config.tech.ctseelink.cn:8080
 APOLLO_OPENAPI_HOST=http://apollo-config.tech.ctseelink.cn:8070
-APOLLO_OPENAPI_TOKEN=${TOKEN}
+APOLLO_OPENAPI_TOKEN=your_token_here
 LOG_LEVEL=INFO
 EOF
+    fi
     chmod 600 .env
-    echo -e "✅ .env 文件已创建"
-else
-    echo -e "✅ .env 文件已存在，跳过配置"
+    echo "⚠️  .env 已生成，请务必修改 APOLLO_OPENAPI_TOKEN 后重新执行本脚本"
+    echo "   vi .env"
+    exit 0
 fi
 
-# 3. 构建与启动
-echo -e "\n${YELLOW}[3/5] 构建并启动服务${NC}"
-docker compose build -q
-docker compose up -d
+# 校验 Token 是否仍为占位符
+if grep -q "your_token_here\|your_openapi_token_here" .env 2>/dev/null; then
+    echo "错误: APOLLO_OPENAPI_TOKEN 仍是占位符，请先修改 .env 后重试"
+    exit 1
+fi
 
-# 4. 等待启动
-echo -e "\n${YELLOW}[4/5] 等待服务启动${NC}"
+# 3. 构建与启动（禁用 BuildKit 避免 rpc EOF；先停旧容器保证干净）
+echo "[3/5] 构建并启动服务"
+DOCKER_BUILDKIT=0 $DC down 2>/dev/null || true
+DOCKER_BUILDKIT=0 $DC up -d --build
+
+# 4. 等待启动并查看日志
+echo "[4/5] 等待服务启动"
 sleep 3
+echo "--- 启动日志 ---"
+$DC logs --tail=50 apollo-mcp || true
 
 # 5. 健康检查
-echo -e "\n${YELLOW}[5/5] 健康检查${NC}"
-HEALTH=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:8062/health)
+echo "[5/5] 健康检查"
+HEALTH=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:8062/health || echo "000")
 
 if [ "$HEALTH" = "200" ]; then
-    IP=$(hostname -I | awk '{print $1}')
+    IP=$(hostname -I 2>/dev/null | awk '{print $1}')
     echo ""
-    echo -e "${GREEN}╔══════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║             🎉 部署成功！                       ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════════════════╝${NC}"
+    echo "✅ 部署成功！"
     echo ""
-    echo -e "  服务地址: ${CYAN}http://${IP}:8062${NC}"
-    echo -e "  MCP 端点: ${CYAN}http://${IP}:8062/mcp${NC}"
-    echo -e "  健康检查: ${CYAN}http://localhost:8062/health${NC}"
+    echo "  服务地址: http://${IP:-<服务器IP>}:8062"
+    echo "  MCP 端点: http://${IP:-<服务器IP>}:8062/mcp"
+    echo "  健康检查: http://localhost:8062/health"
     echo ""
-    echo -e "${YELLOW}下一步:${NC}"
-    echo "  1. 查看日志: docker compose logs -f"
+    echo "下一步:"
+    echo "  1. 查看日志: $DC logs -f apollo-mcp"
     echo "  2. 注册 MCP: 在 StarAgent 平台填写服务地址"
     echo "  3. 绑定 Skill: 将 apollo-config-query 技能绑定到此 MCP"
 else
-    echo -e "${RED}❌ 健康检查失败 (HTTP $HEALTH)${NC}"
+    echo "❌ 健康检查失败 (HTTP $HEALTH)"
     echo "查看日志排查:"
-    echo "  docker compose logs apollo-mcp"
+    echo "  $DC logs --tail=100 apollo-mcp"
+    echo "  或进入容器: $DC exec apollo-mcp sh"
     exit 1
 fi

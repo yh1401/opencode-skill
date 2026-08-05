@@ -20,13 +20,7 @@ services:
     volumes:
       - ../config:/app/config:ro
       - ../mock:/app/mock:ro
-      - ../logs:/app/logs
-    healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8062/health').raise_for_status()"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      - apollo-mcp-logs:/app/logs
     networks:
       - apollo-network
     logging:
@@ -50,7 +44,7 @@ services:
     volumes:
       - ../config:/app/config:ro
       - ../mock:/app/mock:ro
-      - ../logs:/app/logs
+      - apollo-mcp-mock-logs:/app/logs
     networks:
       - apollo-network
     profiles:
@@ -59,3 +53,7 @@ services:
 networks:
   apollo-network:
     driver: bridge
+
+volumes:
+  apollo-mcp-logs:
+  apollo-mcp-mock-logs:

@@ -5,6 +5,10 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
+# 替换为阿里云 Debian 镜像源（国内加速）
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true
+
 # 安装编译依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
@@ -41,9 +45,9 @@ USER apollo
 # 暴露端口
 EXPOSE 8062
 
-# 健康检查
+# 健康检查（使用标准库 socket，不依赖 requests，避免模块加载失败导致不健康）
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8062/health').raise_for_status()" || exit 1
+    CMD python -c "import socket,sys; s=socket.socket(socket.AF_INET,socket.SOCK_STREAM); s.settimeout(2); sys.exit(0 if s.connect_ex(('localhost',8062))==0 else 1)"
 
 # 默认 Mock 模式（生产环境通过环境变量关闭）
 ENV MCP_USE_MOCK=true
