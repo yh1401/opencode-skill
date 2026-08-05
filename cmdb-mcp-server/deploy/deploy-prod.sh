@@ -43,9 +43,11 @@ else
     echo ".env 已存在，跳过"
 fi
 
-# 3. 停旧容器、构建并启动
+# 3. 停旧容器、构建并启动（禁用 BuildKit 避免 rpc EOF）
+export DOCKER_BUILDKIT=0
 $dc down 2>/dev/null || true
-$dc up -d --build
+$dc build
+$dc up -d
 
 # 4. 等待启动并查看日志
 sleep 3
