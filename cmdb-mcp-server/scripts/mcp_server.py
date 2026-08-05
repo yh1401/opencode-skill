@@ -274,22 +274,25 @@ client = CMDBAPIClient()
 MCP_TOOLS = [
     {
         "name": "cmdb_server_query",
-        "description": "查询 CMDB 服务器信息，包括主机名、IP、机房、配置、状态等",
+        "description": "查询CMDB服务器信息，支持按机房、状态、类型等多条件组合查询",
         "inputSchema": {
             "type": "object",
             "properties": {
+                "node": {"type": "string", "description": "机房位置，如'云公司->贵州'"},
+                "state": {"type": "string", "description": "服务器状态，0=在线, 1=库存, 2=计划上线, 3=维修中, 4=已报废, 5=待分配, 6=待清退", "enum": ["0", "1", "2", "3", "4", "5", "6"]},
+                "osType": {"type": "string", "description": "操作系统", "enum": ["linux", "windows"]},
+                "type": {"type": "string", "description": "服务器类型，0=物理机, 1=自有虚拟机, 2=第三方云机", "enum": ["0", "1", "2"]},
                 "hostName": {"type": "string", "description": "主机名（模糊匹配）"},
-                "ip": {"type": "string", "description": "IP 地址"},
-                "node": {"type": "string", "description": "机房名称"},
-                "state": {"type": "string", "description": "状态：运行中/已关机/故障"},
-                "serverType": {"type": "string", "description": "服务器类型：物理机/虚拟机"},
-                "belong": {"type": "integer", "description": "所属业务线"},
-                "xc": {"type": "string", "description": "线路类型"},
-                "productName": {"type": "string", "description": "产品名称"},
-                "projectName": {"type": "string", "description": "项目名称"},
-                "currentPage": {"type": "integer", "description": "页码", "default": 1},
-                "pageSize": {"type": "integer", "description": "每页条数", "default": 15}
-            }
+                "ip": {"type": "string", "description": "内网IP/公网IP（模糊匹配）"},
+                "assetNo": {"type": "string", "description": "资产编号"},
+                "serial": {"type": "string", "description": "序列号"},
+                "belong": {"type": "integer", "description": "归属类型，1=云网, 2=视联"},
+                "isFromOutside": {"type": "string", "description": "信创标识，0=非信创, 1=信创", "enum": ["0", "1"]},
+                "isReplaceForChinaProduction": {"type": "string", "description": "国产化替换状态，0=未替换, 1=已替换", "enum": ["0", "1"]},
+                "currentPage": {"type": "integer", "description": "页码", "minimum": 1},
+                "pageSize": {"type": "integer", "description": "每页条数", "minimum": 1, "maximum": 100}
+            },
+            "required": []
         }
     },
     {
