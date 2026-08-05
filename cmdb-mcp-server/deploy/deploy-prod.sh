@@ -6,7 +6,16 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-# 1. 检测 Compose 版本
+# 1. 检测 Docker 环境
+if ! command -v docker >/dev/null 2>&1; then
+    echo "错误: 未检测到 Docker，请先安装 Docker"
+    echo "  CentOS/RHEL:  yum install -y docker-ce docker-ce-cli"
+    echo "  Ubuntu/Debian: apt install -y docker.io"
+    exit 1
+fi
+echo "[Docker] $(docker --version 2>/dev/null)"
+
+# 2. 检测 Compose 版本 (V2 优先，V1 兜底)
 if docker compose version >/dev/null 2>&1; then
     dc="docker compose"
     echo "[Compose V2] $(docker compose version)"
@@ -14,12 +23,14 @@ elif command -v docker-compose >/dev/null 2>&1; then
     dc="docker-compose"
     echo "[Compose V1] $(docker-compose --version)"
 else
-    echo "错误: 未检测到 Docker Compose"; exit 1
+    echo "错误: 未检测到 Docker Compose，请先安装"
+    echo "  CentOS/RHEL:  yum install -y docker-compose-plugin"
+    echo "  Ubuntu/Debian: apt install -y docker-compose-v2"
+    echo "  或手动安装:  curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose"
+    exit 1
 fi
 
-command -v docker >/dev/null 2>&1 || { echo "错误: 未检测到 Docker"; exit 1; }
-
-# 2. 配置 .env
+# 3. 配置 .env
 if [ ! -f .env ]; then
     cat > .env << 'EOF'
 MCP_USE_MOCK=false

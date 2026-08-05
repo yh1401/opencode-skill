@@ -11,6 +11,11 @@
 | 端口 8061 | 未被占用 |
 | CMDB API | 服务器可访问 `https://oss.tech.ctseelink.cn` |
 
+> **未安装 Docker Compose 时**（`docker-compose: command not found`）：
+> - CentOS/RHEL: `yum install -y docker-compose-plugin`
+> - Ubuntu/Debian: `apt install -y docker-compose-v2`
+> - 或手动安装: `curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose`
+
 ## 一、检测 Compose 版本
 
 ```bash
@@ -20,7 +25,7 @@ if docker compose version >/dev/null 2>&1; then
 elif command -v docker-compose >/dev/null 2>&1; then
     dc="docker-compose"; echo "[V1] $(docker-compose --version)"
 else
-    echo "未安装 Docker Compose"; exit 1
+    echo "未安装 Docker Compose，请参考上方安装说明"; exit 1
 fi
 ```
 
