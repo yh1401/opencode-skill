@@ -14,7 +14,7 @@ services:
     volumes:
       - ../config:/app/config:ro
       - ../mock:/app/mock:ro
-      - ../logs:/app/logs
+      - cmdb-mcp-logs:/app/logs
     networks:
       - cmdb-network
     logging:
@@ -26,3 +26,6 @@ services:
 networks:
   cmdb-network:
     driver: bridge
+
+volumes:
+  cmdb-mcp-logs:
