@@ -359,6 +359,33 @@ MCP_TOOLS = [
     }
 ]
 
+# ============================================================================
+# 工具启用白名单控制
+# 当前仅 cmdb_server_query 联调通过，其余工具暂不对平台暴露：
+#   - tools/list 只返回已启用工具，避免平台展示后调用失败
+#   - tools/call 调用未启用工具时返回明确错误提示
+# 启用方式（二选一）：
+#   1. 环境变量: MCP_ENABLED_TOOLS=cmdb_server_query,product_query
+#   2. 修改下方 DEFAULT_ENABLED_TOOLS 列表
+# ============================================================================
+DEFAULT_ENABLED_TOOLS = ["cmdb_server_query"]
+_env_tools = os.environ.get('MCP_ENABLED_TOOLS', '').strip()
+if _env_tools:
+    ENABLED_TOOLS = [t.strip() for t in _env_tools.split(',') if t.strip()]
+else:
+    ENABLED_TOOLS = list(DEFAULT_ENABLED_TOOLS)
+logger.log_info(f"已启用工具白名单: {ENABLED_TOOLS}")
+
+
+def _get_available_tools() -> List[dict]:
+    """返回已启用工具的定义列表"""
+    return [tool for tool in MCP_TOOLS if tool['name'] in ENABLED_TOOLS]
+
+
+def _is_tool_enabled(tool_name: str) -> bool:
+    """判断工具是否已启用"""
+    return tool_name in ENABLED_TOOLS
+
 MCP_CAPABILITIES = {
     "tools/list": {},
     "tools/call": {}
@@ -413,6 +440,9 @@ class MCPProtocolHandler:
     
     def _execute_tool(self, tool_name: str, arguments: dict) -> dict:
         """执行工具调用"""
+        if not _is_tool_enabled(tool_name):
+            raise ValueError(f"工具 {tool_name} 未启用，当前仅支持: {', '.join(ENABLED_TOOLS)}")
+
         if tool_name == "cmdb_server_query":
             query_params = {k: v for k, v in arguments.items() if v is not None}
             result = client.query_server(**query_params)
@@ -465,7 +495,7 @@ class MCPProtocolHandler:
             elif method == "tools/list":
                 logger.log_mcp_request(method, request_id)
                 response = self._build_response(request_id, {
-                    "tools": MCP_TOOLS
+                    "tools": _get_available_tools()
                 })
                 logger.log_mcp_response(method, request_id, True)
                 return response, True
@@ -611,7 +641,7 @@ if HAS_FASTAPI:
                 "docs": "/docs",
                 "health": "/health"
             },
-            "tools": [tool["name"] for tool in MCP_TOOLS]
+            "tools": [tool["name"] for tool in _get_available_tools()]
         }
     
     @app.get("/health", tags=["基础"])
@@ -688,7 +718,7 @@ if HAS_FASTAPI:
         Agent 平台工具发现端点
         平台通过 GET /tools 获取工具列表
         """
-        return JSONResponse(content={"tools": MCP_TOOLS})
+        return JSONResponse(content={"tools": _get_available_tools()})
     
     @app.post("/tools", tags=["平台兼容"])
     def platform_tools_endpoint_post(request: dict):
@@ -702,7 +732,7 @@ if HAS_FASTAPI:
             return JSONResponse(content={
                 "jsonrpc": "2.0",
                 "id": request_id,
-                "result": {"tools": MCP_TOOLS}
+                "result": {"tools": _get_available_tools()}
             })
         elif method == "tools/call":
             request_id = request.get("id", 1)
@@ -725,7 +755,7 @@ if HAS_FASTAPI:
                     "error": {"code": -32603, "message": str(e)}
                 })
         else:
-            return JSONResponse(content={"tools": MCP_TOOLS})
+            return JSONResponse(content={"tools": _get_available_tools()})
     
     @app.post("/tools/list", tags=["平台兼容"])
     def platform_tools_list_endpoint(request: dict = None):
@@ -737,7 +767,7 @@ if HAS_FASTAPI:
         return JSONResponse(content={
             "jsonrpc": "2.0",
             "id": request_id,
-            "result": {"tools": MCP_TOOLS}
+            "result": {"tools": _get_available_tools()}
         })
     
     @app.get("/tools/list", tags=["平台兼容"])
@@ -745,7 +775,7 @@ if HAS_FASTAPI:
         """
         Agent 平台工具列表端点（GET 版本）
         """
-        return JSONResponse(content={"tools": MCP_TOOLS})
+        return JSONResponse(content={"tools": _get_available_tools()})
     
     @app.post("/tools/call", tags=["平台兼容"])
     def platform_tools_call_endpoint(request: dict):
@@ -863,7 +893,7 @@ def run_http(host: str, port: int):
     logger.log_info(f"📖 API 文档: http://{host}:{port}/docs")
     logger.log_info(f"🔌 MCP SSE: http://{host}:{port}/sse")
     logger.log_info(f"📤 MCP 消息: http://{host}:{port}/messages")
-    logger.log_info(f"✅ 注册工具: {[tool['name'] for tool in MCP_TOOLS]}")
+    logger.log_info(f"✅ 注册工具: {[tool['name'] for tool in _get_available_tools()]}")
     
     # 直接使用 uvicorn.run，避免 get_event_loop 在 Python 3.12+ 的兼容性问题
     uvicorn.run(app, host=host, port=port, log_level="info")
