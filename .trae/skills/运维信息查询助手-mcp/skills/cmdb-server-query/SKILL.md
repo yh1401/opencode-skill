@@ -451,7 +451,7 @@ author: Skill Agent Team
 **错误原因**：{工具返回的错误信息}
 
 **建议**：
-1. 检查 MCP 服务（cmdb-mcp-server）是否已部署且健康检查通过
+1. 检查 MCP 服务（cmdb-mcp-server）是否已部署且健康检查通过（`curl http://localhost:5235/gateway/cmdb/health` 应返回 200）
 2. 稍后重新查询
 3. 如问题持续，请联系管理员
 ```

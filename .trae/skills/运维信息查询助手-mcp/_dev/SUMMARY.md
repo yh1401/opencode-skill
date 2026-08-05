@@ -33,13 +33,13 @@ _dev/
 MCP 服务代码位于 `cmdb-mcp-server/`（本仓库根目录），部署步骤：
 1. `cd cmdb-mcp-server && ./package.sh` 打包
 2. 上传服务器解压，`cd deploy && ./deploy-prod.sh` 启动
-3. 健康检查：`curl http://<MCP地址>:8061/health` 返回 200
+3. 健康检查：`curl http://localhost:5235/gateway/cmdb/health` 返回 200（或容器内 `curl http://localhost:8061/health`）
 
 ### 平台注册
 
 在 StarAgent 平台注册 MCP 服务：
 - 服务名：`cmdb-mcp-server`
-- 地址：`http://<MCP地址>:8061/mcp`
+- 地址：`http://localhost:5235/gateway/cmdb/mcp`
 - 验证：`tools/list` 应返回 `cmdb_server_query` 工具
 
 ---

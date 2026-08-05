@@ -76,6 +76,7 @@ cat > "${SKILL_AGENT_BUILD_DIR}/.env" << EOF
 SKILL_ENV=${TARGET_ENV}
 MCP_SERVER=cmdb-mcp-server
 MCP_TOOL=cmdb_server_query
+MCP_ENDPOINT=http://localhost:5235/gateway/cmdb/mcp
 EOF
 
 # 验证配置
@@ -111,22 +112,22 @@ echo ""
 case "${TARGET_ENV}" in
     development)
         echo "📋 开发环境配置:"
-        echo "   - MCP 服务: cmdb-mcp-server（本地 http://localhost:8061/mcp）"
+        echo "   - MCP 服务: cmdb-mcp-server（http://localhost:5235/gateway/cmdb/mcp）"
         ;;
     production)
         echo "📋 生产环境配置:"
-        echo "   - MCP 服务: cmdb-mcp-server（需在平台注册生产地址）"
+        echo "   - MCP 服务: cmdb-mcp-server（http://localhost:5235/gateway/cmdb/mcp）"
         ;;
     test)
         echo "📋 测试环境配置:"
-        echo "   - MCP 服务: cmdb-mcp-server（需在平台注册测试地址）"
+        echo "   - MCP 服务: cmdb-mcp-server（http://localhost:5235/gateway/cmdb/mcp）"
         ;;
 esac
 
 echo ""
 echo "使用方法:"
 echo "1. 部署 cmdb-mcp-server（参考 cmdb-mcp-server/deploy/deploy-guide.md）"
-echo "2. 在 StarAgent 平台注册 MCP 服务 cmdb-mcp-server，地址 http://<MCP地址>:8061/mcp"
+echo "2. 在 StarAgent 平台注册 MCP 服务 cmdb-mcp-server，地址 http://localhost:5235/gateway/cmdb/mcp"
 echo "3. 在平台上传 ${ZIP_NAME}"
 echo "4. 测试查询:"
 echo "   - 查找贵州机房的服务器"
