@@ -230,8 +230,14 @@ author: Skill Agent Team
 
 ### 服务地址
 
+**生产环境**（StarAgent 平台注册）：
 ```
 http://180.101.21.13:8080/gateway/apollo/mcp
+```
+
+**本地测试**（本机启动 apollo-mcp-server 后）：
+```
+http://localhost:8062/mcp
 ```
 
 ### 启动方式
@@ -279,7 +285,7 @@ APOLLO_HOST=http://your-apollo-host:8080 ./start.sh
 
 ### API 文档
 
-启动后访问：`http://180.101.21.13:8080/gateway/apollo/docs`
+本地启动后访问：`http://localhost:8062/docs`（生产网关：`http://180.101.21.13:8080/gateway/apollo/docs`）
 
 ---
 
