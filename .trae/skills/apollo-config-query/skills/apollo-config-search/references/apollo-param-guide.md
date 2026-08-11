@@ -41,7 +41,7 @@ Apollo 配置查询 API 共支持以下查询字段，按处理方式分为 4 �
 | **固定可选值映射** | 1 | 技能内直接映射 | 环境（env） |
 | **默认值参数** | 2 | 默认值兜底 | 集群、Namespace |
 | **模糊匹配** | 1 | 原值传递 | 配置项 Key |
-| **查询模式** | 1 | 模式切换 | config/release/apps |
+| **查询模式** | 1 | 模式切换 | config/apps |
 
 ---
 
@@ -53,7 +53,7 @@ Apollo 配置查询 API 共支持以下查询字段，按处理方式分为 4 �
 | 应用相关 | appid、应用配置、应用 |
 | Namespace | namespace、配置空间、配置命名空间 |
 | 环境相关 | 开发环境、测试环境、生产环境、DEV、FAT、PRO |
-| 查询模式 | 查看配置、发布历史、变更记录、应用列表 |
+| 查询模式 | 查看配置、应用列表 |
 | 配置项 | key、配置key、配置项key |
 
 ---
@@ -94,7 +94,6 @@ Apollo 配置查询 API 共支持以下查询字段，按处理方式分为 4 �
 | 输入关键词 | API参数 | 映射值 | 说明 |
 |-----------|---------|--------|------|
 | 查看配置、配置列表 | queryMode | config | 查询配置项列表（默认） |
-| 发布历史、变更记录 | queryMode | release | 查询发布历史 |
 | 应用列表、有哪些应用 | queryMode | apps | 查询应用列表 |
 
 ### 4.5 应用 ID 映射
@@ -128,21 +127,14 @@ Apollo 配置查询 API 共支持以下查询字段，按处理方式分为 4 �
 输出：{"appId": "rule-engine", "env": "PRO", "queryMode": "config", "namespaceName": "application", "key": "timeout"}
 ```
 
-### 示例 3：查询发布历史
-
-```
-输入：rule-engine 的配置变更记录
-输出：{"appId": "rule-engine", "env": "PRO", "queryMode": "release", "namespaceName": "application"}
-```
-
-### 示例 4：查询特定 Namespace
+### 示例 3：查询特定 Namespace
 
 ```
 输入：rule-engine 在测试环境的数据库配置
 输出：{"appId": "rule-engine", "env": "FAT", "queryMode": "config", "namespaceName": "datasource"}
 ```
 
-### 示例 5：查询应用列表
+### 示例 4：查询应用列表
 
 ```
 输入：Apollo 里有哪些应用

@@ -11,8 +11,7 @@
 | Docker | 已安装并运行 | `docker info` |
 | Docker Compose | V2 版本 | `docker compose version` |
 | 端口 8062 | 未被占用 | `ss -tlnp \| grep 8062` |
-| Apollo ConfigService | 内网可达 | `curl -s -o /dev/null -w "%{http_code}" http://apollo-config.tech.ctseelink.cn:8080` |
-| Apollo OpenAPI | 内网可达 | `curl -s -o /dev/null -w "%{http_code}" http://apollo-config.tech.ctseelink.cn:8070` |
+| Apollo OpenAPI (8070) | 内网可达（查询配置/应用列表共用） | `curl -s -o /dev/null -w "%{http_code}" http://apollo-config.tech.ctseelink.cn:8070` |
 | 磁盘空间 | >1GB 可用 | `df -h /` |
 
 > 如果 Apollo 服务不可达，需先配置内网 DNS 或在 `/etc/hosts` 中添加解析。
@@ -53,7 +52,6 @@ cd /opt/opencode-skill/apollo-mcp-server/deploy
 
 cat > .env << 'EOF'
 MCP_USE_MOCK=false
-APOLLO_CONFIG_HOST=http://apollo-config.tech.ctseelink.cn:8080
 APOLLO_OPENAPI_HOST=http://apollo-config.tech.ctseelink.cn:8070
 APOLLO_OPENAPI_TOKEN=your_token_here
 LOG_LEVEL=INFO
@@ -122,7 +120,7 @@ docker compose down
 |------|----------|
 | `Mock 模式: true` | 检查 `.env` 中 `MCP_USE_MOCK=false` |
 | `Token 未配置` | 检查 `.env` 中 `APOLLO_OPENAPI_TOKEN` |
-| Apollo 网络不通 | `curl http://apollo-config.tech.ctseelink.cn:8080` 测试 |
+| Apollo 网络不通 | `curl http://apollo-config.tech.ctseelink.cn:8070` 测试 |
 | 端口被占用 | 修改 `docker-compose.yml` 中的端口映射 |
 
 ---
@@ -133,7 +131,6 @@ docker compose down
 |------|------|--------|
 | `MCP_USE_MOCK` | Mock 数据开关 | `false` |
 | `APOLLO_ENV` | Apollo 环境（PRO/DEV/SIT/LOCAL） | 配置文件 `default_env` |
-| `APOLLO_CONFIG_HOST` | Apollo ConfigService 地址 | - |
-| `APOLLO_OPENAPI_HOST` | Apollo OpenAPI 地址 | - |
+| `APOLLO_OPENAPI_HOST` | Apollo OpenAPI 统一地址（查询配置/应用列表共用） | - |
 | `APOLLO_OPENAPI_TOKEN` | Apollo OpenAPI Token | - |
 | `LOG_LEVEL` | 日志级别 | `INFO` |

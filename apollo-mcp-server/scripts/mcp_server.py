@@ -77,7 +77,6 @@ logger.addHandler(_file_handler)
 
 class ApolloConfig:
     def __init__(self):
-        self.config_service_base = "http://localhost:8080"
         self.openapi_base = "http://localhost:8070"
         self.openapi_token = ""
         self.endpoints = {}
@@ -91,19 +90,14 @@ class ApolloConfig:
             with open(config_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 
-            # 1. 优先使用环境变量（生产部署方式）
-            env_config_host = os.environ.get('APOLLO_CONFIG_HOST')
+            # 1. 优先使用环境变量（生产部署方式），配置查询和应用列表统一走 OpenAPI（8070）
             env_openapi_host = os.environ.get('APOLLO_OPENAPI_HOST')
-            
-            if env_config_host:
-                self.config_service_base = env_config_host
-                logger.info(f"环境变量 APOLLO_CONFIG_HOST 覆盖: {self.config_service_base}")
             if env_openapi_host:
                 self.openapi_base = env_openapi_host
                 logger.info(f"环境变量 APOLLO_OPENAPI_HOST 覆盖: {self.openapi_base}")
             
             # 2. 如果环境变量没设，从配置文件读取对应环境
-            if not env_config_host or not env_openapi_host:
+            if not env_openapi_host:
                 environments = data.get('environments', {})
                 # 如果 APOLLO_ENV 未设，使用配置文件的 default_env
                 if not self.current_env:
@@ -112,31 +106,24 @@ class ApolloConfig:
                 env_key = self.current_env
                 if env_key in environments:
                     env_config = environments[env_key]
-                    if not env_config_host:
-                        self.config_service_base = env_config.get('config_service', self.config_service_base)
-                    if not env_openapi_host:
-                        self.openapi_base = env_config.get('openapi_service', self.openapi_base)
-                    logger.info(f"加载 {env_key} 环境配置: ConfigService={self.config_service_base}, OpenAPI={self.openapi_base}")
+                    self.openapi_base = env_config.get('openapi_service', self.openapi_base)
+                    logger.info(f"加载 {env_key} 环境配置: OpenAPI={self.openapi_base}")
             
             # 3. 兼容旧格式（base_url）
-            if not env_config_host and not environments:
+            if not env_openapi_host and not data.get('environments'):
                 old_base = data.get('base_url')
                 if old_base:
-                    self.config_service_base = old_base
                     self.openapi_base = old_base.replace(':8080', ':8070')
             
             # 4. 加载 endpoints 模板
             self.endpoints = data.get('endpoints', {})
             
-            # 5. 构建完整 URL
-            for endpoint_id, endpoint in self.endpoints.items():
+            # 5. 构建完整 URL（全部基于 OpenAPI 统一地址）
+            for endpoint in self.endpoints.values():
                 if 'path' in endpoint:
-                    if endpoint_id == 'apollo-config-query':
-                        endpoint['full_url'] = f"{self.config_service_base}{endpoint['path']}"
-                    else:
-                        endpoint['full_url'] = f"{self.openapi_base}{endpoint['path']}"
+                    endpoint['full_url'] = f"{self.openapi_base}{endpoint['path']}"
             
-            logger.info(f"Apollo 配置加载完成 [{self.current_env}]: ConfigService={self.config_service_base}, OpenAPI={self.openapi_base}")
+            logger.info(f"Apollo 配置加载完成 [{self.current_env}]: OpenAPI={self.openapi_base}")
     
     def load_auth(self):
         auth_path = os.path.join(_config_dir, 'auth.json')
@@ -156,7 +143,7 @@ class ApolloConfig:
                     if self.openapi_token:
                         logger.info("从配置文件加载 Apollo OpenAPI Token")
                     else:
-                        logger.warning("Apollo OpenAPI Token 未配置（发布历史和应用列表查询可能失败）")
+                        logger.warning("Apollo OpenAPI Token 未配置（配置查询和应用列表将失败）")
             except Exception as e:
                 logger.warning(f"auth.json 读取失败，忽略配置文件: {e}")
 
@@ -236,33 +223,6 @@ class ApolloAPIClient:
                 result["data"]["_filtered_count"] = len(configurations)
             return result
         
-        elif tool_id == 'apollo-release-history':
-            releases_data = mock_data.get('_releases', {})
-            app_releases = releases_data.get(appId, {})
-            namespace_releases = app_releases.get(namespaceName, [])
-            
-            if not app_releases:
-                print(f"[MOCK] [apollo-release-history] 应用不存在: {appId}")
-                return {"code": 404, "message": f"应用 {appId} 不存在", "data": {}}
-            
-            if not namespace_releases:
-                available_ns = list(app_releases.keys())
-                print(f"[MOCK] [apollo-release-history] Namespace 无发布记录: {namespaceName}")
-                return {"code": 200, "message": "success", "data": {"appId": appId, "releases": [], "note": f"该 Namespace 无发布记录，可用: {', '.join(available_ns)}"}}
-            
-            print(f"[MOCK] [apollo-release-history] appId={appId}, namespace={namespaceName}, releases={len(namespace_releases)}")
-            return {
-                "code": 200,
-                "message": "success",
-                "data": {
-                    "appId": appId,
-                    "clusterName": kwargs.get('clusterName', 'default'),
-                    "namespaceName": namespaceName,
-                    "env": kwargs.get('env', 'PRO'),
-                    "releases": namespace_releases
-                }
-            }
-        
         return {"code": 500, "message": f"Mock 数据不存在: {tool_id}", "data": {}}
     
     def _request(self, tool_id: str, url: str, params: dict = None, headers: dict = None, **mock_kwargs) -> dict:
@@ -319,14 +279,6 @@ class ApolloAPIClient:
             # 提取 HTTP 状态码，提供更有针对性的错误信息
             status_code = getattr(getattr(e, 'response', None), 'status_code', None)
             if status_code == 400:
-                # 检查是否是方法不支持（如 GET releases 在某些 Apollo 版本不支持）
-                try:
-                    err_body = e.response.json()
-                    if 'method' in str(err_body).lower() and 'not supported' in str(err_body).lower():
-                        logger.warning(f"[{tool_id}] Apollo OpenAPI 不支持此请求方法: {str(e)}")
-                        return {"code": 501, "message": "Apollo OpenAPI 不支持此端点（可能是 Apollo 版本过低）", "data": {}}
-                except:
-                    pass
                 logger.warning(f"[{tool_id}] 请求参数错误: {str(e)}")
                 return {"code": 400, "message": f"请求参数错误: {str(e)}", "data": {}}
             elif status_code == 401:
@@ -338,18 +290,31 @@ class ApolloAPIClient:
             logger.error(f"[{tool_id}] 请求异常: {str(e)}")
             return {"code": 500, "message": f"API 请求失败: {str(e)}", "data": {}}
     
-    def query_config(self, appId: str, clusterName: str = "default", namespaceName: str = "application", key: str = None) -> dict:
+    def query_config(self, appId: str, env: str = "PRO", clusterName: str = "default", namespaceName: str = "application", key: str = None) -> dict:
         """
-        查询 Apollo 配置项 (使用 ConfigService，无需认证)
-        GET /configs/{appId}/{clusterName}/{namespaceName}
+        查询 Apollo 配置项 (使用 OpenAPI，需要 Token)
+        GET /openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}
         """
-        url = f"{self.config.config_service_base}/configs/{appId}/{clusterName}/{namespaceName}"
+        url = f"{self.config.openapi_base}/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}"
         
-        logger.info(f"查询配置: appId={appId}, namespace={namespaceName}, key={key or '(全部)'}")
+        headers = {}
+        if self.config.openapi_token:
+            headers['Authorization'] = self.config.openapi_token
         
-        result = self._request('apollo-config-query', url,
-                                appId=appId, clusterName=clusterName,
-                                namespaceName=namespaceName, key=key)
+        logger.info(f"查询配置: appId={appId}, env={env}, namespace={namespaceName}, key={key or '(全部)'}")
+        
+        result = self._request('apollo-config-query', url, headers=headers,
+                                appId=appId, env=env,
+                                clusterName=clusterName, namespaceName=namespaceName, key=key)
+        
+        # 将 OpenAPI 返回的 items 数组转换为 configurations 字典（保持输出格式稳定）
+        if result.get('code') == 200:
+            data = result.get('data', {})
+            if isinstance(data, dict) and 'items' in data:
+                data['configurations'] = {
+                    item['key']: item['value']
+                    for item in data['items'] if isinstance(item, dict) and 'key' in item
+                }
         
         # 如果有 key 参数，在非 Mock 模式下做本地过滤（Mock 模式已在数据层处理）
         if key and result.get('code') == 200 and not USE_MOCK:
@@ -366,27 +331,12 @@ class ApolloAPIClient:
         
         return result
     
-    def query_releases(self, appId: str, env: str = "PRO", clusterName: str = "default", namespaceName: str = "application") -> dict:
-        """
-        查询 Apollo 发布历史 (使用 OpenAPI，需要 Token)
-        GET /openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/releases
-        """
-        url = f"{self.config.openapi_base}/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/releases"
-        
-        headers = {}
-        if self.config.openapi_token:
-            headers['Authorization'] = self.config.openapi_token
-        
-        return self._request('apollo-release-history', url, headers=headers,
-                                 appId=appId, env=env,
-                                 clusterName=clusterName, namespaceName=namespaceName)
-    
     def query_apps(self) -> dict:
         """
         查询 Apollo 应用列表 (使用 OpenAPI，需要 Token)
         GET /openapi/v1/apps
         """
-        endpoint = self.config.endpoints.get('apollo-apps', {})
+        endpoint = self.config.endpoints.get('apollo-app-list', {})
         url = endpoint.get('full_url', f"{self.config.openapi_base}/openapi/v1/apps")
         
         headers = {}
@@ -410,23 +360,10 @@ MCP_TOOLS = [
             "type": "object",
             "properties": {
                 "appId": {"type": "string", "description": "应用ID，如 'rule-engine'。必填参数"},
+                "env": {"type": "string", "description": "环境，PRO=生产, DEV=开发, FAT=测试, UAT=预发", "enum": ["PRO", "DEV", "FAT", "UAT"]},
                 "clusterName": {"type": "string", "description": "集群名称，默认 'default'"},
                 "namespaceName": {"type": "string", "description": "Namespace 名称，默认 'application'"},
                 "key": {"type": "string", "description": "配置项 Key 关键词（模糊匹配），用于过滤配置项"}
-            },
-            "required": ["appId"]
-        }
-    },
-    {
-        "name": "apollo_release_history",
-        "description": "查询 Apollo 配置的发布历史记录，包含发布版本、发布人、发布时间等信息。",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "appId": {"type": "string", "description": "应用ID，如 'rule-engine'。必填参数"},
-                "env": {"type": "string", "description": "环境，PRO=生产, DEV=开发, FAT=测试, UAT=预发", "enum": ["PRO", "DEV", "FAT", "UAT"]},
-                "clusterName": {"type": "string", "description": "集群名称，默认 'default'"},
-                "namespaceName": {"type": "string", "description": "Namespace 名称，默认 'application'"}
             },
             "required": ["appId"]
         }
@@ -495,19 +432,10 @@ class MCPProtocolHandler:
                 raise ValueError("appId 是必填参数，请指定应用ID")
             return client.query_config(
                 appId=appId,
+                env=arguments.get("env", "PRO"),
                 clusterName=arguments.get("clusterName", "default"),
                 namespaceName=arguments.get("namespaceName", "application"),
                 key=arguments.get("key")
-            )
-        elif tool_name == "apollo_release_history":
-            appId = arguments.get("appId")
-            if not appId:
-                raise ValueError("appId 是必填参数，请指定应用ID")
-            return client.query_releases(
-                appId=appId,
-                env=arguments.get("env", "PRO"),
-                clusterName=arguments.get("clusterName", "default"),
-                namespaceName=arguments.get("namespaceName", "application")
             )
         elif tool_name == "apollo_app_list":
             return client.query_apps()
@@ -587,26 +515,21 @@ if HAS_FASTAPI:
     app = FastAPI(
         title="apollo-config-query-mcp",
         description="Apollo 配置查询 MCP 服务 - 为 Apollo 配置中心提供标准化工具调用接口",
-        version="1.0.0"
+        version="2.0.0"
     )
     
     class ApolloConfigQueryParams(BaseModel):
         appId: str
-        clusterName: Optional[str] = "default"
-        namespaceName: Optional[str] = "application"
-        key: Optional[str] = None
-    
-    class ApolloReleaseHistoryParams(BaseModel):
-        appId: str
         env: Optional[str] = "PRO"
         clusterName: Optional[str] = "default"
         namespaceName: Optional[str] = "application"
+        key: Optional[str] = None
     
     @app.get("/", tags=["基础"])
     def root():
         return {
             "service": "apollo-config-query-mcp",
-            "version": "1.0.0",
+            "version": "2.0.0",
             "description": "Apollo 配置查询 MCP 服务",
             "mcp_protocol": "standard",
             "capabilities": ["tools/list", "tools/call"],
@@ -622,7 +545,6 @@ if HAS_FASTAPI:
             "version": "2.0.0",
             "environment": client.config.current_env,
             "mock_enabled": USE_MOCK,
-            "config_service_base": client.config.config_service_base,
             "openapi_base": client.config.openapi_base,
             "has_openapi_token": bool(client.config.openapi_token),
             "api_stats": {
@@ -676,19 +598,10 @@ if HAS_FASTAPI:
     def http_config_query(params: ApolloConfigQueryParams):
         result = client.query_config(
             appId=params.appId,
+            env=params.env,
             clusterName=params.clusterName,
             namespaceName=params.namespaceName,
             key=params.key
-        )
-        return JSONResponse(content=result)
-    
-    @app.post("/api/releases", tags=["兼容层 - 发布历史"])
-    def http_release_history(params: ApolloReleaseHistoryParams):
-        result = client.query_releases(
-            appId=params.appId,
-            env=params.env,
-            clusterName=params.clusterName,
-            namespaceName=params.namespaceName
         )
         return JSONResponse(content=result)
     

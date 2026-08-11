@@ -6,22 +6,18 @@
   "environments": {
     "LOCAL": {
       "label": "本地 Docker 环境",
-      "config_service": "http://localhost:8080",
       "openapi_service": "http://localhost:8070"
     },
     "PRO": {
       "label": "生产环境",
-      "config_service": "http://apollo-config.tech.ctseelink.cn:8080",
       "openapi_service": "http://apollo-config.tech.ctseelink.cn:8070"
     },
     "SIT": {
       "label": "系统集成测试",
-      "config_service": "http://apollo-sit.tech.ctseelink.cn:8080",
       "openapi_service": "http://apollo-sit.tech.ctseelink.cn:8070"
     },
     "DEV": {
       "label": "开发环境",
-      "config_service": "http://apollo-dev.tech.ctseelink.cn:8080",
       "openapi_service": "http://apollo-dev.tech.ctseelink.cn:8070"
     }
   },
@@ -31,13 +27,8 @@
   "endpoints": {
     "apollo-config-query": {
       "method": "GET",
-      "path": "/configs/{appId}/{clusterName}/{namespaceName}",
-      "description": "ConfigService - 获取配置项（无认证）"
-    },
-    "apollo-release-history": {
-      "method": "GET",
-      "path": "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/releases",
-      "description": "OpenAPI - 获取发布历史（需 Token）"
+      "path": "/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}",
+      "description": "OpenAPI - 获取配置项（需 Token）"
     },
     "apollo-app-list": {
       "method": "GET",

@@ -1,6 +1,6 @@
 ---
 name: apollo-config-search
-description: 查询 Apollo 配置中心的配置信息，支持配置项查询、发布历史查询和应用列表查询
+description: 查询 Apollo 配置中心的配置信息，支持配置项查询和应用列表查询
 version: 2.0.0
 author: Skill Agent Team
 ---
@@ -12,8 +12,7 @@ author: Skill Agent Team
 本技能通过 **MCP 工具** 与 Apollo 配置中心进行交互，提供以下能力：
 
 1.  **配置查询** (`apollo_config_query`)：查询指定应用、环境、集群、Namespace 的配置项
-2.  **发布历史** (`apollo_release_history`)：查询配置的发布版本记录
-3.  **应用列表** (`apollo_app_list`)：获取 Apollo 中所有可用应用列表
+2.  **应用列表** (`apollo_app_list`)：获取 Apollo 中所有可用应用列表
 
 ## 触发条件
 
@@ -22,7 +21,6 @@ author: Skill Agent Team
 - appid、应用配置
 - namespace、配置项
 - key、配置 key
-- 发布历史、变更记录
 - 应用列表、有哪些应用
 
 **排他条件**：
@@ -31,7 +29,7 @@ author: Skill Agent Team
 
 ## 工具调用 Schema
 
-本技能依赖 3 个 MCP 工具，通过 `apollo-mcp-server` 提供服务。
+本技能依赖 2 个 MCP 工具，通过 `apollo-mcp-server` 提供服务。
 
 ### 工具 1: apollo_config_query
 
@@ -66,41 +64,7 @@ author: Skill Agent Team
 }
 ```
 
-### 工具 2: apollo_release_history
-
-查询指定应用的 Namespace 发布历史。
-
-```json
-{
-  "name": "apollo_release_history",
-  "description": "查询 Apollo 配置的发布历史记录，包含发布版本、发布人、发布时间等信息。",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "appId": {
-        "type": "string",
-        "description": "应用ID，如 'rule-engine'。必填参数"
-      },
-      "env": {
-        "type": "string",
-        "description": "环境，PRO=生产, DEV=开发, FAT=测试, UAT=预发",
-        "enum": ["PRO", "DEV", "FAT", "UAT"]
-      },
-      "clusterName": {
-        "type": "string",
-        "description": "集群名称，默认 'default'"
-      },
-      "namespaceName": {
-        "type": "string",
-        "description": "Namespace 名称，默认 'application'"
-      }
-    },
-    "required": ["appId"]
-  }
-}
-```
-
-### 工具 3: apollo_app_list
+### 工具 2: apollo_app_list
 
 获取 Apollo 中所有可用应用列表。
 
@@ -122,7 +86,6 @@ author: Skill Agent Team
 | 工具 | 必填参数 | 缺失时处理 |
 |------|----------|-----------|
 | apollo_config_query | appId | 反问"想查哪个应用"，或先调用 `apollo_app_list` |
-| apollo_release_history | appId | 同上 |
 | apollo_app_list | 无 | 直接调用 |
 
 ### 交互话术
@@ -184,23 +147,7 @@ author: Skill Agent Team
 
 💡 您可以说：
 - "搜索 timeout" - 按关键词过滤配置项
-- "查看发布历史" - 获取配置变更记录
 - "查看 datasource 配置" - 切换到其他 Namespace
-```
-
-### 发布历史输出
-
-```
-## Apollo 发布历史
-
-**应用**：{appId} | **环境**：{env} | **Namespace**：{namespaceName}
-
----
-
-| 版本 | 发布标题 | 发布人 | 发布时间 |
-|------|----------|--------|----------|
-| v3 | 2026-01配置更新 | zhangsan | 2026-01-15 10:30:00 |
-| v2 | 初始配置 | admin | 2025-11-01 09:00:00 |
 ```
 
 ### 应用列表输出
@@ -250,23 +197,7 @@ author: Skill Agent Team
 }
 ```
 
-### 示例 3：查询发布历史
-
-**用户输入**："rule-engine 的配置变更记录"
-
-**工具调用**：
-```json
-{
-  "tool_name": "apollo_release_history",
-  "parameters": {
-    "appId": "rule-engine",
-    "env": "PRO",
-    "namespaceName": "application"
-  }
-}
-```
-
-### 示例 4：查看应用列表
+### 示例 3：查看应用列表
 
 **用户输入**："有哪些应用"
 

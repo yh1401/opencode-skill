@@ -30,7 +30,6 @@ if [ ! -f .env ]; then
     else
         cat > .env << 'EOF'
 MCP_USE_MOCK=false
-APOLLO_CONFIG_HOST=http://apollo-config.tech.ctseelink.cn:8080
 APOLLO_OPENAPI_HOST=http://apollo-config.tech.ctseelink.cn:8070
 APOLLO_OPENAPI_TOKEN=your_token_here
 LOG_LEVEL=INFO

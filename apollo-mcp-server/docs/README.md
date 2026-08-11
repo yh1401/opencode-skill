@@ -28,7 +28,6 @@ cd deploy
 # 创建 .env 配置文件（生产环境必须关闭 Mock 并填写 Token）
 cat > .env << 'EOF'
 MCP_USE_MOCK=false
-APOLLO_CONFIG_HOST=http://apollo-config.tech.ctseelink.cn:8080
 APOLLO_OPENAPI_HOST=http://apollo-config.tech.ctseelink.cn:8070
 APOLLO_OPENAPI_TOKEN=your_openapi_token_here
 LOG_LEVEL=INFO
@@ -67,7 +66,6 @@ docker run -d \
   -p 8062:8062 \
   -e MCP_USE_MOCK=false \
   -e APOLLO_OPENAPI_TOKEN="your_token" \
-  -e APOLLO_CONFIG_HOST="http://apollo-config.tech.ctseelink.cn:8080" \
   -e APOLLO_OPENAPI_HOST="http://apollo-config.tech.ctseelink.cn:8070" \
   -v $(pwd)/config:/app/config:ro \
   -v $(pwd)/mock:/app/mock:ro \
@@ -104,9 +102,8 @@ APOLLO_OPENAPI_TOKEN="your_token" python3 scripts/mcp_server.py --port 8062
 |------|------|--------|------|
 | `MCP_USE_MOCK` | 否 | `false` | Mock 模式（无需 Apollo 服务） |
 | `APOLLO_ENV` | 否 | `PRO` | 环境标识：PRO/SIT/DEV |
-| `APOLLO_CONFIG_HOST` | 否 | 配置文件中的值 | Apollo ConfigService 地址（端口 8080） |
-| `APOLLO_OPENAPI_HOST` | 否 | 配置文件中的值 | Apollo OpenAPI 地址（端口 8070） |
-| `APOLLO_OPENAPI_TOKEN` | Mock 模式否 / 生产模式是 | - | Apollo OpenAPI Token |
+| `APOLLO_OPENAPI_HOST` | 是（生产） | 配置文件中的值 | Apollo OpenAPI 统一地址（端口 8070，查询配置/应用列表共用） |
+| `APOLLO_OPENAPI_TOKEN` | 否 | - | Apollo OpenAPI Token |
 | `LOG_LEVEL` | 否 | `INFO` | 日志级别：DEBUG/INFO/WARNING/ERROR |
 
 ---
@@ -148,9 +145,8 @@ APOLLO_OPENAPI_TOKEN="your_token" python3 scripts/mcp_server.py --port 8062
 
 点击 **获取工具列表**，平台会调用 `tools/list`。
 
-**成功响应**：3 个工具
+**成功响应**：2 个工具
 - `apollo_config_query` - 查询 Apollo 配置项
-- `apollo_release_history` - 查询发布历史
 - `apollo_app_list` - 获取应用列表
 
 ### 步骤 5：绑定到 Skill
@@ -164,7 +160,6 @@ APOLLO_OPENAPI_TOKEN="your_token" python3 scripts/mcp_server.py --port 8062
 
 在 Skill 测试面板中输入：
 - `"查一下 user-service 的配置"` → 触发 `apollo_config_query`
-- `"rule-engine 最近的发布历史"` → 触发 `apollo_release_history`
 - `"当前有哪些应用"` → 触发 `apollo_app_list`
 
 ---
@@ -180,22 +175,10 @@ APOLLO_OPENAPI_TOKEN="your_token" python3 scripts/mcp_server.py --port 8062
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
 | appId | string | 是 | - | Apollo 应用 ID |
+| env | string | 否 | `PRO` | 环境：PRO/DEV/FAT/UAT |
 | clusterName | string | 否 | `default` | 集群名称 |
 | namespaceName | string | 否 | `application` | Namespace 名称 |
 | key | string | 否 | - | 配置项 Key（模糊匹配） |
-
-### Tool: `apollo_release_history`
-
-查询指定应用的 Namespace 发布历史。
-
-**参数**：
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| appId | string | 是 | - | Apollo 应用 ID |
-| env | string | 否 | `PRO` | 环境 |
-| clusterName | string | 否 | `default` | 集群名称 |
-| namespaceName | string | 否 | `application` | Namespace 名称 |
 
 ### Tool: `apollo_app_list`
 
@@ -215,7 +198,6 @@ APOLLO_OPENAPI_TOKEN="your_token" python3 scripts/mcp_server.py --port 8062
 | `/tools/list` | GET | 获取工具列表（平台兼容） |
 | `/tools/call` | POST | 调用工具（平台兼容） |
 | `/api/config` | POST | 配置查询（REST 兼容） |
-| `/api/releases` | POST | 发布历史（REST 兼容） |
 | `/api/apps` | GET | 应用列表（REST 兼容） |
 | `/docs` | GET | Swagger API 文档 |
 
@@ -267,7 +249,7 @@ tail -f logs/apollo-mcp.log
 
 ## 9. 生产环境检查清单
 
-- [ ] Apollo 生产环境网络可达（ConfigService:8080, OpenAPI:8070）
+- [ ] Apollo 生产环境网络可达（OpenAPI:8070，查询配置/应用列表共用）
 - [ ] APOLLO_OPENAPI_TOKEN 已配置
 - [ ] 服务器端口 8062 已开放
 - [ ] Docker / Docker Compose 已安装

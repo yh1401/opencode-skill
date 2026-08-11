@@ -10,8 +10,7 @@ services:
     environment:
       # 生产环境配置
       - MCP_USE_MOCK=${MCP_USE_MOCK:-false}
-      # Apollo 生产环境
-      - APOLLO_CONFIG_HOST=${APOLLO_CONFIG_HOST:-http://apollo-config.tech.ctseelink.cn:8080}
+      # Apollo OpenAPI 统一服务地址（查询配置/应用列表共用）
       - APOLLO_OPENAPI_HOST=${APOLLO_OPENAPI_HOST:-http://apollo-config.tech.ctseelink.cn:8070}
       # Apollo OpenAPI Token（从环境变量注入，不要写入镜像）
       - APOLLO_OPENAPI_TOKEN=${APOLLO_OPENAPI_TOKEN:-}

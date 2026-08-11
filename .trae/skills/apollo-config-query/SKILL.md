@@ -1,6 +1,6 @@
 ---
 name: Apollo配置查询助手
-description: 查询 Apollo 配置中心的配置数据（应用配置/Namespace/配置项/发布历史/应用列表），通过 MCP 工具与 Apollo 交互。当用户询问 Apollo、配置、appid、namespace、配置项 key、发布历史等信息时调用。
+description: 查询 Apollo 配置中心的配置数据（应用配置/Namespace/配置项/应用列表），通过 MCP 工具与 Apollo 交互。当用户询问 Apollo、配置、appid、namespace、配置项 key、应用列表等信息时调用。
 version: 2.0.0
 author: Skill Agent Team
 ---
@@ -9,17 +9,17 @@ author: Skill Agent Team
 
 ## 技能概述
 
-本技能通过 **MCP 工具** 与 Apollo 配置中心交互，提供配置查询、发布历史、应用列表三大能力。
+本技能通过 **MCP 工具** 与 Apollo 配置中心交互，提供配置查询、应用列表两大能力。
 
 | 技能 ID | 功能描述 | 状态 | 触发关键词 |
 |---------|----------|------|------------|
-| apollo-config-search | Apollo 配置查询/发布历史/应用列表 | ✅ 可用 | Apollo、配置、appid、namespace、配置项、key、发布历史、应用列表 |
+| apollo-config-search | Apollo 配置查询/应用列表 | ✅ 可用 | Apollo、配置、appid、namespace、配置项、key、应用列表 |
 
 ---
 
 ## 路由规则
 
-当用户输入包含「Apollo/配置/appid/namespace/配置项/key/发布历史/应用列表」等关键词且意图为查询 Apollo 信息时，匹配 `apollo-config-search`。
+当用户输入包含「Apollo/配置/appid/namespace/配置项/key/应用列表」等关键词且意图为查询 Apollo 信息时，匹配 `apollo-config-search`。
 
 **排他条件**：
 - 如果用户明确提到"服务器"、"主机"、"机房"，应触发 `cmdb-server-query` 技能
@@ -27,7 +27,7 @@ author: Skill Agent Team
 
 **业务处理**：参数映射、MCP 工具调用、输出格式化等业务逻辑由子技能 [apollo-config-search/SKILL.md](skills/apollo-config-search/SKILL.md) 负责。
 
-**MCP 服务**：`apollo-mcp-server` 提供 3 个工具：`apollo_config_query`、`apollo_release_history`、`apollo_app_list`
+**MCP 服务**：`apollo-mcp-server` 提供 2 个工具：`apollo_config_query`、`apollo_app_list`
 
 ---
 
@@ -54,26 +54,7 @@ author: Skill Agent Team
 | key2     | val2 | comment2 |
 
 ---
-
-💡 您可以说："查看发布历史"获取配置变更记录，或"搜索 timeout"按关键词过滤
-```
-
-### 发布历史输出（用户要求"查看发布历史"时）
-
-```markdown
-## Apollo 发布历史
-
-**应用**：{appId} | **环境**：{env} | **Namespace**：{namespaceName}
-
----
-
-| 版本 | 发布标题 | 发布人 | 发布时间 |
-|------|----------|--------|----------|
-| v1   | 2026-01配置更新 | zhangsan | 2026-01-15 10:30:00 |
-
----
-
-💡 您可以说："查看版本详情"获取具体配置变更内容
+💡 您可以说："搜索 timeout"按关键词过滤，或"查看应用列表"查看所有应用
 ```
 
 ---
@@ -90,7 +71,6 @@ author: Skill Agent Team
 
 | 用户输入 | 处理逻辑 |
 |----------|----------|
-| "查看发布历史" | 保持当前查询条件，切换到发布历史模式 |
 | "搜索 {keyword}" | 保持当前查询条件，按 keyword 过滤配置项 |
 | "查看 {appId} 的配置" | 更新 appId，保持其他参数 |
 | "切换到 {env} 环境" | 更新 env，保持其他参数 |
@@ -126,7 +106,7 @@ author: Skill Agent Team
 | **缺少应用** | 未指定 appId 且上下文无继承 | 反问用户 | [话术 1](#1-缺少应用-id) |
 | **应用模糊匹配** | 用户描述匹配到多个应用 | 列出候选 | [话术 2](#2-应用名模糊匹配到多个) |
 | **范围过大** | 用户只说了 appId，没具体查什么 | 查默认 namespace 配置，结果多时提示收窄 | [话术 3](#3-范围过大-仅指定应用) |
-| **查询模式不明** | 无法判断查配置/发布历史/应用列表 | 默认 config，提示其他模式 | [话术 4](#4-查询模式不确定) |
+| **查询模式不明** | 无法判断查配置/应用列表 | 默认 config，提示其他模式 | [话术 4](#4-查询模式不确定) |
 | **无查询结果** | API 返回空或 404 | 提示检查条件 | [话术 5](#5-无查询结果) |
 | **结果过多** | 配置项 > 15 条 | 提示搜索收窄 | [话术 6](#6-结果过多) |
 | **API 失败** | 服务不可用 | 直接报错，不用模拟数据 | [话术 7](#7-api-调用失败) |
@@ -166,18 +146,16 @@ author: Skill Agent Team
 您可以说：
 - "查看 {namespace} 配置" - 切换到指定 Namespace
 - "搜索 {keyword}" - 按关键词过滤
-- "查看发布历史" - 查看配置变更记录
 - "切换到 {DEV/FAT/UAT} 环境" - 切换环境
 ```
 
 #### 4. 查询模式不确定
 
 ```
-您是想查看配置内容还是查看变更记录？
+您是想查看配置内容还是应用列表？
 
 您可以说：
 - "查看配置" - 获取当前配置项列表
-- "查看发布历史" - 查看配置变更记录
 - "应用列表" - 查看所有应用
 ```
 
@@ -203,7 +181,6 @@ author: Skill Agent Team
 
 - "搜索 {keyword}" - 按配置 Key 过滤（如"搜索 timeout"）
 - "查看 {namespace} 配置" - 切换到指定 Namespace（如"查看 datasource 配置"）
-- "查看发布历史" - 查看配置变更记录
 ```
 
 #### 7. API 调用失败
@@ -233,7 +210,7 @@ author: Skill Agent Team
   ├─ 如果 queryMode = "apps"
   │    └─ 直接调用 API 返回应用列表
   │
-  ├─ 如果 queryMode = "config" 或 "release"
+  ├─ 如果 queryMode = "config"
   │    ├─ env/hamespace 有默认值，直接用
   │    └─ 调用 API
   │         ├─ 成功 → 检查结果数量
@@ -298,7 +275,7 @@ APOLLO_HOST=http://your-apollo-host:8080 ./start.sh
 }
 ```
 
-> ConfigService (端口 8080) 无需 Token，OpenAPI (端口 8070) 查询发布历史和应用列表需要 Token。
+> ConfigService (端口 8080) 无需 Token，OpenAPI (端口 8070) 查询配置和应用列表需要 Token。
 
 ### API 文档
 
@@ -329,6 +306,6 @@ apollo-config-query/
 
 - **版本**: 2.0.0
 - **可用技能**: 1 个（apollo-config-search）
-- **MCP 工具**: 3 个（apollo_config_query, apollo_release_history, apollo_app_list）
+- **MCP 工具**: 2 个（apollo_config_query, apollo_app_list）
 - **架构**: MCP 工具调用（apollo-mcp-server）
 - **设计模式**: 渐进式披露
