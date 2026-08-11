@@ -1,21 +1,15 @@
 # Apollo 接口对接文档
 
-Apollo MCP 服务调用 Apollo 的 2 个接口（查询配置、应用列表），统一返回 `{code, message, data}` 格式。两个接口均走 **OpenAPI（8070）**，共用同一个服务地址，仅需配置一个地址 + 一个 Token。
-
-## 接口地址
-
-两个接口均由 Apollo 官方 **OpenAPI（8070）** 提供，共用同一个服务地址，仅需配置一个地址 + 一个 Token。
+Apollo 配置中心对外提供 **OpenAPI（8070）**，本文档对接其中 2 个接口：获取配置项、获取应用列表。两个接口均为 GET、均需 Token，共用同一个服务地址。
 
 ## 接口总览
 
-| # | 接口 | 服务 | 认证 |
-|---|------|------|------|
-| 1 | 获取配置项 | OpenAPI (8070) | Token |
-| 2 | 获取应用列表 | OpenAPI (8070) | Token |
+| # | 接口 | 方法 | 地址 | 认证 |
+|---|------|------|------|------|
+| 1 | 获取配置项 | GET | `/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}` | Token |
+| 2 | 获取应用列表 | GET | `/openapi/v1/apps` | Token |
 
-## 环境地址
-
-统一使用 OpenAPI 服务地址（MCP 端只需配置这一个地址 + Token）：
+## 环境地址与认证
 
 | 环境 | OpenAPI (8070) |
 |------|----------------|
@@ -23,51 +17,87 @@ Apollo MCP 服务调用 Apollo 的 2 个接口（查询配置、应用列表）�
 | SIT | `http://apollo-sit.tech.ctseelink.cn:8070` |
 | DEV | `http://apollo-dev.tech.ctseelink.cn:8070` |
 
-认证：所有接口 Header 传 `Authorization: <Token>`（裸 Token，不加 Bearer）。Token 在 Portal「管理员工具 → 开放平台授权」获取，且 **appId 需在授权列表中**，否则查询会失败。
+认证方式：所有请求 Header 传 `Authorization: <Token>`（裸 Token，不加 `Bearer`）。
+
+Token 获取：登录 Portal（8070）→ 管理员工具 → 开放平台授权 → 创建授权后生成。
+
+> 注意：**appId 需在开放平台授权列表中**，否则查询会返回 404。
 
 ## 接口详情
 
-### 1. 获取配置项（需 Token）
+### 1. 获取配置项
 
 ```
 GET /openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}
 ```
 
+**参数**
+
 | 参数 | 必填 | 默认 | 说明 |
 |------|------|------|------|
-| env | ✅ | - | 环境（PRO/SIT/DEV） |
+| env | ✅ | - | 环境：PRO / SIT / DEV |
 | appId | ✅ | - | 应用 ID |
-| clusterName | ❌ | `default` | 集群名 |
-| namespaceName | ❌ | `application` | Namespace 名 |
+| clusterName | ❌ | `default` | 集群名，不传默认 `default` |
+| namespaceName | ❌ | `application` | Namespace 名，不传默认 `application` |
+
+**请求示例**
 
 ```bash
-curl -H "Authorization: <TOKEN>" "http://apollo-config.tech.ctseelink.cn:8070/openapi/v1/envs/PRO/apps/rule-engine/default/application"
+curl -H "Authorization: <TOKEN>" \
+  "http://apollo-config.tech.ctseelink.cn:8070/openapi/v1/envs/PRO/apps/rule-engine/default/application"
 ```
+
+clusterName、namespaceName 可不传，接口按默认值 `default` / `application` 处理。
+
+**响应示例**
 
 ```json
-{"appId":"rule-engine","clusterName":"default","namespaceName":"application","items":[{"key":"server.port","value":"8080","dataChangeCreatedTime":"..."}]}
+{
+  "appId": "rule-engine",
+  "clusterName": "default",
+  "namespaceName": "application",
+  "items": [
+    { "key": "server.port", "value": "9000", "dataChangeCreatedTime": "..." },
+    { "key": "max.retry", "value": "3", "dataChangeCreatedTime": "..." }
+  ]
+}
 ```
 
-> 返回 `items` 数组，MCP 端会转换为 `configurations` 字典（`{key: value}`），与 ConfigService 的返回格式保持一致。
+> 返回 `items` 数组（key/value 列表）。如通过 apollo-mcp-server 调用，会转换为 `configurations` 字典（`{key: value}`），并统一包装为 `{code, message, data}`。
 
-### 2. 获取应用列表（需 Token）
+### 2. 获取应用列表
 
 ```
 GET /openapi/v1/apps
 ```
 
+无参数。
+
+**请求示例**
+
 ```bash
 curl -H "Authorization: <TOKEN>" "http://apollo-config.tech.ctseelink.cn:8070/openapi/v1/apps"
 ```
 
+**响应示例**
+
 ```json
-[{"appId":"rule-engine","name":"规则引擎","ownerName":"apollo","orgName":"研发部"}]
+[
+  { "appId": "rule-engine", "name": "规则引擎", "ownerName": "apollo", "orgName": "研发部" }
+]
 ```
 
-## 不支持的能力说明
+## 返回格式（通过 apollo-mcp-server 调用）
 
-- **发布历史查询**：OpenAPI 中不存在"发布历史列表"接口（`/releases` 是 POST 发布配置，不是查询历史）。发布历史仅在 Apollo Portal 网页端（需登录态）提供，MCP 端不支持该能力。如确实需要，可在 Portal 网页查看，或后续在网关层对接 AdminService（8090）时补充。
-- **ConfigService (8080)**：MCP 端不直接调用，仅用于应用 SDK 读取配置。
+统一返回 `{code, message, data}`：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
 
 ## 错误码
 
@@ -77,11 +107,13 @@ curl -H "Authorization: <TOKEN>" "http://apollo-config.tech.ctseelink.cn:8070/op
 | 400 | 请求参数错误 |
 | 401 | Token 无效或未配置 |
 | 404 | 资源不存在（appId/env 错误，或 appId 未在开放平台授权） |
+| 500 | 服务内部异常 |
 | 503 | 网络连接失败 |
 | 504 | 请求超时（30s） |
 
 ## 对接要点
 
-1. 两个接口均为 **GET**，无请求体，全部需 Token（Header `Authorization`，裸 Token）
-2. 两个接口共用同一个 OpenAPI 地址，仅需在 Portal 开放平台授权后使用同一 Token
-3. 401 查 Token，404 查 appId/env 拼写或开放平台授权
+1. 两个接口均为 GET，无请求体，均需 Token（Header `Authorization`，裸 Token）
+2. 共用同一个 OpenAPI 地址（8070），使用同一 Token
+3. 401 查 Token 是否有效；404 查 appId/env 拼写，或 appId 是否在开放平台授权列表
+4. 发布历史不在 OpenAPI 能力范围内（`/releases` 为 POST 发布接口，非查询历史），如需查看请使用 Apollo Portal 网页端
