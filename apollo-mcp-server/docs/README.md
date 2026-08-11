@@ -120,7 +120,7 @@ APOLLO_OPENAPI_TOKEN="your_token" python3 scripts/mcp_server.py --port 8062
 |------|-----|
 | **服务名称** | `apollo-config-query-mcp` |
 | **服务描述** | Apollo 配置查询 MCP 服务 |
-| **服务地址** | `http://{服务器IP}:8062/mcp` |
+| **服务地址** | `http://180.101.21.13:8080/gateway/apollo/mcp` |
 | **传输协议** | Streamable HTTP |
 | **认证方式** | 无（内网部署） / 可选 API Key |
 

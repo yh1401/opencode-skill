@@ -34,7 +34,7 @@ chmod +x deploy-prod.sh
 ./deploy-prod.sh
 
 # 3. 记录输出的服务地址，前往 StarAgent 注册
-# 例如: http://192.168.1.100:8062/mcp
+# 例如: http://180.101.21.13:8080/gateway/apollo/mcp
 ```
 
 脚本会自动完成：环境检查 → 配置生成 → 镜像构建 → 服务启动 → 健康验证。
@@ -85,7 +85,7 @@ docker compose logs -f
 1. 打开 **StarAgent 平台** → **MCP 管理** → **新建**
 2. 填写：
    - **服务名称**: `apollo-config-query-mcp`
-   - **服务地址**: `http://{服务器IP}:8062/mcp`
+   - **服务地址**: `http://180.101.21.13:8080/gateway/apollo/mcp`
    - **传输协议**: `Streamable HTTP`
 3. 点击 **测试连接** → **获取工具列表** → **保存**
 4. 绑定 Skill: 将 `apollo-config-query` 技能关联到此 MCP 服务

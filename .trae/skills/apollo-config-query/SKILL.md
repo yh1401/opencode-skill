@@ -231,7 +231,7 @@ author: Skill Agent Team
 ### 服务地址
 
 ```
-http://localhost:8062/mcp
+http://180.101.21.13:8080/gateway/apollo/mcp
 ```
 
 ### 启动方式
@@ -279,7 +279,7 @@ APOLLO_HOST=http://your-apollo-host:8080 ./start.sh
 
 ### API 文档
 
-启动后访问：`http://localhost:8062/docs`
+启动后访问：`http://180.101.21.13:8080/gateway/apollo/docs`
 
 ---
 
