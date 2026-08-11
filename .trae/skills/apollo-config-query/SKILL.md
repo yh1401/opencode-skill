@@ -279,7 +279,7 @@ APOLLO_HOST=http://your-apollo-host:8080 ./start.sh
 
 ### API 文档
 
-启动后访问：`http://localhost:8062/docs`
+仅本地调试访问：`http://localhost:8062/docs`（生产环境经网关部署，不暴露该端点）
 
 ---
 
