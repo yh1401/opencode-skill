@@ -76,9 +76,17 @@ sleep 3
 echo "--- 启动日志 ---"
 $DC logs --tail=50 apollo-mcp || true
 
-# 5. 健康检查
+# 5. 健康检查（轮询等待：容器启动需同步拉取第三方接口，可能耗时 10s+）
 echo "[5/5] 健康检查"
-HEALTH=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:8062/health || echo "000")
+HEALTH="000"
+for i in $(seq 1 24); do
+    HEALTH=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 http://localhost:8062/health || echo "000")
+    if [ "$HEALTH" = "200" ]; then
+        break
+    fi
+    echo "  等待服务就绪... (${i}/24) HTTP=$HEALTH"
+    sleep 5
+done
 
 if [ "$HEALTH" = "200" ]; then
     IP=$(hostname -I 2>/dev/null | awk '{print $1}')
@@ -98,5 +106,7 @@ else
     echo "查看日志排查:"
     echo "  $DC logs --tail=100 apollo-mcp"
     echo "  或进入容器: $DC exec apollo-mcp sh"
+    echo "  或先验证第三方接口连通性:"
+    echo "  curl -m 10 -b \"sessionId=e5e27a7d1805758400287ae86741f889\" https://easyops.tech.ctseelink.cn/api/getApolloHostInfo"
     exit 1
 fi
