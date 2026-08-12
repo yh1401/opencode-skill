@@ -23,27 +23,33 @@ else
     exit 1
 fi
 
-# 2. 配置 .env (不存在则从 .env.example 生成，Token 需手动填写)
+# 2. 配置 .env (不存在则从 .env.example 生成)
 if [ ! -f .env ]; then
     if [ -f ../.env.example ]; then
         cp ../.env.example .env
     else
         cat > .env << 'EOF'
 MCP_USE_MOCK=false
+APOLLO_ENV=PRO
+# 推荐方式：第三方「Apollo Host 信息查询接口」（默认值已内置在代码中，无需配置）
+# APOLLO_HOST_API_BASE=https://easyops.tech.ctseelink.cn
+# APOLLO_HOST_SESSION_ID=e5e27a7d1805758400287ae86741f889
+# 备用方式：直接指定 Apollo 地址与 Token
 APOLLO_OPENAPI_HOST=http://apollo-config.tech.ctseelink.cn:8070
-APOLLO_OPENAPI_TOKEN=your_token_here
+APOLLO_OPENAPI_TOKEN=
 LOG_LEVEL=INFO
 EOF
     fi
     chmod 600 .env
-    echo "⚠️  .env 已生成，请务必修改 APOLLO_OPENAPI_TOKEN 后重新执行本脚本"
+    echo "⚠️  .env 已生成（使用第三方接口获取 Apollo 地址/Token，默认无需填写）"
+    echo "   如需覆盖第三方接口地址或 sessionId，请编辑 .env 后重新执行本脚本"
     echo "   vi .env"
     exit 0
 fi
 
-# 校验 Token 是否仍为占位符
-if grep -q "your_token_here\|your_openapi_token_here" .env 2>/dev/null; then
-    echo "错误: APOLLO_OPENAPI_TOKEN 仍是占位符，请先修改 .env 后重试"
+# 校验：仅当未使用第三方接口（APOLLO_HOST_SESSION_ID 为空）且 Token 仍为占位符时才报错
+if [ -z "${APOLLO_HOST_SESSION_ID:-}" ] && grep -q "your_token_here\|your_openapi_token_here" .env 2>/dev/null; then
+    echo "错误: APOLLO_OPENAPI_TOKEN 仍是占位符且未配置第三方接口 sessionId，请修改 .env 后重试"
     exit 1
 fi
 

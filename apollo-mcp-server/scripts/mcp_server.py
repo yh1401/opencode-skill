@@ -22,6 +22,7 @@ import os
 import sys
 import argparse
 import time
+import threading
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
 
@@ -75,73 +76,276 @@ _file_handler.setFormatter(logging.Formatter(_log_format))
 logger.addHandler(_file_handler)
 
 
+class ConfigClient:
+    """通过第三方「Apollo Host 信息查询接口」获取 Apollo 连接配置（地址 + Token）的客户端
+
+    完整链路：skill → MCP → 第三方接口（返回 Apollo 地址+加密 Token）→ MCP 解密组装 → Apollo → 返回
+
+    设计目标：
+        - Token / 服务地址由第三方接口集中管理，MCP 通过接口获取（不再在本地暴露明文 Token）
+        - 启动时拉取一次并缓存，之后定时刷新
+        - 第三方接口不可用时回退到本地兜底配置（config/api_endpoints.json + auth.json），保证可用性
+
+    环境变量：
+        APOLLO_HOST_API_BASE      第三方接口地址，默认 https://easyops.tech.ctseelink.cn
+        APOLLO_HOST_SESSION_ID    第三方鉴权 sessionId（32位），同时是 token 解密密钥
+        APOLLO_HOST_NAME          可选，按服务名称模糊过滤第三方返回的 host（不填取第一条）
+        APOLLO_HOST_PORT_OVERRIDE 可选，强制替换 host 端口（如第三方返回 8154，OpenAPI 实际 8070 时配置）
+        CONFIG_SERVICE_REFRESH_SEC 刷新间隔（秒），默认 60
+    """
+
+    _DEFAULT_API_BASE = "https://easyops.tech.ctseelink.cn"
+    _DEFAULT_SESSION_ID = "e5e27a7d1805758400287ae86741f889"
+
+    def __init__(self, refresh_sec: int = None):
+        self.api_base = os.environ.get('APOLLO_HOST_API_BASE', self._DEFAULT_API_BASE).rstrip('/')
+        self.session_id = os.environ.get('APOLLO_HOST_SESSION_ID', self._DEFAULT_SESSION_ID)
+        self.refresh_sec = refresh_sec or int(os.environ.get('CONFIG_SERVICE_REFRESH_SEC', '60'))
+        self._cache: Optional[dict] = None          # 最近一次成功拉取的完整配置
+        self._last_fetch_ts: float = 0.0
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def decrypt_token(encrypted_token: str, session_id: str) -> str:
+        """解密 token：Base64 解码后与 sessionId 循环逐字节 XOR（与服务端加密逻辑一致）"""
+        if not encrypted_token or not session_id:
+            return ""
+        try:
+            import base64
+            decoded = base64.b64decode(encrypted_token)
+            return ''.join(
+                chr(decoded[i] ^ ord(session_id[i % len(session_id)]))
+                for i in range(len(decoded))
+            )
+        except Exception as e:
+            logger.warning(f"token 解密失败: {e}")
+            return ""
+
+    def _fetch(self) -> dict:
+        """调用第三方接口获取 Apollo Host 信息，组装成与本地模板同构的配置结构"""
+        url = f"{self.api_base}/api/getApolloHostInfo"
+        logger.info(f"[ConfigClient] 从第三方接口拉取 Apollo Host 信息: {url}")
+        resp = requests.get(
+            url,
+            params={"paginator": False, "pageIndex": 1, "pageSize": 100},
+            cookies={"sessionId": self.session_id},
+            timeout=10,
+            verify=False
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        if data.get('code') != 'success':
+            raise RuntimeError(f"第三方接口返回失败: {data.get('message', '未知错误')}")
+        host_list = data.get('list', [])
+        logger.info(f"[ConfigClient] 第三方接口返回 {len(host_list)} 条 Apollo Host 记录")
+        if not host_list:
+            raise RuntimeError("第三方接口返回的 Apollo Host 列表为空")
+
+        # 选择目标记录：APOLLO_HOST_NAME 模糊过滤，否则取第一条
+        name_filter = os.environ.get('APOLLO_HOST_NAME', '')
+        target = None
+        if name_filter:
+            for item in host_list:
+                if name_filter.lower() in item.get('name', '').lower():
+                    target = item
+                    break
+        if target is None:
+            target = host_list[0]
+
+        host = target.get('host', '')
+        raw_token = self.decrypt_token(target.get('token', ''), self.session_id)
+
+        # 可选：端口覆盖（第三方返回端口与 OpenAPI 实际端口不一致时）
+        port_override = os.environ.get('APOLLO_HOST_PORT_OVERRIDE', '')
+        if port_override and host:
+            from urllib.parse import urlsplit, urlunsplit
+            parts = urlsplit(host)
+            host = urlunsplit((parts.scheme, f"{parts.hostname}:{port_override}", parts.path, parts.query, parts.fragment))
+            logger.info(f"[ConfigClient] 已覆盖 host 端口为 {port_override}: {host}")
+
+        # 以本地模板为基底组装（environments/endpoints/timeout 等静态结构）
+        template = self._load_local_template()
+        env_key = template.get('default_env', 'PRO')
+        environments = dict(template.get('environments', {}))
+        environments[env_key] = {
+            **environments.get(env_key, {}),
+            'openapi_service': host,
+            'label': target.get('name', env_key)
+        }
+        configs = dict(template)
+        configs['environments'] = environments
+        configs['openapi_token'] = raw_token
+
+        logger.info(f"[ConfigClient] 组装远程配置: 环境={env_key}, OpenAPI={host}, 有Token={bool(raw_token)}, 来源={target.get('name', '')}")
+        return configs
+
+    def _load_local_template(self) -> dict:
+        """加载本地模板 api_endpoints.json（作为组装远程配置的基底）"""
+        config_path = os.path.join(_config_dir, 'api_endpoints.json')
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return {}
+
+    def get_configs(self, force: bool = False) -> dict:
+        """获取配置（完整字典，含 environments/token/endpoints 等）。
+
+        优先级：缓存（未过期）> 定时刷新 > 失败回退缓存 > 失败无缓存返回空。
+        """
+        now = time.time()
+        with self._lock:
+            # 缓存仍有效：直接返回
+            if not force and self._cache and (now - self._last_fetch_ts) < self.refresh_sec:
+                return self._cache
+
+            try:
+                data = self._fetch()
+                if data:
+                    self._cache = data
+                    self._last_fetch_ts = time.time()
+                    envs = list(data.get('environments', {}).keys())
+                    logger.info(f"[ConfigClient] 配置拉取成功: 环境={envs}, default_env={data.get('default_env')}, 有Token={bool(data.get('openapi_token'))}")
+                else:
+                    logger.warning("[ConfigClient] 第三方接口返回空配置")
+            except Exception as e:
+                logger.warning(f"[ConfigClient] 第三方接口不可达({self.api_base}): {e}")
+
+            # 有缓存则回退缓存
+            if self._cache:
+                logger.info("[ConfigClient] 使用上次成功拉取的缓存配置")
+                return self._cache
+
+        return {}
+
+
 class ApolloConfig:
     def __init__(self):
         self.openapi_base = "http://localhost:8070"
         self.openapi_token = ""
         self.endpoints = {}
         self.current_env = os.environ.get('APOLLO_ENV', '')  # 先留空，load_config 中从配置文件补充
+        self.timeout = 30
+        self.max_retries = 2
+        self.retry_delay = 1
+        self.config_client = ConfigClient()
         self.load_config()
         self.load_auth()
     
+    def _apply_remote_config(self, data: dict):
+        """应用配置服务拉取的配置（地址、环境、endpoints、超时等）"""
+        self.endpoints = data.get('endpoints', {})
+        self.timeout = data.get('timeout', 30)
+        self.max_retries = data.get('max_retries', 2)
+        self.retry_delay = data.get('retry_delay', 1)
+
+        # 环境与地址：环境变量优先，其次配置服务
+        env_openapi_host = os.environ.get('APOLLO_OPENAPI_HOST')
+        if env_openapi_host:
+            self.openapi_base = env_openapi_host
+            logger.info(f"环境变量 APOLLO_OPENAPI_HOST 覆盖: {self.openapi_base}")
+        else:
+            environments = data.get('environments', {})
+            if not self.current_env:
+                self.current_env = data.get('default_env', 'PRO')
+                logger.info(f"未设置 APOLLO_ENV，使用配置服务默认环境: {self.current_env}")
+            env_key = self.current_env
+            if env_key in environments:
+                env_config = environments[env_key]
+                self.openapi_base = env_config.get('openapi_service', self.openapi_base)
+                logger.info(f"[ConfigService] 加载 {env_key} 环境配置: OpenAPI={self.openapi_base}")
+
+        # 构建完整 URL
+        for endpoint in self.endpoints.values():
+            if 'path' in endpoint:
+                endpoint['full_url'] = f"{self.openapi_base}{endpoint['path']}"
+
+        logger.info(f"Apollo 配置加载完成（来自配置服务）[{self.current_env}]: OpenAPI={self.openapi_base}")
+
     def load_config(self):
+        """加载 Apollo 连接配置：优先配置服务拉取，失败回退本地 api_endpoints.json"""
+        remote = self.config_client.get_configs(force=True)
+        if remote:
+            self._apply_remote_config(remote)
+            return
+
+        # ---- 回退：本地配置文件 ----
+        logger.warning("[ConfigClient] 配置服务不可用，回退本地配置 api_endpoints.json")
         config_path = os.path.join(_config_dir, 'api_endpoints.json')
-        if os.path.exists(config_path):
-            with open(config_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                
-            # 1. 优先使用环境变量（生产部署方式），配置查询和应用列表统一走 OpenAPI（8070）
-            env_openapi_host = os.environ.get('APOLLO_OPENAPI_HOST')
-            if env_openapi_host:
-                self.openapi_base = env_openapi_host
-                logger.info(f"环境变量 APOLLO_OPENAPI_HOST 覆盖: {self.openapi_base}")
-            
-            # 2. 如果环境变量没设，从配置文件读取对应环境
-            if not env_openapi_host:
-                environments = data.get('environments', {})
-                # 如果 APOLLO_ENV 未设，使用配置文件的 default_env
-                if not self.current_env:
-                    self.current_env = data.get('default_env', 'PRO')
-                    logger.info(f"未设置 APOLLO_ENV，使用默认环境: {self.current_env}")
-                env_key = self.current_env
-                if env_key in environments:
-                    env_config = environments[env_key]
-                    self.openapi_base = env_config.get('openapi_service', self.openapi_base)
-                    logger.info(f"加载 {env_key} 环境配置: OpenAPI={self.openapi_base}")
-            
-            # 3. 兼容旧格式（base_url）
-            if not env_openapi_host and not data.get('environments'):
-                old_base = data.get('base_url')
-                if old_base:
-                    self.openapi_base = old_base.replace(':8080', ':8070')
-            
-            # 4. 加载 endpoints 模板
-            self.endpoints = data.get('endpoints', {})
-            
-            # 5. 构建完整 URL（全部基于 OpenAPI 统一地址）
-            for endpoint in self.endpoints.values():
-                if 'path' in endpoint:
-                    endpoint['full_url'] = f"{self.openapi_base}{endpoint['path']}"
-            
-            logger.info(f"Apollo 配置加载完成 [{self.current_env}]: OpenAPI={self.openapi_base}")
-    
+        if not os.path.exists(config_path):
+            logger.warning("本地配置 api_endpoints.json 不存在，使用内置默认值")
+            return
+
+        with open(config_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        # 1. 优先使用环境变量（生产部署方式），配置查询和应用列表统一走 OpenAPI（8070）
+        env_openapi_host = os.environ.get('APOLLO_OPENAPI_HOST')
+        if env_openapi_host:
+            self.openapi_base = env_openapi_host
+            logger.info(f"环境变量 APOLLO_OPENAPI_HOST 覆盖: {self.openapi_base}")
+
+        # 2. 如果环境变量没设，从配置文件读取对应环境
+        if not env_openapi_host:
+            environments = data.get('environments', {})
+            # 如果 APOLLO_ENV 未设，使用配置文件的 default_env
+            if not self.current_env:
+                self.current_env = data.get('default_env', 'PRO')
+                logger.info(f"未设置 APOLLO_ENV，使用默认环境: {self.current_env}")
+            env_key = self.current_env
+            if env_key in environments:
+                env_config = environments[env_key]
+                self.openapi_base = env_config.get('openapi_service', self.openapi_base)
+                logger.info(f"加载 {env_key} 环境配置: OpenAPI={self.openapi_base}")
+
+        # 3. 兼容旧格式（base_url）
+        if not env_openapi_host and not data.get('environments'):
+            old_base = data.get('base_url')
+            if old_base:
+                self.openapi_base = old_base.replace(':8080', ':8070')
+
+        # 4. 加载超时/重试参数
+        self.timeout = data.get('timeout', 30)
+        self.max_retries = data.get('max_retries', 2)
+        self.retry_delay = data.get('retry_delay', 1)
+
+        # 5. 加载 endpoints 模板
+        self.endpoints = data.get('endpoints', {})
+
+        # 6. 构建完整 URL（全部基于 OpenAPI 统一地址）
+        for endpoint in self.endpoints.values():
+            if 'path' in endpoint:
+                endpoint['full_url'] = f"{self.openapi_base}{endpoint['path']}"
+
+        logger.info(f"Apollo 配置加载完成（本地回退）[{self.current_env}]: OpenAPI={self.openapi_base}")
+
     def load_auth(self):
+        """加载 Token：优先第三方接口拉取的（已解密），其次环境变量，最后本地 auth.json"""
+        # 1. 第三方接口拉取（config_client 缓存中包含解密后的 openapi_token）
+        remote = self.config_client._cache or {}
+        remote_token = remote.get('openapi_token', '')
+        if remote_token:
+            self.openapi_token = remote_token
+            logger.info("从第三方接口加载 Apollo OpenAPI Token（已解密）")
+            return
+
         auth_path = os.path.join(_config_dir, 'auth.json')
-        
-        # 优先使用环境变量
+
+        # 2. 环境变量
         env_token = os.environ.get('APOLLO_OPENAPI_TOKEN')
         if env_token:
             self.openapi_token = env_token
             logger.info("从环境变量加载 Apollo OpenAPI Token")
             return
-        
+
+        # 3. 本地 auth.json（回退）
         if os.path.exists(auth_path):
             try:
                 with open(auth_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.openapi_token = data.get('openapi_token', '')
                     if self.openapi_token:
-                        logger.info("从配置文件加载 Apollo OpenAPI Token")
+                        logger.info("从本地配置文件加载 Apollo OpenAPI Token（回退）")
                     else:
                         logger.warning("Apollo OpenAPI Token 未配置（配置查询和应用列表将失败）")
             except Exception as e:
@@ -242,7 +446,7 @@ class ApolloAPIClient:
             logger.debug(f"[{tool_id}] 请求: GET {url}")
             start_time = time.time()
             
-            resp = self._session.get(url, params=params, headers=headers, timeout=30)
+            resp = self._session.get(url, params=params, headers=headers, timeout=self.config.timeout)
             duration = time.time() - start_time
             
             logger.debug(f"[{tool_id}] 响应: status={resp.status_code}, duration={round(duration*1000)}ms")
@@ -547,6 +751,12 @@ if HAS_FASTAPI:
             "mock_enabled": USE_MOCK,
             "openapi_base": client.config.openapi_base,
             "has_openapi_token": bool(client.config.openapi_token),
+            "config_source": {
+                "api_base": client.config.config_client.api_base,
+                "session_id": client.config.config_client.session_id[:8] + "...(脱敏)",
+                "using_remote": bool(client.config.config_client._cache),
+                "refresh_sec": client.config.config_client.refresh_sec
+            },
             "api_stats": {
                 "total_requests": client._request_count,
                 "successful_requests": client._success_count,
