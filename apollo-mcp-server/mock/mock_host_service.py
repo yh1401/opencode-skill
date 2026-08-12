@@ -30,7 +30,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | 
 
 # 本地 Apollo 的连接信息（模拟第三方库中记录的一条数据）
 MOCK_HOST_NAME = "本地Apollo测试-亿讯专用"
-MOCK_HOST = "http://localhost:8070"
+# 默认指向本机 Apollo；Docker 容器内测试时可用 MOCK_HOST 覆盖为 http://host.docker.internal:8070
+MOCK_HOST = os.environ.get("MOCK_HOST", "http://localhost:8070")
 MOCK_USER = "eshore-user"
 MOCK_REAL_TOKEN = "mcp-token-1785390342"  # 本地 Apollo OpenAPI Token（与 config/auth.json 一致）
 
