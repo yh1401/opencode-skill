@@ -54,6 +54,7 @@ app = FastAPI(title="mock-apollo-host-api", description="Mock 第三方 Apollo H
 
 
 @app.get("/api/getApolloHostInfo", tags=["第三方接口"])
+@app.get("/thirdApi/getApolloHostInfo", tags=["第三方接口"])
 def get_apollo_host_info(request: Request, paginator: bool = True, pageIndex: int = 1, pageSize: int = 10,
                          name: str = "", secondProductId: str = "", host: str = "", user: str = "", token: str = ""):
     """模拟第三方接口：校验 Cookie sessionId，返回一条 Mock 的 Apollo Host 记录"""

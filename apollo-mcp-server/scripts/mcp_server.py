@@ -125,7 +125,9 @@ class ConfigClient:
 
     def _fetch(self) -> dict:
         """调用第三方接口获取 Apollo Host 信息，组装成与本地模板同构的配置结构"""
-        url = f"{self.api_base}/api/getApolloHostInfo"
+        # 路径可配置：线上 /thirdApi/getApolloHostInfo，本地 mock 为 /api/getApolloHostInfo
+        host_path = (os.environ.get('APOLLO_HOST_PATH') or '/thirdApi/getApolloHostInfo').strip()
+        url = f"{self.api_base}{host_path}"
         logger.info(f"[ConfigClient] 从第三方接口拉取 Apollo Host 信息: {url}")
 
         # 鉴权 Cookie：接口需要完整会话 Cookie（如 Cookie_1/Cookie_7 等），
