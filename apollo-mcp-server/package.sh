@@ -82,14 +82,14 @@ APOLLO_ENV=PRO
 # APOLLO_HOST_PORT_OVERRIDE=8070
 
 # ================================================
-# 备用方式：直接指定 Apollo 地址与 Token（第三方接口不可用时回退本地配置）
+# 备用方式：直接指定 Apollo 地址与 Token（仅当第三方接口不可用时才需要）
 # ================================================
 
-# Apollo OpenAPI 统一服务地址（端口 8070，查询配置/应用列表共用，唯一需配置的地址）
+# Apollo OpenAPI 统一服务地址（端口 8070，查询配置/应用列表共用）
 APOLLO_OPENAPI_HOST=http://apollo-config.tech.ctseelink.cn:8070
 
-# Apollo OpenAPI Token（必填，从 Apollo Portal 管理员工具->开放平台授权获取）
-APOLLO_OPENAPI_TOKEN=your_token_here
+# Apollo OpenAPI Token（备用方式必填；推荐方式下留空，由第三方接口解密提供）
+APOLLO_OPENAPI_TOKEN=
 
 # 日志级别：DEBUG/INFO/WARNING/ERROR
 LOG_LEVEL=INFO

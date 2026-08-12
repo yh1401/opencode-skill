@@ -98,8 +98,9 @@ class ConfigClient:
     _DEFAULT_SESSION_ID = "e5e27a7d1805758400287ae86741f889"
 
     def __init__(self, refresh_sec: int = None):
-        self.api_base = os.environ.get('APOLLO_HOST_API_BASE', self._DEFAULT_API_BASE).rstrip('/')
-        self.session_id = os.environ.get('APOLLO_HOST_SESSION_ID', self._DEFAULT_SESSION_ID)
+        # 注意：docker-compose 会以空字符串注入环境变量，需用 or 回退内置默认值
+        self.api_base = (os.environ.get('APOLLO_HOST_API_BASE') or self._DEFAULT_API_BASE).rstrip('/')
+        self.session_id = os.environ.get('APOLLO_HOST_SESSION_ID') or self._DEFAULT_SESSION_ID
         self.refresh_sec = refresh_sec or int(os.environ.get('CONFIG_SERVICE_REFRESH_SEC', '60'))
         self._cache: Optional[dict] = None          # 最近一次成功拉取的完整配置
         self._last_fetch_ts: float = 0.0

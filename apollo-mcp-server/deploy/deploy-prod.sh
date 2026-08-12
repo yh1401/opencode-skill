@@ -47,10 +47,22 @@ EOF
     exit 0
 fi
 
-# 校验：仅当未使用第三方接口（APOLLO_HOST_SESSION_ID 为空）且 Token 仍为占位符时才报错
-if [ -z "${APOLLO_HOST_SESSION_ID:-}" ] && grep -q "your_token_here\|your_openapi_token_here" .env 2>/dev/null; then
-    echo "错误: APOLLO_OPENAPI_TOKEN 仍是占位符且未配置第三方接口 sessionId，请修改 .env 后重试"
-    exit 1
+# 校验/自动修正：优先推荐使用第三方接口（默认值已内置在代码中，无需配置）
+# 若 .env 中 Token 仍是占位符（从旧版 .env.example 复制导致），自动清空并继续部署
+if grep -q "your_token_here\|your_openapi_token_here" .env 2>/dev/null; then
+    sed -i 's/^\(APOLLO_OPENAPI_TOKEN=\).*/\1/' .env
+    echo "⚠️  检测到 .env 中 APOLLO_OPENAPI_TOKEN 为占位符，已自动清空"
+    echo "   将使用第三方「Apollo Host 信息查询接口」获取地址与 Token（默认无需配置）"
+fi
+
+# 校验：第三方接口 sessionId 与备用 Token 均未配置时给出提示（不再阻断，代码内置默认第三方接口）
+ENV_SESSION_ID=$(grep -E '^\s*APOLLO_HOST_SESSION_ID=' .env 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"' | tr -d "'" | xargs)
+ENV_TOKEN=$(grep -E '^\s*APOLLO_OPENAPI_TOKEN=' .env 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"' | tr -d "'" | xargs)
+case "$ENV_TOKEN" in
+    your_token_here|your_openapi_token_here) ENV_TOKEN="" ;;
+esac
+if [ -z "$ENV_SESSION_ID" ] && [ -z "$ENV_TOKEN" ]; then
+    echo "ℹ️  未配置第三方接口 sessionId 与备用 Token，使用代码内置默认第三方接口（https://easyops.tech.ctseelink.cn）"
 fi
 
 # 3. 构建与启动（禁用 BuildKit 避免 rpc EOF；先停旧容器保证干净）
