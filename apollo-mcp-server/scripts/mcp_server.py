@@ -104,6 +104,7 @@ class ConfigClient:
         self.refresh_sec = refresh_sec or int(os.environ.get('CONFIG_SERVICE_REFRESH_SEC', '60'))
         self._cache: Optional[dict] = None          # 最近一次成功拉取的完整配置
         self._last_fetch_ts: float = 0.0
+        self.last_error: str = ""                   # 最近一次拉取失败原因（用于健康检查排查）
         self._lock = threading.Lock()
 
     @staticmethod
@@ -205,11 +206,14 @@ class ConfigClient:
                 if data:
                     self._cache = data
                     self._last_fetch_ts = time.time()
+                    self.last_error = ""
                     envs = list(data.get('environments', {}).keys())
                     logger.info(f"[ConfigClient] 配置拉取成功: 环境={envs}, default_env={data.get('default_env')}, 有Token={bool(data.get('openapi_token'))}")
                 else:
+                    self.last_error = "第三方接口返回空配置"
                     logger.warning("[ConfigClient] 第三方接口返回空配置")
             except Exception as e:
+                self.last_error = str(e)
                 logger.warning(f"[ConfigClient] 第三方接口不可达({self.api_base}): {e}")
 
             # 有缓存则回退缓存
@@ -756,7 +760,8 @@ if HAS_FASTAPI:
                 "api_base": client.config.config_client.api_base,
                 "session_id": client.config.config_client.session_id[:8] + "...(脱敏)",
                 "using_remote": bool(client.config.config_client._cache),
-                "refresh_sec": client.config.config_client.refresh_sec
+                "refresh_sec": client.config.config_client.refresh_sec,
+                "last_error": client.config.config_client.last_error or None
             },
             "api_stats": {
                 "total_requests": client._request_count,
