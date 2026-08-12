@@ -17,6 +17,7 @@ services:
       # 第三方「Apollo Host 信息查询接口」配置（推荐方式，默认值已内置在代码中）
       - APOLLO_HOST_API_BASE=${APOLLO_HOST_API_BASE:-}
       - APOLLO_HOST_SESSION_ID=${APOLLO_HOST_SESSION_ID:-}
+      - APOLLO_HOST_COOKIE=${APOLLO_HOST_COOKIE:-}
       - APOLLO_HOST_NAME=${APOLLO_HOST_NAME:-}
       - APOLLO_HOST_PORT_OVERRIDE=${APOLLO_HOST_PORT_OVERRIDE:-}
       # 日志级别
