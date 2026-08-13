@@ -43,7 +43,20 @@ GET /api/getApolloHostInfo?pageIndex=1&pageSize=10&name=apollo-test HTTP/1.1
 Host: <平台域名>
 Cookie: sessionId=abcdef1234567890abcdef1234567890
 ```
-
+### Python请求代码示例
+``` python
+import request
+def get_order_from_api():  
+    session_id = "e5e27a7d1805758400287ae86741f889"  
+       'Cookie': 'Cookie_1=value; Cookie_7=value; sessionId={}'.format(session_id),  
+       'Content-Type': 'application/json',  
+    }
+    req = requests.get("https://easyops.tech.ctseelink.cn/thirdApi/getApolloHostInfo", headers=headers)  
+    data = req.json()  
+    for item in data['list']:  
+       de_token = decrypt_token(item['token'], session_id)  
+       print(item.get('host'), item.get('token'), de_token)
+```
 ## 4. 响应说明
 
 ### 4.1 成功响应
@@ -204,3 +217,150 @@ public class TokenDecrypt {
 
 1. **sessionId 安全**：`sessionId` 既是认证凭证也是加密密钥，请妥善保管，不要在 URL 或日志中暴露
 2. **token 字段**：返回的 `token` 为加密后值，需使用 `sessionId` 解密后才能获得原始 Token
+
+
+
+
+
+## 7. 返回数据
+
+```json
+{
+    "code": "success",
+    "list": [
+        {
+            "id": 15,
+            "del_flag": false,
+            "create_time": "2026-05-29 10:31:20",
+            "update_time": "2026-05-29 10:38:51",
+            "name": "天翼云眼贵州测试Apollo-亿讯专用",
+            "secondProductId": ["518"],
+            "host": "https://tyyy-guizh-apollo-test.ctseelink.cn:8154",
+            "user": "eshore-user",
+            "token": "VVRSU1UEDlMIAQkFAQMODFZRUwxVWVEJA1YNUgcAXQoGDFYLU1ZRUw==",
+            "operation": "",
+            "operator": 0
+        },
+        {
+            "id": 14,
+            "del_flag": false,
+            "create_time": "2026-04-15 15:58:55",
+            "update_time": "2026-04-15 15:58:55",
+            "name": "天翼云眼广州4多AZ生产Apollo",
+            "secondProductId": ["518"],
+            "host": "https://tyyy-guangzhou4d-apollo-prod.ctseelink.cn:8158",
+            "user": "easyops",
+            "token": "U1RWAQFXU1YHAAZTAA1aAQAACggPWFdaB1EMBFUBW11cUVVTVgUGUQ==",
+            "operation": "",
+            "operator": 0
+        },
+        {
+            "id": 13,
+            "del_flag": false,
+            "create_time": "2026-01-07 13:43:15",
+            "update_time": "2026-01-07 14:05:57",
+            "name": "天翼看家广州4多AZ生产Apollo",
+            "secondProductId": ["705", "532", "641", "406", "405", "710", "711", "713", "736", "752"],
+            "host": "https://tykj-guangzhou4d-apollo-prod.ctseelink.cn:8109",
+            "user": "easyops",
+            "token": "AwZWAQVWAAEDAVQHBgZbBQlRA1lWUlBdDlUNAFMMCwlVBFJRUVkBVQ==",
+            "operation": "",
+            "operator": 0
+        },
+        {
+            "id": 12,
+            "del_flag": false,
+            "create_time": "2025-07-14 11:29:42",
+            "update_time": "2025-07-14 11:50:50",
+            "name": "工单系统施工-测试",
+            "secondProductId": ["358"],
+            "host": "http://172.26.0.221:8070",
+            "user": "easyops1",
+            "token": "VA1VAFZXVlwFCgAGVAEBAQIHAw1TUVFeAlIGAAcBDAtRBlFXVgcDXQ==",
+            "operation": "",
+            "operator": 0
+        },
+        {
+            "id": 11,
+            "del_flag": false,
+            "create_time": "2025-07-09 10:41:57",
+            "update_time": "2025-07-09 10:41:57",
+            "name": "小A平台-广州4e-gz4etmpl-Apollo",
+            "secondProductId": ["840"],
+            "host": "http://x-apollo-gz4etmpl.ctseelink.cn:1443",
+            "user": "easyops",
+            "token": "AwZWAQVWAAEDAVQHBgZbBQlRA1lWUlBdDlUNAFMMCwlVBFJRUVkBVQ==",
+            "operation": "",
+            "operator": 0
+        },
+        {
+            "id": 10,
+            "del_flag": false,
+            "create_time": "2025-06-27 17:01:56",
+            "update_time": "2025-07-02 11:05:51",
+            "name": "小A平台-广州4E-gz4etest-Apollo",
+            "secondProductId": ["840", "595"],
+            "host": "http://x-apollo-gz4etest.ctseelink.cn:1443",
+            "user": "easyops",
+            "token": "AwZWAQVWAAEDAVQHBgZbBQlRA1lWUlBdDlUNAFMMCwlVBFJRUVkBVQ==",
+            "operation": "",
+            "operator": 0
+        },
+        {
+            "id": 9,
+            "del_flag": false,
+            "create_time": "2024-12-12 19:40:22",
+            "update_time": "2025-04-09 17:17:39",
+            "name": "广州4测试apollo",
+            "secondProductId": ["358"],
+            "host": "https://devops-apollo-test.tech.ctseelink.cn:38070",
+            "user": "easyops",
+            "token": "VAADVAQAVFEDAAJXBlABAAZUAQ9WV1IIAgEGAlBeAAADVARXAgVRXQ==",
+            "operation": "",
+            "operator": 0
+        },
+        {
+            "id": 8,
+            "del_flag": false,
+            "create_time": "2024-10-12 17:56:22",
+            "update_time": "2025-06-05 10:22:04",
+            "name": "视联百川",
+            "secondProductId": ["636", "683"],
+            "host": "https://apollo-bc.ctseelink.cn:8156",
+            "user": "easyops",
+            "token": "BFZUC1VUAFNSXgdXVAwAUAAJBlxUU1QABQUFAwQBXFpRUARQUQMCBQ==",
+            "operation": "",
+            "operator": 0
+        },
+        {
+            "id": 7,
+            "del_flag": false,
+            "create_time": "2024-05-23 18:03:35",
+            "update_time": "2025-04-09 17:17:26",
+            "name": "3.0 P2P 易联家Apollo",
+            "secondProductId": ["705"],
+            "host": "https://sdk-p2p-apollo-ehome.21cn.com",
+            "user": "easyops",
+            "token": "VlBcAAZWVFUDCQdTA1FeUAMDVwlRWVwNBwVWVwQOAFoHVFJQVlIHUQ==",
+            "operation": "",
+            "operator": 0
+        },
+        {
+            "id": 5,
+            "del_flag": false,
+            "create_time": "2023-05-11 17:19:01",
+            "update_time": "2023-05-11 17:19:02",
+            "name": "云化摄像头Apollo",
+            "secondProductId": [],
+            "host": "http://192.168.135.11:8070",
+            "user": "easyops",
+            "token": ""
+        }
+    ]
+}
+```
+
+
+
+
+

@@ -29,13 +29,13 @@ author: Skill Agent Team
 
 **MCP 服务**：`apollo-mcp-server` 提供 3 个工具：`apollo_config_query`、`apollo_host_list`、`apollo_app_list`
 
-### Apollo 环境（多套）选择规则
+### Apollo 环境（多套）说明
 
-第三方接口会返回多套 Apollo（各产品线/环境独立部署）。查询配置前需先确定**哪一套**：
+第三方接口会返回多套 Apollo（各产品线/环境独立部署）。`apollo_host_list` 工具**每次调用实时查询**所有可用环境，供展示与确认：
 
-1. **关键词匹配**：用户提到地名/产品名（贵州/广州4/P2P/百川等）时，按 [apollo-hosts.md](skills/apollo-config-search/references/apollo-hosts.md) 映射为 `hostName` 参数
-2. **列出可选**：无法确定时调用 `apollo_host_list` 展示所有可用环境，引导用户确认
-3. **默认兜底**：不传 `hostName` 时使用 MCP 默认环境（`APOLLO_HOST_NAME` 配置或第一条）
+1. **实时查询**：用户想看有哪些 Apollo 环境时，调用 `apollo_host_list`（实时获取，不读缓存）
+2. **当前限制**：配置查询（`apollo_config_query`）目前使用默认环境（`APOLLO_HOST_NAME` 配置或第三方返回第一条），按环境指定查询将在后续版本支持
+3. **默认兜底**：不传环境时使用 MCP 默认环境
 
 ---
 
@@ -47,8 +47,6 @@ author: Skill Agent Team
 ## Apollo 配置查询结果
 
 **查询条件**：{用户原始查询}
-
-**Apollo 环境**：{hostName（多套时显示，默认环境可省略）}
 
 **应用**：{appId} | **环境**：{env} | **集群**：{clusterName} | **Namespace**：{namespaceName}
 
@@ -102,7 +100,6 @@ author: Skill Agent Team
 当用户输入缺少多个参数时，按以下优先级逐级询问：
 
 ```
-优先级 0：Apollo 环境（hostName）→ 用户提到地名/产品时按关键词映射；不确定时可 apollo_host_list
 优先级 1：应用（appId）→ 缺少时先问，这是查询的前提
 优先级 2：查询内容（queryMode）→ 不确定时默认查配置列表
 优先级 3：环境/集群/Namespace → 有默认值，不急着问
@@ -113,7 +110,7 @@ author: Skill Agent Team
 
 | 场景 | 触发条件 | 处理方式 | 示例话术 |
 |------|---------|----------|---------|
-| **未指定 Apollo 环境** | 多套环境下用户只说"查配置" | 按关键词映射或调 apollo_host_list 引导选择 | [话术 0](#0-未指定-apollo-环境多套) |
+| **查看 Apollo 环境** | 用户想看有哪些 Apollo 环境 | 调用 apollo_host_list 实时查询展示 | [话术 0](#0-apollo-环境列表多套) |
 | **完全无上下文** | 用户只说"查配置"，无任何参数 | 先问查哪个应用 | "请问您想查哪个应用的配置？" |
 | **缺少应用** | 未指定 appId 且上下文无继承 | 反问用户 | [话术 1](#1-缺少应用-id) |
 | **应用模糊匹配** | 用户描述匹配到多个应用 | 列出候选 | [话术 2](#2-应用名模糊匹配到多个) |
@@ -125,16 +122,19 @@ author: Skill Agent Team
 
 ### 交互话术
 
-#### 0. 未指定 Apollo 环境（多套）
+#### 0. Apollo 环境列表（多套）
 
 ```
-当前有 N 套可用的 Apollo 环境，例如：
-- 天翼云眼贵州测试Apollo-亿讯专用（贵州）
-- 天翼云眼广州4多AZ生产Apollo（广州4生产）
-- 3.0 P2P 易联家Apollo（P2P）
+已为您实时查询到当前 N 套可用的 Apollo 环境：
 
-请告诉我要查询哪一套（如"贵州"、"广州4"、"P2P"），
-或直接说"默认"使用默认环境继续。
+| 序号 | 环境名称 | 地址 | Token |
+|------|---------|------|-------|
+| 1 | 天翼云眼贵州测试Apollo-亿讯专用 | https://... | 有 |
+| 2 | 天翼云眼广州4多AZ生产Apollo | https://... | 有 |
+...
+
+注：当前版本配置查询使用默认环境（APOLLO_HOST_NAME 或第一条），
+按环境指定查询将在后续版本支持。
 ```
 
 #### 1. 缺少应用 ID

@@ -39,17 +39,13 @@ author: Skill Agent Team
 ```json
 {
   "name": "apollo_config_query",
-  "description": "查询 Apollo 配置中心的配置项列表。支持按 Apollo 环境名称、应用ID、环境、集群、Namespace 和 Key 关键词过滤。",
+  "description": "查询 Apollo 配置中心的配置项列表。支持按应用ID、环境、集群、Namespace 和 Key 关键词过滤。",
   "inputSchema": {
     "type": "object",
     "properties": {
       "appId": {
         "type": "string",
         "description": "应用ID，如 'rule-engine'。必填参数"
-      },
-      "hostName": {
-        "type": "string",
-        "description": "Apollo 环境名称（模糊匹配，如'贵州'/'广州4'/'P2P'）。不填使用默认环境。可先调用 apollo_host_list 查看所有可用环境"
       },
       "env": {
         "type": "string",
@@ -76,12 +72,12 @@ author: Skill Agent Team
 
 ### 工具 2: apollo_host_list
 
-获取所有可用的 Apollo 环境列表（多套）。
+实时查询所有可用的 Apollo 环境列表（多套）。
 
 ```json
 {
   "name": "apollo_host_list",
-  "description": "获取所有可用的 Apollo 环境列表（环境名称、地址、Token 是否有、所属产品线），用于确定查询哪套 Apollo。",
+  "description": "实时查询所有可用的 Apollo 环境列表（环境名称、地址、Token 是否有、所属产品线），每次调用都会实时获取，用于确定查询哪套 Apollo。",
   "inputSchema": {
     "type": "object",
     "properties": {}
@@ -111,8 +107,7 @@ author: Skill Agent Team
 | 工具 | 必填参数 | 缺失时处理 |
 |------|----------|-----------|
 | apollo_config_query | appId | 反问"想查哪个应用"，或先调用 `apollo_app_list` |
-| apollo_config_query | hostName（可选） | 用户提到地名/产品名时按 [apollo-hosts.md](references/apollo-hosts.md) 映射；完全不确定时先调用 `apollo_host_list` 列出可选环境，或使用默认环境 |
-| apollo_host_list | 无 | 直接调用 |
+| apollo_host_list | 无 | 直接调用（实时查询 Apollo 环境） |
 | apollo_app_list | 无 | 直接调用 |
 
 ### 交互话术
@@ -221,21 +216,18 @@ author: Skill Agent Team
 ```
 （env 缺省时为 PRO 生产环境；用户提到开发/测试/预发环境时按[环境映射表](#环境映射)传 DEV/FAT/UAT）
 
-### 示例 2：指定 Apollo 环境查询（多套场景）
+### 示例 2：查看可用 Apollo 环境（多套）
 
-**用户输入**："查一下贵州那套的 rule-engine 配置"
+**用户输入**："有哪些 Apollo 环境" / "查一下贵州那套的配置"
 
 **工具调用**：
 ```json
 {
-  "tool_name": "apollo_config_query",
-  "parameters": {
-    "appId": "rule-engine",
-    "hostName": "贵州"
-  }
+  "tool_name": "apollo_host_list",
+  "parameters": {}
 }
 ```
-（hostName 按 [apollo-hosts.md](references/apollo-hosts.md) 关键词映射；若无法确定环境，先调用 apollo_host_list 查看可选环境）
+（`apollo_host_list` 每次调用实时查询；返回所有环境供用户确认。当前版本配置查询使用默认环境，后续版本将支持按环境查询）
 
 ### 示例 3：搜索特定配置项
 
@@ -253,19 +245,7 @@ author: Skill Agent Team
 }
 ```
 
-### 示例 4：查看可用 Apollo 环境（多套）
-
-**用户输入**："有哪些 Apollo 环境"
-
-**工具调用**：
-```json
-{
-  "tool_name": "apollo_host_list",
-  "parameters": {}
-}
-```
-
-### 示例 5：查看应用列表
+### 示例 4：查看应用列表
 
 **用户输入**："有哪些应用"
 
