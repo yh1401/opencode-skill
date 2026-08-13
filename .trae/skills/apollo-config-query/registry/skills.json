@@ -6,11 +6,11 @@
     {
       "id": "apollo-config-search",
       "name": "Apollo配置查询",
-      "description": "通过MCP工具查询Apollo配置中心的配置信息、应用列表",
+      "description": "通过MCP工具查询Apollo配置中心的配置信息、应用列表、Apollo环境列表",
       "enabled": true,
       "path": "skills/apollo-config-search/SKILL.md",
-      "keywords": ["Apollo", "配置", "appid", "namespace", "配置项", "key", "配置中心", "应用列表"],
-      "version": "2.0.0",
+      "keywords": ["Apollo", "配置", "appid", "namespace", "配置项", "key", "配置中心", "应用列表", "Apollo环境"],
+      "version": "2.1.0",
       "priority": 1
     }
   ]
