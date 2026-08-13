@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-本地 Mock：模拟第三方「Apollo Host 信息查询接口」/api/getApolloHostInfo
+本地 Mock：模拟第三方「Apollo Host 信息查询接口」/thirdApi/getApolloHostInfo
 
 用途：
     第三方线上接口 https://easyops.tech.ctseelink.cn 在本地（无代理）不可达，
@@ -8,7 +8,7 @@
 
 行为：
     - 监听端口 8066（可通过 --port 修改）
-    - GET /api/getApolloHostInfo 返回文档同构的 list 数据
+    - GET /thirdApi/getApolloHostInfo 返回文档同构的 list 数据
     - host 指向本地 Apollo (http://localhost:8070)，token 为「用 sessionId 加密后的本地 Token」
       （MCP 拉取后会用 sessionId 解密还原，链路完整）
 
@@ -53,7 +53,6 @@ def _load_session_id() -> str:
 app = FastAPI(title="mock-apollo-host-api", description="Mock 第三方 Apollo Host 信息查询接口")
 
 
-@app.get("/api/getApolloHostInfo", tags=["第三方接口"])
 @app.get("/thirdApi/getApolloHostInfo", tags=["第三方接口"])
 def get_apollo_host_info(request: Request, paginator: bool = True, pageIndex: int = 1, pageSize: int = 10,
                          name: str = "", secondProductId: str = "", host: str = "", user: str = "", token: str = ""):

@@ -72,9 +72,6 @@ APOLLO_ENV=PRO
 # 第三方接口地址（默认 https://easyops.tech.ctseelink.cn）
 # APOLLO_HOST_API_BASE=https://easyops.tech.ctseelink.cn
 
-# 第三方接口路径（默认 /thirdApi/getApolloHostInfo；本地 mock 测试改为 /api/getApolloHostInfo）
-# APOLLO_HOST_PATH=/thirdApi/getApolloHostInfo
-
 # 第三方鉴权 sessionId（32位），同时是 token 解密密钥
 # APOLLO_HOST_SESSION_ID=e5e27a7d1805758400287ae86741f889
 
