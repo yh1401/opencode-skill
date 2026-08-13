@@ -44,6 +44,10 @@ Thumbs.db
 *.tmp
 *.bak
 
+# 临时测试/任务文件（勿提交）
+/test_output_format.py
+/用户要求使用技能查询贵州机房的服务器*.md
+
 # Skill packages (保留 build.sh)
 .trae/skills/packages/*.zip
 .trae/skills/packages/**/*.zip
@@ -51,6 +55,15 @@ Thumbs.db
 
 # Skill reports
 .trae/skills/*/reports/
+.trae/skills/*/scripts/reports/
+
+# Skill output / release 打包产物
+.trae/skills/*/output/
+.trae/skills/*/release/
+
+# 敏感凭证文件（勿提交）
+cookies.txt
+*.cookie
 
 # Backup directories
 .trae/skills/*/.backup_*/
