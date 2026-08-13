@@ -56,7 +56,7 @@ app = FastAPI(title="mock-apollo-host-api", description="Mock 第三方 Apollo H
 @app.get("/thirdApi/getApolloHostInfo", tags=["第三方接口"])
 def get_apollo_host_info(request: Request, paginator: bool = True, pageIndex: int = 1, pageSize: int = 10,
                          name: str = "", secondProductId: str = "", host: str = "", user: str = "", token: str = ""):
-    """模拟第三方接口：校验 Cookie sessionId，返回一条 Mock 的 Apollo Host 记录"""
+    """模拟第三方接口：校验 Cookie sessionId，返回多套 Mock 的 Apollo Host 记录（模拟线上多套 Apollo）"""
     cookie = request.cookies.get("sessionId", "")
     if not cookie:
         return JSONResponse(status_code=401, content={"code": "fail", "message": "未认证的IP访问!"})
@@ -64,25 +64,53 @@ def get_apollo_host_info(request: Request, paginator: bool = True, pageIndex: in
     session_id = cookie
     encrypted_token = _encrypt_token(MOCK_REAL_TOKEN, session_id)
 
-    record = {
-        "id": 15,
-        "del_flag": False,
-        "create_time": "2026-08-11 10:00:00",
-        "update_time": "2026-08-11 10:00:00",
-        "name": MOCK_HOST_NAME,
-        "secondProductId": ["518"],
-        "host": MOCK_HOST,
-        "user": MOCK_USER,
-        "token": encrypted_token,
-        "operation": "",
-        "operator": 0
-    }
+    records = [
+        {
+            "id": 15,
+            "del_flag": False,
+            "create_time": "2026-08-11 10:00:00",
+            "update_time": "2026-08-11 10:00:00",
+            "name": "天翼云眼贵州测试Apollo-亿讯专用",
+            "secondProductId": ["518"],
+            "host": MOCK_HOST,
+            "user": MOCK_USER,
+            "token": encrypted_token,
+            "operation": "",
+            "operator": 0
+        },
+        {
+            "id": 14,
+            "del_flag": False,
+            "create_time": "2026-08-11 10:00:00",
+            "update_time": "2026-08-11 10:00:00",
+            "name": "天翼云眼广州4多AZ生产Apollo",
+            "secondProductId": ["518"],
+            "host": MOCK_HOST,
+            "user": "easyops",
+            "token": encrypted_token,
+            "operation": "",
+            "operator": 0
+        },
+        {
+            "id": 7,
+            "del_flag": False,
+            "create_time": "2026-08-11 10:00:00",
+            "update_time": "2026-08-11 10:00:00",
+            "name": "3.0 P2P 易联家Apollo",
+            "secondProductId": ["705"],
+            "host": MOCK_HOST,
+            "user": "easyops",
+            "token": encrypted_token,
+            "operation": "",
+            "operator": 0
+        }
+    ]
 
     # 模拟 name 模糊查询过滤
-    if name and name.lower() not in MOCK_HOST_NAME.lower():
-        return {"code": "success", "list": [], "pageTotal": 0}
+    if name:
+        records = [r for r in records if name.lower() in r["name"].lower()]
 
-    return {"code": "success", "list": [record], "pageTotal": 1}
+    return {"code": "success", "list": records, "pageTotal": len(records)}
 
 
 @app.get("/health", tags=["基础"])

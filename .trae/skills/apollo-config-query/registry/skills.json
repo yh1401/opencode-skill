@@ -1,5 +1,5 @@
 {
-  "version": "2.0",
+  "version": "2.1",
   "lastUpdated": "2026-07-29",
   "description": "Apollo配置查询技能注册中心 - 通过MCP工具查询Apollo配置和应用列表",
   "skills": [

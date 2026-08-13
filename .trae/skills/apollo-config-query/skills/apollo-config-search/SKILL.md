@@ -1,7 +1,7 @@
 ---
 name: apollo-config-search
 description: 查询 Apollo 配置中心的配置信息，支持配置项查询和应用列表查询
-version: 2.0.0
+version: 2.1.0
 author: Skill Agent Team
 ---
 
@@ -11,8 +11,9 @@ author: Skill Agent Team
 
 本技能通过 **MCP 工具** 与 Apollo 配置中心进行交互，提供以下能力：
 
-1.  **配置查询** (`apollo_config_query`)：查询指定应用、环境、集群、Namespace 的配置项
-2.  **应用列表** (`apollo_app_list`)：获取 Apollo 中所有可用应用列表
+1.  **配置查询** (`apollo_config_query`)：查询指定 Apollo 环境、应用、环境、集群、Namespace 的配置项
+2.  **环境列表** (`apollo_host_list`)：获取所有可用的 Apollo 环境（多套，按产品线/地域划分）
+3.  **应用列表** (`apollo_app_list`)：获取 Apollo 中所有可用应用列表
 
 ## 触发条件
 
@@ -29,22 +30,31 @@ author: Skill Agent Team
 
 ## 工具调用 Schema
 
-本技能依赖 2 个 MCP 工具，通过 `apollo-mcp-server` 提供服务。
+本技能依赖 3 个 MCP 工具，通过 `apollo-mcp-server` 提供服务。
 
 ### 工具 1: apollo_config_query
 
-查询指定应用的 Namespace 配置项列表。
+查询指定 Apollo 环境的 Namespace 配置项列表。
 
 ```json
 {
   "name": "apollo_config_query",
-  "description": "查询 Apollo 配置中心的配置项列表。支持按应用ID、环境、集群、Namespace 和 Key 关键词过滤。",
+  "description": "查询 Apollo 配置中心的配置项列表。支持按 Apollo 环境名称、应用ID、环境、集群、Namespace 和 Key 关键词过滤。",
   "inputSchema": {
     "type": "object",
     "properties": {
       "appId": {
         "type": "string",
         "description": "应用ID，如 'rule-engine'。必填参数"
+      },
+      "hostName": {
+        "type": "string",
+        "description": "Apollo 环境名称（模糊匹配，如'贵州'/'广州4'/'P2P'）。不填使用默认环境。可先调用 apollo_host_list 查看所有可用环境"
+      },
+      "env": {
+        "type": "string",
+        "description": "环境，PRO=生产(默认), DEV=开发, FAT=测试, UAT=预发",
+        "enum": ["PRO", "DEV", "FAT", "UAT"]
       },
       "clusterName": {
         "type": "string",
@@ -64,7 +74,22 @@ author: Skill Agent Team
 }
 ```
 
-### 工具 2: apollo_app_list
+### 工具 2: apollo_host_list
+
+获取所有可用的 Apollo 环境列表（多套）。
+
+```json
+{
+  "name": "apollo_host_list",
+  "description": "获取所有可用的 Apollo 环境列表（环境名称、地址、Token 是否有、所属产品线），用于确定查询哪套 Apollo。",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  }
+}
+```
+
+### 工具 3: apollo_app_list
 
 获取 Apollo 中所有可用应用列表。
 
@@ -86,6 +111,8 @@ author: Skill Agent Team
 | 工具 | 必填参数 | 缺失时处理 |
 |------|----------|-----------|
 | apollo_config_query | appId | 反问"想查哪个应用"，或先调用 `apollo_app_list` |
+| apollo_config_query | hostName（可选） | 用户提到地名/产品名时按 [apollo-hosts.md](references/apollo-hosts.md) 映射；完全不确定时先调用 `apollo_host_list` 列出可选环境，或使用默认环境 |
+| apollo_host_list | 无 | 直接调用 |
 | apollo_app_list | 无 | 直接调用 |
 
 ### 交互话术
@@ -95,6 +122,17 @@ author: Skill Agent Team
 请问您想查询哪个应用的配置？
 您可以说应用名称（如"SampleApp"）、AppId（如"rule-engine"），
 或输入"应用列表"查看所有可用应用。
+```
+
+**未指定 Apollo 环境（多套场景）**：
+```
+当前有 N 套可用的 Apollo 环境，例如：
+- 天翼云眼贵州测试Apollo-亿讯专用（贵州）
+- 天翼云眼广州4多AZ生产Apollo（广州4生产）
+- 3.0 P2P 易联家Apollo（P2P）
+
+请告诉我要查询哪一套（如"贵州"、"广州4"、"P2P"），
+或直接说"默认"使用默认环境继续。
 ```
 
 ## 参数映射规则
@@ -130,7 +168,7 @@ author: Skill Agent Team
 
 **查询条件**：{用户原始查询}
 
-**应用**：{appId} | **集群**：{clusterName} | **Namespace**：{namespaceName}
+**应用**：{appId} | **环境**：{env} | **集群**：{clusterName} | **Namespace**：{namespaceName}
 
 ---
 
@@ -165,7 +203,7 @@ author: Skill Agent Team
 
 ## 完整调用示例
 
-### 示例 1：查询应用配置
+### 示例 1：查询应用配置（默认环境）
 
 **用户输入**："查询 rule-engine 的配置"
 
@@ -175,13 +213,31 @@ author: Skill Agent Team
   "tool_name": "apollo_config_query",
   "parameters": {
     "appId": "rule-engine",
+    "env": "PRO",
     "clusterName": "default",
     "namespaceName": "application"
   }
 }
 ```
+（env 缺省时为 PRO 生产环境；用户提到开发/测试/预发环境时按[环境映射表](#环境映射)传 DEV/FAT/UAT）
 
-### 示例 2：搜索特定配置项
+### 示例 2：指定 Apollo 环境查询（多套场景）
+
+**用户输入**："查一下贵州那套的 rule-engine 配置"
+
+**工具调用**：
+```json
+{
+  "tool_name": "apollo_config_query",
+  "parameters": {
+    "appId": "rule-engine",
+    "hostName": "贵州"
+  }
+}
+```
+（hostName 按 [apollo-hosts.md](references/apollo-hosts.md) 关键词映射；若无法确定环境，先调用 apollo_host_list 查看可选环境）
+
+### 示例 3：搜索特定配置项
 
 **用户输入**："查一下 rule-engine 的 timeout 配置"
 
@@ -197,7 +253,19 @@ author: Skill Agent Team
 }
 ```
 
-### 示例 3：查看应用列表
+### 示例 4：查看可用 Apollo 环境（多套）
+
+**用户输入**："有哪些 Apollo 环境"
+
+**工具调用**：
+```json
+{
+  "tool_name": "apollo_host_list",
+  "parameters": {}
+}
+```
+
+### 示例 5：查看应用列表
 
 **用户输入**："有哪些应用"
 

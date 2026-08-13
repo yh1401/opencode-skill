@@ -103,6 +103,7 @@ class ConfigClient:
         self.session_id = os.environ.get('APOLLO_HOST_SESSION_ID') or self._DEFAULT_SESSION_ID
         self.refresh_sec = refresh_sec or int(os.environ.get('CONFIG_SERVICE_REFRESH_SEC', '60'))
         self._cache: Optional[dict] = None          # 最近一次成功拉取的完整配置
+        self._hosts: List[dict] = []                # 全部 Apollo 套 [{"name","host","token","secondProductId",...}]
         self._last_fetch_ts: float = 0.0
         self.last_error: str = ""                   # 最近一次拉取失败原因（用于健康检查排查）
         self._lock = threading.Lock()
@@ -149,7 +150,21 @@ class ConfigClient:
         if not host_list:
             raise RuntimeError("第三方接口返回的 Apollo Host 列表为空")
 
-        # 选择目标记录：APOLLO_HOST_NAME 模糊过滤，否则取第一条
+        # 全量缓存所有套（解密每套 token），供「按套查询」使用
+        self._hosts = []
+        for item in host_list:
+            decrypted = self.decrypt_token(item.get('token', ''), self.session_id)
+            self._hosts.append({
+                'name': item.get('name', ''),
+                'host': item.get('host', ''),
+                'token': decrypted,
+                'has_token': bool(decrypted),
+                'secondProductId': item.get('secondProductId', []),
+                'user': item.get('user', ''),
+            })
+        logger.info(f"[ConfigClient] 已缓存 {len(self._hosts)} 套 Apollo 环境")
+
+        # 选择默认套：APOLLO_HOST_NAME 模糊过滤，否则取第一条
         name_filter = os.environ.get('APOLLO_HOST_NAME', '')
         target = None
         if name_filter:
@@ -504,18 +519,30 @@ class ApolloAPIClient:
             logger.error(f"[{tool_id}] 请求异常: {str(e)}")
             return {"code": 500, "message": f"API 请求失败: {str(e)}", "data": {}}
     
-    def query_config(self, appId: str, env: str = "PRO", clusterName: str = "default", namespaceName: str = "application", key: str = None) -> dict:
+    def _resolve_host(self, host_name: str = None) -> Tuple[str, str]:
+        """按 Apollo 环境名称（模糊匹配）解析 host + token；未指定时用默认套"""
+        hosts = self.config.config_client._hosts if self.config.config_client else []
+        if host_name and hosts:
+            for h in hosts:
+                if host_name.lower() in h.get('name', '').lower():
+                    logger.info(f"[ApolloAPIClient] 命中 Apollo 环境: {h['name']} -> {h['host']}")
+                    return h['host'], h['token']
+            logger.warning(f"[ApolloAPIClient] 未找到匹配的 Apollo 环境: {host_name}，回退默认套")
+        return self.config.openapi_base, self.config.openapi_token
+
+    def query_config(self, appId: str, env: str = "PRO", clusterName: str = "default", namespaceName: str = "application", key: str = None, host_name: str = None) -> dict:
         """
         查询 Apollo 配置项 (使用 OpenAPI，需要 Token)
         GET /openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}
         """
-        url = f"{self.config.openapi_base}/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}"
+        base, token = self._resolve_host(host_name)
+        url = f"{base}/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}"
         
         headers = {}
-        if self.config.openapi_token:
-            headers['Authorization'] = self.config.openapi_token
+        if token:
+            headers['Authorization'] = token
         
-        logger.info(f"查询配置: appId={appId}, env={env}, namespace={namespaceName}, key={key or '(全部)'}")
+        logger.info(f"查询配置: apolloHost={host_name or '(默认)'}, appId={appId}, env={env}, namespace={namespaceName}, key={key or '(全部)'}")
         
         result = self._request('apollo-config-query', url, headers=headers,
                                 appId=appId, env=env,
@@ -545,6 +572,34 @@ class ApolloAPIClient:
         
         return result
     
+    def query_hosts(self) -> dict:
+        """
+        查询所有可用的 Apollo 环境列表（第三方接口返回的多套 Apollo：名称、地址、Token 是否有）
+        供 skill 引导用户选择在哪套 Apollo 上查询
+        """
+        hosts = self.config.config_client._hosts if self.config.config_client else []
+        if not hosts:
+            return {"code": 200, "message": "success",
+                    "data": {"default_host": self.config.openapi_base, "hosts": [], "count": 0}}
+        return {
+            "code": 200,
+            "message": "success",
+            "data": {
+                "default_host": self.config.openapi_base,
+                "count": len(hosts),
+                "hosts": [
+                    {
+                        "name": h.get('name', ''),
+                        "host": h.get('host', ''),
+                        "has_token": h.get('has_token', False),
+                        "secondProductId": h.get('secondProductId', []),
+                        "user": h.get('user', '')
+                    }
+                    for h in hosts
+                ]
+            }
+        }
+
     def query_apps(self) -> dict:
         """
         查询 Apollo 应用列表 (使用 OpenAPI，需要 Token)
@@ -569,17 +624,26 @@ client = ApolloAPIClient()
 MCP_TOOLS = [
     {
         "name": "apollo_config_query",
-        "description": "查询 Apollo 配置中心的配置项列表。支持按应用ID、环境、集群、Namespace 和 Key 关键词过滤。",
+        "description": "查询 Apollo 配置中心的配置项列表。支持按 Apollo 环境名称、应用ID、环境、集群、Namespace 和 Key 关键词过滤。",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "appId": {"type": "string", "description": "应用ID，如 'rule-engine'。必填参数"},
+                "hostName": {"type": "string", "description": "Apollo 环境名称（模糊匹配，如'贵州'/'广州4'/'P2P'）。不填使用默认环境。可先调用 apollo_host_list 查看所有可用环境"},
                 "env": {"type": "string", "description": "环境，PRO=生产, DEV=开发, FAT=测试, UAT=预发", "enum": ["PRO", "DEV", "FAT", "UAT"]},
                 "clusterName": {"type": "string", "description": "集群名称，默认 'default'"},
                 "namespaceName": {"type": "string", "description": "Namespace 名称，默认 'application'"},
                 "key": {"type": "string", "description": "配置项 Key 关键词（模糊匹配），用于过滤配置项"}
             },
             "required": ["appId"]
+        }
+    },
+    {
+        "name": "apollo_host_list",
+        "description": "获取所有可用的 Apollo 环境列表（环境名称、地址、Token 是否有、所属产品线），用于确定查询哪套 Apollo。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
         }
     },
     {
@@ -646,11 +710,14 @@ class MCPProtocolHandler:
                 raise ValueError("appId 是必填参数，请指定应用ID")
             return client.query_config(
                 appId=appId,
+                host_name=arguments.get("hostName"),
                 env=arguments.get("env", "PRO"),
                 clusterName=arguments.get("clusterName", "default"),
                 namespaceName=arguments.get("namespaceName", "application"),
                 key=arguments.get("key")
             )
+        elif tool_name == "apollo_host_list":
+            return client.query_hosts()
         elif tool_name == "apollo_app_list":
             return client.query_apps()
         else:

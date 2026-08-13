@@ -1,7 +1,7 @@
 ---
 name: Apollo配置查询助手
 description: 查询 Apollo 配置中心的配置数据（应用配置/Namespace/配置项/应用列表），通过 MCP 工具与 Apollo 交互。当用户询问 Apollo、配置、appid、namespace、配置项 key、应用列表等信息时调用。
-version: 2.0.0
+version: 2.1.0
 author: Skill Agent Team
 ---
 
@@ -9,11 +9,11 @@ author: Skill Agent Team
 
 ## 技能概述
 
-本技能通过 **MCP 工具** 与 Apollo 配置中心交互，提供配置查询、应用列表两大能力。
+本技能通过 **MCP 工具** 与 Apollo 配置中心交互，提供配置查询、Apollo 环境（多套）查询、应用列表三大能力。
 
 | 技能 ID | 功能描述 | 状态 | 触发关键词 |
 |---------|----------|------|------------|
-| apollo-config-search | Apollo 配置查询/应用列表 | ✅ 可用 | Apollo、配置、appid、namespace、配置项、key、应用列表 |
+| apollo-config-search | Apollo 配置查询/环境列表/应用列表 | ✅ 可用 | Apollo、配置、appid、namespace、配置项、key、应用列表、Apollo环境 |
 
 ---
 
@@ -27,7 +27,15 @@ author: Skill Agent Team
 
 **业务处理**：参数映射、MCP 工具调用、输出格式化等业务逻辑由子技能 [apollo-config-search/SKILL.md](skills/apollo-config-search/SKILL.md) 负责。
 
-**MCP 服务**：`apollo-mcp-server` 提供 2 个工具：`apollo_config_query`、`apollo_app_list`
+**MCP 服务**：`apollo-mcp-server` 提供 3 个工具：`apollo_config_query`、`apollo_host_list`、`apollo_app_list`
+
+### Apollo 环境（多套）选择规则
+
+第三方接口会返回多套 Apollo（各产品线/环境独立部署）。查询配置前需先确定**哪一套**：
+
+1. **关键词匹配**：用户提到地名/产品名（贵州/广州4/P2P/百川等）时，按 [apollo-hosts.md](skills/apollo-config-search/references/apollo-hosts.md) 映射为 `hostName` 参数
+2. **列出可选**：无法确定时调用 `apollo_host_list` 展示所有可用环境，引导用户确认
+3. **默认兜底**：不传 `hostName` 时使用 MCP 默认环境（`APOLLO_HOST_NAME` 配置或第一条）
 
 ---
 
@@ -40,6 +48,8 @@ author: Skill Agent Team
 
 **查询条件**：{用户原始查询}
 
+**Apollo 环境**：{hostName（多套时显示，默认环境可省略）}
+
 **应用**：{appId} | **环境**：{env} | **集群**：{clusterName} | **Namespace**：{namespaceName}
 
 ---
@@ -48,10 +58,10 @@ author: Skill Agent Team
 
 ---
 
-| 配置 Key | 值 | 说明 |
-|----------|----|------|
-| key1     | val1 | comment1 |
-| key2     | val2 | comment2 |
+| 配置 Key | 值 |
+|----------|----|
+| key1     | val1 |
+| key2     | val2 |
 
 ---
 💡 您可以说："搜索 timeout"按关键词过滤，或"查看应用列表"查看所有应用
@@ -92,6 +102,7 @@ author: Skill Agent Team
 当用户输入缺少多个参数时，按以下优先级逐级询问：
 
 ```
+优先级 0：Apollo 环境（hostName）→ 用户提到地名/产品时按关键词映射；不确定时可 apollo_host_list
 优先级 1：应用（appId）→ 缺少时先问，这是查询的前提
 优先级 2：查询内容（queryMode）→ 不确定时默认查配置列表
 优先级 3：环境/集群/Namespace → 有默认值，不急着问
@@ -102,6 +113,7 @@ author: Skill Agent Team
 
 | 场景 | 触发条件 | 处理方式 | 示例话术 |
 |------|---------|----------|---------|
+| **未指定 Apollo 环境** | 多套环境下用户只说"查配置" | 按关键词映射或调 apollo_host_list 引导选择 | [话术 0](#0-未指定-apollo-环境多套) |
 | **完全无上下文** | 用户只说"查配置"，无任何参数 | 先问查哪个应用 | "请问您想查哪个应用的配置？" |
 | **缺少应用** | 未指定 appId 且上下文无继承 | 反问用户 | [话术 1](#1-缺少应用-id) |
 | **应用模糊匹配** | 用户描述匹配到多个应用 | 列出候选 | [话术 2](#2-应用名模糊匹配到多个) |
@@ -112,6 +124,18 @@ author: Skill Agent Team
 | **API 失败** | 服务不可用 | 直接报错，不用模拟数据 | [话术 7](#7-api-调用失败) |
 
 ### 交互话术
+
+#### 0. 未指定 Apollo 环境（多套）
+
+```
+当前有 N 套可用的 Apollo 环境，例如：
+- 天翼云眼贵州测试Apollo-亿讯专用（贵州）
+- 天翼云眼广州4多AZ生产Apollo（广州4生产）
+- 3.0 P2P 易联家Apollo（P2P）
+
+请告诉我要查询哪一套（如"贵州"、"广州4"、"P2P"），
+或直接说"默认"使用默认环境继续。
+```
 
 #### 1. 缺少应用 ID
 
@@ -247,35 +271,27 @@ cd apollo-mcp-server
 MCP_USE_MOCK=true ./start.sh
 ```
 
-### 配置 Apollo 地址
+### 生产环境部署
 
-编辑 `apollo-mcp-server/config/api_endpoints.json`：
-
-```json
-{
-  "base_url": "http://your-apollo-host:8080",
-  "env_overrides": {
-    "base_url": "APOLLO_HOST"
-  }
-}
-```
-
-或通过环境变量覆盖：
 ```bash
-APOLLO_HOST=http://your-apollo-host:8080 ./start.sh
+# 1. 上传安装包 apollo-mcp-server-*.tar.gz 到服务器并解压
+cd deploy && chmod +x deploy-prod.sh && ./deploy-prod.sh
 ```
 
-### 配置 OpenAPI Token
+### 地址与 Token 获取（自动）
 
-编辑 `apollo-mcp-server/config/auth.json`：
+MCP 启动时通过第三方接口 `GET {api_base}/thirdApi/getApolloHostInfo`（Cookie 携带 sessionId）自动获取 Apollo 地址并解密 Token，**无需手动配置**。
 
-```json
-{
-  "openapi_token": "your-apollo-openapi-token"
-}
+需要覆盖时，在 `deploy/.env` 中配置：
+
+```ini
+# 第三方接口（推荐，默认值已内置在代码中）
+# APOLLO_HOST_API_BASE=https://easyops.tech.ctseelink.cn
+# APOLLO_HOST_SESSION_ID=<32位sessionId>
+# 备用方式：直接指定 Apollo 地址与 Token（第三方接口不可用时）
+# APOLLO_OPENAPI_HOST=http://apollo-config.tech.ctseelink.cn:8070
+# APOLLO_OPENAPI_TOKEN=<OpenAPI Token>
 ```
-
-> ConfigService (端口 8080) 无需 Token，OpenAPI (端口 8070) 查询配置和应用列表需要 Token。
 
 ### API 文档
 
@@ -294,18 +310,17 @@ apollo-config-query/
 │   └── apollo-config-search/
 │       ├── SKILL.md                      # Apollo 配置查询工具（含完整工具定义）
 │       └── references/
+│           ├── apollo-hosts.md           # Apollo 环境（多套）关键词映射
 │           ├── app-options.md            # 应用可选值列表
 │           └── namespace-options.md      # Namespace 可选值列表
-└── _dev/                                 # 开发/打包相关（不参与打包）
-    └── package.sh                        # 打包脚本
 ```
 
 ---
 
 ## 版本信息
 
-- **版本**: 2.0.0
+- **版本**: 2.1.0
 - **可用技能**: 1 个（apollo-config-search）
-- **MCP 工具**: 2 个（apollo_config_query, apollo_app_list）
+- **MCP 工具**: 3 个（apollo_config_query, apollo_host_list, apollo_app_list）
 - **架构**: MCP 工具调用（apollo-mcp-server）
 - **设计模式**: 渐进式披露
