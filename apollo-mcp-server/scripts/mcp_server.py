@@ -130,16 +130,14 @@ class ConfigClient:
         url = f"{self.api_base}{host_path}"
         logger.info(f"[ConfigClient] 从第三方接口拉取 Apollo Host 信息: {url}")
 
-        # 鉴权 Cookie：接口需要完整会话 Cookie（如 Cookie_1/Cookie_7 等），
-        # 可通过 APOLLO_HOST_COOKIE 配置（分号分隔，不含 sessionId），sessionId 自动拼接
-        extra_cookie = (os.environ.get('APOLLO_HOST_COOKIE') or '').strip()
-        cookie_header = f"{extra_cookie}; sessionId={self.session_id}" if extra_cookie else f"sessionId={self.session_id}"
-        logger.info(f"[ConfigClient] 请求 Cookie: {extra_cookie.split('=')[0] + '=***; ' if extra_cookie else ''}sessionId={self.session_id[:8]}...(脱敏)")
+        # 鉴权：Cookie sessionId（既是认证凭证，也是 token 解密密钥）
+        logger.info(f"[ConfigClient] 请求 Cookie: sessionId={self.session_id[:8]}...(脱敏)")
 
         resp = requests.get(
             url,
             params={"paginator": False, "pageIndex": 1, "pageSize": 100},
-            headers={"Cookie": cookie_header, "Content-Type": "application/json"},
+            headers={"Content-Type": "application/json"},
+            cookies={"sessionId": self.session_id},
             timeout=10,
             verify=False
         )

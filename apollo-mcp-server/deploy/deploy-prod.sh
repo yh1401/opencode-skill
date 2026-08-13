@@ -35,8 +35,6 @@ APOLLO_ENV=PRO
 # APOLLO_HOST_API_BASE=https://easyops.tech.ctseelink.cn
 # APOLLO_HOST_PATH=/thirdApi/getApolloHostInfo
 # APOLLO_HOST_SESSION_ID=e5e27a7d1805758400287ae86741f889
-# 第三方接口要求的其他会话 Cookie（如无则留空注释）：
-# APOLLO_HOST_COOKIE=Cookie_1=xxx; Cookie_7=xxx
 # 备用方式：直接指定 Apollo 地址与 Token
 APOLLO_OPENAPI_HOST=http://apollo-config.tech.ctseelink.cn:8070
 APOLLO_OPENAPI_TOKEN=
