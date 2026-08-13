@@ -5,8 +5,9 @@ services:
       dockerfile: deploy/Dockerfile
     container_name: apollo-mcp-server
     restart: unless-stopped
-    ports:
-      - "8062:8062"
+    # 复用宿主机网络：容器内 DNS/路由/hosts 与宿主机一致，
+    # 解决容器无法访问内网域名（easyops/各套 Apollo）的问题
+    network_mode: host
     environment:
       # 生产环境配置
       - MCP_USE_MOCK=${MCP_USE_MOCK:-false}
@@ -25,8 +26,6 @@ services:
       - ../config:/app/config:ro
       - ../mock:/app/mock:ro
       - apollo-mcp-logs:/app/logs
-    networks:
-      - apollo-network
     logging:
       driver: json-file
       options:
