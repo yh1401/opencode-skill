@@ -1,16 +1,16 @@
 {
-  "version": "2.1",
-  "lastUpdated": "2026-07-29",
-  "description": "Apollo配置查询技能注册中心 - 通过MCP工具查询Apollo配置和应用列表",
+  "version": "3.0",
+  "lastUpdated": "2026-08-14",
+  "description": "Apollo配置查询技能注册中心 - 通过MCP工具查询Apollo配置和应用列表（支持多套Apollo，按apolloHostId指定）",
   "skills": [
     {
       "id": "apollo-config-search",
       "name": "Apollo配置查询",
-      "description": "通过MCP工具查询Apollo配置中心的配置信息、应用列表、Apollo环境列表",
+      "description": "通过MCP工具查询Apollo配置中心的配置信息、应用列表、Apollo服务/套列表（多套Apollo按apolloHostId指定）",
       "enabled": true,
       "path": "skills/apollo-config-search/SKILL.md",
-      "keywords": ["Apollo", "配置", "appid", "namespace", "配置项", "key", "配置中心", "应用列表", "Apollo环境"],
-      "version": "2.1.0",
+      "keywords": ["Apollo", "配置", "appid", "namespace", "配置项", "key", "配置中心", "应用列表", "Apollo服务", "Apollo套", "apolloHostId"],
+      "version": "3.0.0",
       "priority": 1
     }
   ]

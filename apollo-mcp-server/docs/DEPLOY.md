@@ -11,10 +11,10 @@
 | Docker | 已安装并运行 | `docker info` |
 | Docker Compose | V2 版本 | `docker compose version` |
 | 端口 8062 | 未被占用 | `ss -tlnp \| grep 8062` |
-| Apollo OpenAPI (8070) | 内网可达（查询配置/应用列表共用） | `curl -s -o /dev/null -w "%{http_code}" http://apollo-config.tech.ctseelink.cn:8070` |
+| 第三方接口（推荐） | 内网可达，用于获取各套 Apollo 地址/Token | `curl -m 10 -b "sessionId=e5e27a7d1805758400287ae86741f889" https://easyops.tech.ctseelink.cn/thirdApi/getApolloHostInfo` |
 | 磁盘空间 | >1GB 可用 | `df -h /` |
 
-> 如果 Apollo 服务不可达，需先配置内网 DNS 或在 `/etc/hosts` 中添加解析。
+> 如果第三方接口不可达，需先配置内网 DNS 或在 `/etc/hosts` 中添加解析；配置/应用查询均通过 EasyOps 代理接口转发，不直连 Apollo。
 
 ---
 
@@ -28,7 +28,7 @@ cd /opt
 git clone https://github.com/yh1401/opencode-skill.git
 cd opencode-skill/apollo-mcp-server
 
-# 2. 执行部署脚本（会交互式询问 Apollo Token）
+# 2. 执行部署脚本（默认通过第三方接口获取 Apollo 地址/Token，无需手动配置）
 cd deploy
 chmod +x deploy-prod.sh
 ./deploy-prod.sh
@@ -52,13 +52,13 @@ cd /opt/opencode-skill/apollo-mcp-server/deploy
 
 cat > .env << 'EOF'
 MCP_USE_MOCK=false
-APOLLO_OPENAPI_HOST=http://apollo-config.tech.ctseelink.cn:8070
-APOLLO_OPENAPI_TOKEN=your_token_here
 LOG_LEVEL=INFO
 EOF
 chmod 600 .env
 ```
 
+> 默认通过第三方「Apollo Host 信息查询接口」获取各套 Apollo 地址/Token，无需填写 Token。
+> 如需指定默认 Apollo 套，追加 `APOLLO_HOST_NAME=天翼云眼贵州`。
 > `.env` 必须放在 `deploy/` 目录下（与 `docker-compose.yml` 同级），docker compose 从这里读取。
 
 ### 步骤 2: 构建并启动
@@ -119,8 +119,8 @@ docker compose down
 | 问题 | 解决方案 |
 |------|----------|
 | `Mock 模式: true` | 检查 `.env` 中 `MCP_USE_MOCK=false` |
-| `Token 未配置` | 检查 `.env` 中 `APOLLO_OPENAPI_TOKEN` |
-| Apollo 网络不通 | `curl http://apollo-config.tech.ctseelink.cn:8070` 测试 |
+| 代理接口提示"未记录的访问" | 在 `t_ops_middleware_third_party_access` 配置 `/thirdApi/apollo/apps`、`/thirdApi/apollo/namespace` 两条 GET 权限 |
+| 第三方接口不可达 | 检查 `APOLLO_HOST_API_BASE` / `APOLLO_HOST_SESSION_ID` 及出口网络；代理调用不通时 MCP 会直接返回错误提示 |
 | 端口被占用 | 修改 `docker-compose.yml` 中的端口映射 |
 
 ---
@@ -131,6 +131,8 @@ docker compose down
 |------|------|--------|
 | `MCP_USE_MOCK` | Mock 数据开关 | `false` |
 | `APOLLO_ENV` | Apollo 环境（PRO/DEV/SIT/LOCAL） | 配置文件 `default_env` |
-| `APOLLO_OPENAPI_HOST` | Apollo OpenAPI 统一地址（查询配置/应用列表共用） | - |
-| `APOLLO_OPENAPI_TOKEN` | Apollo OpenAPI Token | - |
+| `APOLLO_HOST_API_BASE` | 第三方「Apollo Host 信息查询接口」地址（推荐方式） | `https://easyops.tech.ctseelink.cn` |
+| `APOLLO_HOST_SESSION_ID` | 第三方鉴权 sessionId（32 位，同时是 token 解密密钥） | 内置默认值 |
+| `APOLLO_HOST_NAME` | 默认 Apollo 套的模糊过滤名称（不填取第一条） | - |
+| `CONFIG_SERVICE_REFRESH_SEC` | 第三方接口配置刷新间隔（秒） | `60` |
 | `LOG_LEVEL` | 日志级别 | `INFO` |

@@ -19,20 +19,6 @@
     "api-gateway": ["application", "logging", "common", "routes", "ratelimit"]
   },
 
-  "_namespace_labels": {
-    "application": "应用配置",
-    "datasource": "数据源配置",
-    "redis": "Redis缓存配置",
-    "logging": "日志配置",
-    "common": "公共配置",
-    "payment": "支付配置",
-    "rules": "规则配置",
-    "sms": "短信配置",
-    "email": "邮件配置",
-    "routes": "路由配置",
-    "ratelimit": "限流配置"
-  },
-
   "_configs": {
     "user-service": {
       "application": {
@@ -500,7 +486,5 @@
         {"id": 1, "releaseTitle": "v3.1 - 限流策略优化", "releaseComment": "调整各服务限流阈值；增加IP黑白名单配置", "releasedBy": "chenyi", "releaseTime": "2026-07-29 11:05:00"}
       ]
     }
-  },
-
-  "_environments": ["DEV01", "DEV02", "DEV03", "SIT01", "SIT02", "PRE", "PRO"]
+  }
 }

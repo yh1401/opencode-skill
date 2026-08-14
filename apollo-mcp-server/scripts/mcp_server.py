@@ -38,6 +38,11 @@ if USE_MOCK:
 try:
     import requests
     HAS_REQUESTS = True
+    try:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    except Exception:
+        pass
 except ImportError:
     HAS_REQUESTS = False
     print("[ERROR] 未安装 requests 模块，请先安装: pip install requests")
@@ -79,18 +84,17 @@ logger.addHandler(_file_handler)
 class ConfigClient:
     """通过第三方「Apollo Host 信息查询接口」获取 Apollo 连接配置（地址 + Token）的客户端
 
-    完整链路：skill → MCP → 第三方接口（返回 Apollo 地址+加密 Token）→ MCP 解密组装 → Apollo → 返回
+    完整链路：skill → MCP → EasyOps 代理接口（/thirdApi/apollo/apps、/thirdApi/apollo/namespace）→ 返回配置
 
     设计目标：
-        - Token / 服务地址由第三方接口集中管理，MCP 通过接口获取（不再在本地暴露明文 Token）
-        - 启动时拉取一次并缓存，之后定时刷新
-        - 第三方接口不可用时回退到本地兜底配置（config/api_endpoints.json + auth.json），保证可用性
+        - 配置/应用查询统一走 EasyOps 代理接口，MCP 无需持有 Apollo Token
+        - Token / 服务地址由第三方接口集中管理，MCP 通过接口获取（不直连 Apollo OpenAPI）
+        - 启动时拉取一次并缓存，之后定时刷新；代理接口调用不通时直接返回错误提示
 
     环境变量：
         APOLLO_HOST_API_BASE      第三方接口地址，默认 https://easyops.tech.ctseelink.cn
         APOLLO_HOST_SESSION_ID    第三方鉴权 sessionId（32位），同时是 token 解密密钥
         APOLLO_HOST_NAME          可选，按服务名称模糊过滤第三方返回的 host（不填取第一条）
-        APOLLO_HOST_PORT_OVERRIDE 可选，强制替换 host 端口（如第三方返回 8154，OpenAPI 实际 8070 时配置）
         CONFIG_SERVICE_REFRESH_SEC 刷新间隔（秒），默认 60
     """
 
@@ -104,6 +108,7 @@ class ConfigClient:
         self.refresh_sec = refresh_sec or int(os.environ.get('CONFIG_SERVICE_REFRESH_SEC', '60'))
         self._cache: Optional[dict] = None          # 最近一次成功拉取的完整配置
         self._last_fetch_ts: float = 0.0
+        self._default_host_id: Optional[int] = None # 默认 Apollo Host 的 id（作为 apolloHostId 兜底）
         self.last_error: str = ""                   # 最近一次拉取失败原因（用于健康检查排查）
         self._lock = threading.Lock()
 
@@ -123,8 +128,8 @@ class ConfigClient:
             logger.warning(f"token 解密失败: {e}")
             return ""
 
-    def _fetch(self) -> dict:
-        """调用第三方接口获取 Apollo Host 信息，组装成与本地模板同构的配置结构"""
+    def _fetch_host_list_raw(self) -> list:
+        """调用第三方接口获取原始 Apollo Host 列表"""
         url = f"{self.api_base}/thirdApi/getApolloHostInfo"
         logger.info(f"[ConfigClient] 从第三方接口拉取 Apollo Host 信息: {url}")
 
@@ -148,28 +153,25 @@ class ConfigClient:
         logger.info(f"[ConfigClient] 第三方接口返回 {len(host_list)} 条 Apollo Host 记录")
         if not host_list:
             raise RuntimeError("第三方接口返回的 Apollo Host 列表为空")
+        return host_list
 
-        # 选择默认套：APOLLO_HOST_NAME 模糊过滤，否则取第一条
+    def _select_target_host(self, host_list: list) -> dict:
+        """选择默认套：APOLLO_HOST_NAME 模糊过滤，否则取第一条"""
         name_filter = os.environ.get('APOLLO_HOST_NAME', '')
-        target = None
         if name_filter:
             for item in host_list:
                 if name_filter.lower() in item.get('name', '').lower():
-                    target = item
-                    break
-        if target is None:
-            target = host_list[0]
+                    return item
+        return host_list[0]
+
+    def _fetch(self) -> dict:
+        """调用第三方接口获取 Apollo Host 信息，组装成与本地模板同构的配置结构"""
+        host_list = self._fetch_host_list_raw()
+        target = self._select_target_host(host_list)
+        self._default_host_id = target.get('id')
 
         host = target.get('host', '')
         raw_token = self.decrypt_token(target.get('token', ''), self.session_id)
-
-        # 可选：端口覆盖（第三方返回端口与 OpenAPI 实际端口不一致时）
-        port_override = os.environ.get('APOLLO_HOST_PORT_OVERRIDE', '')
-        if port_override and host:
-            from urllib.parse import urlsplit, urlunsplit
-            parts = urlsplit(host)
-            host = urlunsplit((parts.scheme, f"{parts.hostname}:{port_override}", parts.path, parts.query, parts.fragment))
-            logger.info(f"[ConfigClient] 已覆盖 host 端口为 {port_override}: {host}")
 
         # 以本地模板为基底组装（environments/endpoints/timeout 等静态结构）
         template = self._load_local_template()
@@ -188,36 +190,87 @@ class ConfigClient:
         return configs
 
     def fetch_host_list(self) -> list:
-        """实时调用第三方接口查询所有可用的 Apollo 环境列表（供 apollo_host_list 每次调用时查询，不做缓存）"""
-        url = f"{self.api_base}/thirdApi/getApolloHostInfo"
-        logger.info(f"[ConfigClient] 实时查询 Apollo 环境列表: {url}")
+        """实时调用第三方接口查询所有可用的 Apollo 环境列表（供 apollo_host_list 每次调用时查询，不做缓存）。
 
-        resp = requests.get(
-            url,
-            params={"paginator": False, "pageIndex": 1, "pageSize": 100},
-            headers={"Content-Type": "application/json"},
-            cookies={"sessionId": self.session_id},
-            timeout=10,
-            verify=False
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        if data.get('code') != 'success':
-            raise RuntimeError(f"第三方接口返回失败: {data.get('message', '未知错误')}")
-        host_list = data.get('list', [])
+        返回的 apolloHostId（即第三方记录 id）作为查询链路的入口：
+        哪套Apollo(apolloHostId) → 环境(env) → 应用(appId) → 集群(clusterName) → Namespace(namespaceName) → 配置项(key)
+        """
+        host_list = self._fetch_host_list_raw()
+        default_id = self._select_target_host(host_list).get('id')
+        self._default_host_id = default_id  # 顺带缓存默认套，避免 query_hosts 额外请求
         logger.info(f"[ConfigClient] 实时查询到 {len(host_list)} 条 Apollo Host 记录")
 
         return [
             {
+                'apolloHostId': item.get('id'),
+                'id': item.get('id'),
                 'name': item.get('name', ''),
                 'host': item.get('host', ''),
                 'has_token': bool(self.decrypt_token(item.get('token', ''), self.session_id)),
                 'secondProductId': item.get('secondProductId', []),
                 'user': item.get('user', ''),
+                'is_default': item.get('id') == default_id,
             }
             for item in host_list
         ]
+
+    def get_default_host_id(self) -> Optional[int]:
+        """获取默认 Apollo Host 的 id（作为 apolloHostId 兜底，配置查询/应用列表缺省时使用）"""
+        if self._default_host_id is not None:
+            return self._default_host_id
+        try:
+            host_list = self._fetch_host_list_raw()
+            self._default_host_id = self._select_target_host(host_list).get('id')
+        except Exception as e:
+            logger.warning(f"[ConfigClient] 获取默认 Apollo Host ID 失败: {e}")
+        return self._default_host_id
+
+    def fetch_proxy_apps(self, apollo_host_id) -> dict:
+        """通过 EasyOps 代理接口获取指定 Apollo 的应用列表（获取所有 app）
+
+        GET {api_base}/thirdApi/apollo/apps?apolloHostId={id}
+        鉴权：Cookie sessionId（EasyOps 统一保存 Apollo 地址与 Token，调用方无需传 Token）
+        """
+        url = f"{self.api_base}/thirdApi/apollo/apps"
+        logger.info(f"[ConfigClient] 代理接口查询应用列表: apolloHostId={apollo_host_id}")
+        resp = requests.get(
+            url,
+            params={"apolloHostId": apollo_host_id},
+            headers={"Content-Type": "application/json"},
+            cookies={"sessionId": self.session_id},
+            timeout=30,
+            verify=False
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def fetch_proxy_namespace(self, apollo_host_id, env: str, app_id: str,
+                              cluster_name: str = "default", namespace_name: str = "application") -> dict:
+        """通过 EasyOps 代理接口获取指定 Apollo 单个 Namespace 配置
+
+        GET {api_base}/thirdApi/apollo/namespace?apolloHostId=&env=&appId=&clusterName=&namespaceName=
+        鉴权：Cookie sessionId（无需 Apollo Token）
+        """
+        url = f"{self.api_base}/thirdApi/apollo/namespace"
+        params = {
+            "apolloHostId": apollo_host_id,
+            "env": env,
+            "appId": app_id,
+            "clusterName": cluster_name,
+            "namespaceName": namespace_name,
+        }
+        logger.info(f"[ConfigClient] 代理接口查询配置: apolloHostId={apollo_host_id}, env={env}, appId={app_id}, "
+                    f"cluster={cluster_name}, namespace={namespace_name}")
+        resp = requests.get(
+            url,
+            params=params,
+            headers={"Content-Type": "application/json"},
+            cookies={"sessionId": self.session_id},
+            timeout=30,
+            verify=False
+        )
+        resp.raise_for_status()
+        return resp.json()
 
     def _load_local_template(self) -> dict:
         """加载本地模板 api_endpoints.json（作为组装远程配置的基底）"""
@@ -263,7 +316,7 @@ class ConfigClient:
 
 class ApolloConfig:
     def __init__(self):
-        self.openapi_base = "http://localhost:8070"
+        self.openapi_base = ""  # 默认套地址（来自第三方接口，仅用于信息展示）
         self.openapi_token = ""
         self.endpoints = {}
         self.current_env = os.environ.get('APOLLO_ENV', '')  # 先留空，load_config 中从配置文件补充
@@ -281,23 +334,18 @@ class ApolloConfig:
         self.max_retries = data.get('max_retries', 2)
         self.retry_delay = data.get('retry_delay', 1)
 
-        # 环境与地址：环境变量优先，其次配置服务
-        env_openapi_host = os.environ.get('APOLLO_OPENAPI_HOST')
-        if env_openapi_host:
-            self.openapi_base = env_openapi_host
-            logger.info(f"环境变量 APOLLO_OPENAPI_HOST 覆盖: {self.openapi_base}")
-        else:
-            environments = data.get('environments', {})
-            if not self.current_env:
-                self.current_env = data.get('default_env', 'PRO')
-                logger.info(f"未设置 APOLLO_ENV，使用配置服务默认环境: {self.current_env}")
-            env_key = self.current_env
-            if env_key in environments:
-                env_config = environments[env_key]
-                self.openapi_base = env_config.get('openapi_service', self.openapi_base)
-                logger.info(f"[ConfigService] 加载 {env_key} 环境配置: OpenAPI={self.openapi_base}")
+        # 环境与地址：来自第三方接口（默认套地址仅用于信息展示，查询走代理接口，不直连）
+        environments = data.get('environments', {})
+        if not self.current_env:
+            self.current_env = data.get('default_env', 'PRO')
+            logger.info(f"未设置 APOLLO_ENV，使用配置服务默认环境: {self.current_env}")
+        env_key = self.current_env
+        if env_key in environments:
+            env_config = environments[env_key]
+            self.openapi_base = env_config.get('openapi_service', self.openapi_base)
+            logger.info(f"[ConfigService] 加载 {env_key} 环境配置: OpenAPI={self.openapi_base}")
 
-        # 构建完整 URL
+        # 构建完整 URL（仅用于健康检查/信息展示，无直连调用）
         for endpoint in self.endpoints.values():
             if 'path' in endpoint:
                 endpoint['full_url'] = f"{self.openapi_base}{endpoint['path']}"
@@ -305,109 +353,35 @@ class ApolloConfig:
         logger.info(f"Apollo 配置加载完成（来自配置服务）[{self.current_env}]: OpenAPI={self.openapi_base}")
 
     def load_config(self):
-        """加载 Apollo 连接配置：优先配置服务拉取，失败回退本地 api_endpoints.json"""
+        """加载 Apollo 连接配置：优先配置服务拉取；失败仅影响默认套地址展示，查询走代理接口不受影响"""
         remote = self.config_client.get_configs(force=True)
         if remote:
             self._apply_remote_config(remote)
             return
 
-        # ---- 回退：本地配置文件 ----
-        logger.warning("[ConfigClient] 配置服务不可用，回退本地配置 api_endpoints.json")
-        config_path = os.path.join(_config_dir, 'api_endpoints.json')
-        if not os.path.exists(config_path):
-            logger.warning("本地配置 api_endpoints.json 不存在，使用内置默认值")
-            return
-
-        with open(config_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
-        # 1. 优先使用环境变量（生产部署方式），配置查询和应用列表统一走 OpenAPI（8070）
-        env_openapi_host = os.environ.get('APOLLO_OPENAPI_HOST')
-        if env_openapi_host:
-            self.openapi_base = env_openapi_host
-            logger.info(f"环境变量 APOLLO_OPENAPI_HOST 覆盖: {self.openapi_base}")
-
-        # 2. 如果环境变量没设，从配置文件读取对应环境
-        if not env_openapi_host:
-            environments = data.get('environments', {})
-            # 如果 APOLLO_ENV 未设，使用配置文件的 default_env
-            if not self.current_env:
-                self.current_env = data.get('default_env', 'PRO')
-                logger.info(f"未设置 APOLLO_ENV，使用默认环境: {self.current_env}")
-            env_key = self.current_env
-            if env_key in environments:
-                env_config = environments[env_key]
-                self.openapi_base = env_config.get('openapi_service', self.openapi_base)
-                logger.info(f"加载 {env_key} 环境配置: OpenAPI={self.openapi_base}")
-
-        # 3. 兼容旧格式（base_url）
-        if not env_openapi_host and not data.get('environments'):
-            old_base = data.get('base_url')
-            if old_base:
-                self.openapi_base = old_base.replace(':8080', ':8070')
-
-        # 4. 加载超时/重试参数
-        self.timeout = data.get('timeout', 30)
-        self.max_retries = data.get('max_retries', 2)
-        self.retry_delay = data.get('retry_delay', 1)
-
-        # 5. 加载 endpoints 模板
-        self.endpoints = data.get('endpoints', {})
-
-        # 6. 构建完整 URL（全部基于 OpenAPI 统一地址）
-        for endpoint in self.endpoints.values():
-            if 'path' in endpoint:
-                endpoint['full_url'] = f"{self.openapi_base}{endpoint['path']}"
-
-        logger.info(f"Apollo 配置加载完成（本地回退）[{self.current_env}]: OpenAPI={self.openapi_base}")
+        # 配置服务不可用：代理查询不受影响，直接使用内置默认值
+        logger.warning("[ConfigClient] 第三方接口拉取配置失败，使用内置默认值（代理查询不受影响）")
+        self.timeout = 30
+        self.max_retries = 2
+        self.retry_delay = 1
+        self.endpoints = {}
 
     def load_auth(self):
-        """加载 Token：优先第三方接口拉取的（已解密），其次环境变量，最后本地 auth.json"""
-        # 1. 第三方接口拉取（config_client 缓存中包含解密后的 openapi_token）
+        """加载 Token 信息（仅用于展示）。配置/应用查询走 EasyOps 代理接口，无需本地 Token。"""
         remote = self.config_client._cache or {}
         remote_token = remote.get('openapi_token', '')
         if remote_token:
             self.openapi_token = remote_token
-            logger.info("从第三方接口加载 Apollo OpenAPI Token（已解密）")
-            return
-
-        auth_path = os.path.join(_config_dir, 'auth.json')
-
-        # 2. 环境变量
-        env_token = os.environ.get('APOLLO_OPENAPI_TOKEN')
-        if env_token:
-            self.openapi_token = env_token
-            logger.info("从环境变量加载 Apollo OpenAPI Token")
-            return
-
-        # 3. 本地 auth.json（回退）
-        if os.path.exists(auth_path):
-            try:
-                with open(auth_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self.openapi_token = data.get('openapi_token', '')
-                    if self.openapi_token:
-                        logger.info("从本地配置文件加载 Apollo OpenAPI Token（回退）")
-                    else:
-                        logger.warning("Apollo OpenAPI Token 未配置（配置查询和应用列表将失败）")
-            except Exception as e:
-                logger.warning(f"auth.json 读取失败，忽略配置文件: {e}")
+            logger.info("从第三方接口加载默认 Apollo 套 Token（仅展示，查询走代理接口）")
+        else:
+            logger.info("未从第三方接口获取到 Token（查询走代理接口，不受影响）")
 
 
 class ApolloAPIClient:
     def __init__(self):
         self.config = ApolloConfig()
-        self._session = None
         self._request_count = 0
         self._success_count = 0
-    
-    def _ensure_session(self):
-        if HAS_REQUESTS and self._session is None:
-            self._session = requests.Session()
-            proxy_env = os.environ.get('HTTP_PROXY') or os.environ.get('http_proxy')
-            if proxy_env:
-                self._session.proxies = {'http': proxy_env, 'https': proxy_env}
-                print(f"[INFO] HTTP 会话已配置代理: {proxy_env}")
     
     def _load_mock_data(self) -> dict:
         mock_path = os.path.join(_references_dir, 'mock_responses.json')
@@ -471,116 +445,66 @@ class ApolloAPIClient:
         
         return {"code": 500, "message": f"Mock 数据不存在: {tool_id}", "data": {}}
     
-    def _request(self, tool_id: str, url: str, params: dict = None, headers: dict = None, **mock_kwargs) -> dict:
-        self._request_count += 1
-        
+    def query_config(self, appId: str, env: str = "PRO", clusterName: str = "default",
+                     namespaceName: str = "application", key: str = None,
+                     apolloHostId: int = None) -> dict:
+        """
+        查询 Apollo 配置项。
+
+        查询链路：哪套Apollo(apolloHostId) → 环境(env) → 应用(appId) → 集群(clusterName) → Namespace(namespaceName) → 配置项(key)。
+        通过 EasyOps 代理接口查询（按 apolloHostId 指定任意一套 Apollo，无需 Token）；调用不通时直接返回错误提示。
+        """
         if USE_MOCK:
-            logger.debug(f"[{tool_id}] Mock 模式启用，返回 Mock 数据")
-            return self._get_mock_response(tool_id, **mock_kwargs)
-        
-        if not HAS_REQUESTS:
-            logger.error(f"[{tool_id}] requests 模块未安装")
-            return {"code": 500, "message": "requests 模块未安装", "data": {}}
-        
+            return self._get_mock_response('apollo-config-query', appId=appId, env=env,
+                                           clusterName=clusterName, namespaceName=namespaceName, key=key)
+
+        if apolloHostId is None:
+            apolloHostId = self.config.config_client.get_default_host_id()
+
+        logger.info(f"查询配置: apolloHostId={apolloHostId}, env={env}, appId={appId}, "
+                    f"cluster={clusterName}, namespace={namespaceName}, key={key or '(全部)'}")
+
+        # ---- 通过 EasyOps 代理接口查询 ----
         try:
-            self._ensure_session()
-            
-            logger.debug(f"[{tool_id}] 请求: GET {url}")
-            start_time = time.time()
-            
-            resp = self._session.get(url, params=params, headers=headers, timeout=self.config.timeout)
-            duration = time.time() - start_time
-            
-            logger.debug(f"[{tool_id}] 响应: status={resp.status_code}, duration={round(duration*1000)}ms")
-            resp.raise_for_status()
-            
-            try:
-                result = resp.json()
-                self._success_count += 1
-                logger.info(f"[{tool_id}] 请求成功: {round(duration*1000)}ms")
-                # 统一包装为 {code, message, data} 格式
-                if isinstance(result, list):
-                    return {"code": 200, "message": "success", "data": result}
-                elif isinstance(result, dict) and 'code' not in result:
-                    return {"code": 200, "message": "success", "data": result}
-                return result
-            except ValueError:
-                text = resp.text
-                if text.strip().startswith('{'):
-                    try:
-                        return {"code": 200, "message": "success", "data": json.loads(text)}
-                    except:
-                        pass
-                return {"code": 200, "message": "success", "data": {"raw": text}}
-                
-        except requests.exceptions.Timeout as e:
-            logger.warning(f"[{tool_id}] 请求超时: {str(e)}")
-            return {"code": 504, "message": "API 请求超时", "data": {}}
-            
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"[{tool_id}] 连接失败: {str(e)}")
-            return {"code": 503, "message": "网络连接失败", "data": {}}
-            
-        except requests.exceptions.RequestException as e:
-            # 提取 HTTP 状态码，提供更有针对性的错误信息
-            status_code = getattr(getattr(e, 'response', None), 'status_code', None)
-            if status_code == 400:
-                logger.warning(f"[{tool_id}] 请求参数错误: {str(e)}")
-                return {"code": 400, "message": f"请求参数错误: {str(e)}", "data": {}}
-            elif status_code == 401:
-                logger.warning(f"[{tool_id}] 认证失败，请检查 OpenAPI Token")
-                return {"code": 401, "message": "OpenAPI Token 无效或未配置", "data": {}}
-            elif status_code == 404:
-                logger.warning(f"[{tool_id}] 资源不存在: {str(e)}")
-                return {"code": 404, "message": "请求的资源不存在（应用/Namespace/环境可能不正确）", "data": {}}
-            logger.error(f"[{tool_id}] 请求异常: {str(e)}")
-            return {"code": 500, "message": f"API 请求失败: {str(e)}", "data": {}}
-    
-    def query_config(self, appId: str, env: str = "PRO", clusterName: str = "default", namespaceName: str = "application", key: str = None) -> dict:
-        """
-        查询 Apollo 配置项 (使用 OpenAPI，需要 Token)
-        GET /openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}
-        """
-        url = f"{self.config.openapi_base}/openapi/v1/envs/{env}/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}"
-        
-        headers = {}
-        if self.config.openapi_token:
-            headers['Authorization'] = self.config.openapi_token
-        
-        logger.info(f"查询配置: appId={appId}, env={env}, namespace={namespaceName}, key={key or '(全部)'}")
-        
-        result = self._request('apollo-config-query', url, headers=headers,
-                                appId=appId, env=env,
-                                clusterName=clusterName, namespaceName=namespaceName, key=key)
-        
-        # 将 OpenAPI 返回的 items 数组转换为 configurations 字典（保持输出格式稳定）
-        if result.get('code') == 200:
+            self._request_count += 1
+            proxy_result = self.config.config_client.fetch_proxy_namespace(
+                apolloHostId, env, appId, clusterName, namespaceName)
+        except Exception as e:
+            logger.error(f"[apollo-config-query] 代理接口调用失败: {e}")
+            return {"code": 503, "message": f"查询失败，EasyOps 代理接口不可用: {e}", "data": {}}
+
+        if proxy_result is not None and str(proxy_result.get('code')) in ('200', 'success'):
+            self._success_count += 1
+            return self._normalize_config_result(proxy_result, appId, env, clusterName, namespaceName, key)
+
+        # 代理返回业务错误（如 404 未授权/无此环境），原样返回
+        return proxy_result or {"code": 500, "message": "代理接口返回为空", "data": {}}
+
+    def _normalize_config_result(self, result: dict, appId: str, env: str,
+                                 clusterName: str, namespaceName: str, key: str = None) -> dict:
+        """统一处理：OpenAPI items 数组 → configurations 字典 + key 模糊过滤（保持输出格式稳定）"""
+        if str(result.get('code')) in ('200', 'success'):
             data = result.get('data', {})
             if isinstance(data, dict) and 'items' in data:
                 data['configurations'] = {
                     item['key']: item['value']
                     for item in data['items'] if isinstance(item, dict) and 'key' in item
                 }
-        
-        # 如果有 key 参数，在非 Mock 模式下做本地过滤（Mock 模式已在数据层处理）
-        if key and result.get('code') == 200 and not USE_MOCK:
-            data = result.get('data', {})
-            if isinstance(data, dict) and 'configurations' in data:
-                configurations = data['configurations']
+            if key:
+                configurations = data.get('configurations', {})
                 total_count = len(configurations)
                 filtered = {k: v for k, v in configurations.items() if key.lower() in k.lower()}
                 data['configurations'] = filtered
                 data['_filtered_by'] = key
                 data['_total_count'] = total_count
                 data['_filtered_count'] = len(filtered)
-                result['data'] = data
-        
+            result['data'] = data
         return result
     
     def query_hosts(self) -> dict:
         """
         实时查询所有可用的 Apollo 环境列表（每次调用第三方接口，不做缓存）
-        供 skill 引导用户选择在哪套 Apollo 上查询
+        供 skill 引导用户选择在哪套 Apollo（apolloHostId）上查询
         """
         try:
             hosts = self.config.config_client.fetch_host_list()
@@ -593,27 +517,50 @@ class ApolloAPIClient:
             "message": "success",
             "data": {
                 "default_host": self.config.openapi_base,
+                "default_apolloHostId": self.config.config_client.get_default_host_id(),
                 "count": len(hosts),
                 "hosts": hosts
             }
         }
 
-    def query_apps(self) -> dict:
+    def query_apps(self, apolloHostId: int = None) -> dict:
         """
-        查询 Apollo 应用列表 (使用 OpenAPI，需要 Token)
-        GET /openapi/v1/apps
+        查询 Apollo 应用列表（链路：哪套Apollo(apolloHostId) → 应用列表）。
+        通过 EasyOps 代理接口查询（按 apolloHostId 指定任意一套 Apollo，无需 Token）；调用不通时直接返回错误提示。
         """
-        endpoint = self.config.endpoints.get('apollo-app-list', {})
-        url = endpoint.get('full_url', f"{self.config.openapi_base}/openapi/v1/apps")
-        
-        headers = {}
-        if self.config.openapi_token:
-            headers['Authorization'] = self.config.openapi_token
-        
-        return self._request('apollo-app-list', url, headers=headers)
+        if USE_MOCK:
+            return self._get_mock_response('apollo-app-list')
+
+        if apolloHostId is None:
+            apolloHostId = self.config.config_client.get_default_host_id()
+        logger.info(f"查询应用列表: apolloHostId={apolloHostId}")
+
+        # ---- 通过 EasyOps 代理接口查询 ----
+        try:
+            self._request_count += 1
+            proxy_result = self.config.config_client.fetch_proxy_apps(apolloHostId)
+        except Exception as e:
+            logger.error(f"[apollo-app-list] 代理接口调用失败: {e}")
+            return {"code": 503, "message": f"查询失败，EasyOps 代理接口不可用: {e}", "data": {}}
+
+        if proxy_result is not None and str(proxy_result.get('code')) in ('200', 'success'):
+            self._success_count += 1
+            return proxy_result
+
+        return proxy_result or {"code": 500, "message": "代理接口返回为空", "data": {}}
 
 
 client = ApolloAPIClient()
+
+
+def _to_int(value):
+    """将 JSON-RPC 传入的 apolloHostId 安全转换为 int（兼容字符串形式），无法解析时返回 None"""
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 # ============================================================================
 # 标准 MCP 工具定义
@@ -622,12 +569,13 @@ client = ApolloAPIClient()
 MCP_TOOLS = [
     {
         "name": "apollo_config_query",
-        "description": "查询 Apollo 配置中心的配置项列表。支持按应用ID、环境、集群、Namespace 和 Key 关键词过滤。",
+        "description": "查询 Apollo 配置中心的配置项列表。查询链路：哪套Apollo(apolloHostId) → 环境(env) → 应用(appId) → 集群(clusterName) → Namespace(namespaceName) → 具体配置(key)。apolloHostId 缺省时使用默认 Apollo，env 缺省为 PRO。支持按 Key 关键词过滤。",
         "inputSchema": {
             "type": "object",
             "properties": {
+                "apolloHostId": {"type": "integer", "description": "Apollo 服务 ID，来自 apollo_host_list 返回的 apolloHostId，用于指定查询哪一套 Apollo；不传时使用默认 Apollo"},
                 "appId": {"type": "string", "description": "应用ID，如 'rule-engine'。必填参数"},
-                "env": {"type": "string", "description": "环境，PRO=生产, DEV=开发, FAT=测试, UAT=预发", "enum": ["PRO", "DEV", "FAT", "UAT"]},
+                "env": {"type": "string", "description": "环境，如 PRO(生产)、DEV(开发)、SIT(集成测试)、FAT(测试)、UAT(预发)，以目标 Apollo 实际环境名为准"},
                 "clusterName": {"type": "string", "description": "集群名称，默认 'default'"},
                 "namespaceName": {"type": "string", "description": "Namespace 名称，默认 'application'"},
                 "key": {"type": "string", "description": "配置项 Key 关键词（模糊匹配），用于过滤配置项"}
@@ -637,7 +585,7 @@ MCP_TOOLS = [
     },
     {
         "name": "apollo_host_list",
-        "description": "实时查询所有可用的 Apollo 环境列表（环境名称、地址、Token 是否有、所属产品线），每次调用都会实时获取，用于确定查询哪套 Apollo。",
+        "description": "实时查询所有可用的 Apollo 服务列表（apolloHostId、服务名称、地址、Token 是否有、所属产品线、是否默认），每次调用都会实时获取，用于确定查询哪一套 Apollo（查询链路第一步）。",
         "inputSchema": {
             "type": "object",
             "properties": {}
@@ -645,10 +593,12 @@ MCP_TOOLS = [
     },
     {
         "name": "apollo_app_list",
-        "description": "获取 Apollo 配置中心中所有可用的应用列表（AppId、应用名称、所属部门）。",
+        "description": "获取指定 Apollo 服务中的所有应用列表（AppId、应用名称、所属部门）。apolloHostId 缺省时使用默认 Apollo。",
         "inputSchema": {
             "type": "object",
-            "properties": {}
+            "properties": {
+                "apolloHostId": {"type": "integer", "description": "Apollo 服务 ID，来自 apollo_host_list 返回的 apolloHostId，用于指定查询哪一套 Apollo；不传时使用默认 Apollo"}
+            }
         }
     }
 ]
@@ -660,29 +610,11 @@ MCP_CAPABILITIES = {
 
 
 class MCPProtocolHandler:
-    """标准 MCP 协议处理器"""
-    
+    """标准 MCP 协议处理器（Streamable HTTP，JSON-RPC 2.0）"""
+
     def __init__(self):
-        self.sse_clients = []
-    
-    def register_sse_client(self, client):
-        self.sse_clients.append(client)
-        print(f"[MCP] SSE 客户端已注册，当前连接数: {len(self.sse_clients)}")
-    
-    def unregister_sse_client(self, client):
-        if client in self.sse_clients:
-            self.sse_clients.remove(client)
-            print(f"[MCP] SSE 客户端已注销，当前连接数: {len(self.sse_clients)}")
-    
-    def broadcast(self, message: dict):
-        msg_str = json.dumps(message, ensure_ascii=False)
-        for client in self.sse_clients:
-            try:
-                client.put(f"data: {msg_str}\n\n")
-            except Exception as e:
-                print(f"[ERROR] 广播消息失败: {e}")
-                self.unregister_sse_client(client)
-    
+        pass
+
     def _build_response(self, request_id: int, result: Any = None, error: dict = None) -> dict:
         response = {
             "jsonrpc": "2.0",
@@ -710,12 +642,13 @@ class MCPProtocolHandler:
                 env=arguments.get("env", "PRO"),
                 clusterName=arguments.get("clusterName", "default"),
                 namespaceName=arguments.get("namespaceName", "application"),
-                key=arguments.get("key")
+                key=arguments.get("key"),
+                apolloHostId=_to_int(arguments.get("apolloHostId"))
             )
         elif tool_name == "apollo_host_list":
             return client.query_hosts()
         elif tool_name == "apollo_app_list":
-            return client.query_apps()
+            return client.query_apps(apolloHostId=_to_int(arguments.get("apolloHostId")))
         else:
             raise ValueError(f"Unknown tool: {tool_name}")
     
@@ -731,17 +664,29 @@ class MCPProtocolHandler:
         try:
             if method == "initialize":
                 print(f"[MCP] initialize")
+                # 标准 MCP 握手：返回协议版本、服务端能力与标识
+                client_version = params.get("protocolVersion", "2024-11-05")
                 response = self._build_response(request_id, {
-                    "name": "apollo-config-query-mcp",
-                    "version": "2.0.0",
-                    "capabilities": MCP_CAPABILITIES
+                    "protocolVersion": client_version,
+                    "capabilities": {
+                        "tools": {"listChanged": False}
+                    },
+                    "serverInfo": {
+                        "name": "apollo-config-query-mcp",
+                        "version": "3.0.0"
+                    }
                 })
-                return response, True
+                return response, False
+
+            elif method == "notifications/initialized":
+                # 通知类消息无 id，无需响应
+                print(f"[MCP] notifications/initialized")
+                return {}, False
             
             elif method == "tools/list":
                 print(f"[MCP] tools/list")
                 response = self._build_response(request_id, {"tools": MCP_TOOLS})
-                return response, True
+                return response, False
             
             elif method == "tools/call":
                 tool_name = params.get("name")
@@ -749,7 +694,7 @@ class MCPProtocolHandler:
                 print(f"[MCP] tools/call: {tool_name}")
                 
                 if not tool_name:
-                    return self._build_response(request_id, error=self._build_error(-32602, "tool name is required")), True
+                    return self._build_response(request_id, error=self._build_error(-32602, "tool name is required")), False
                 
                 try:
                     start_time = time.time()
@@ -766,13 +711,13 @@ class MCPProtocolHandler:
                         ],
                         "isError": False
                     })
-                    return response, True
+                    return response, False
                 except ValueError as e:
                     print(f"[MCP] tool [{tool_name}] validation error: {str(e)}")
-                    return self._build_response(request_id, error=self._build_error(-32602, str(e))), True
+                    return self._build_response(request_id, error=self._build_error(-32602, str(e))), False
                 except Exception as e:
                     print(f"[MCP] tool [{tool_name}] error: {str(e)}")
-                    return self._build_response(request_id, error=self._build_error(-32603, f"Internal error: {str(e)}")), True
+                    return self._build_response(request_id, error=self._build_error(-32603, f"Internal error: {str(e)}")), False
             
             else:
                 return self._build_response(request_id, error=self._build_error(-32601, f"Method not found: {method}")), False
@@ -792,11 +737,12 @@ if HAS_FASTAPI:
     app = FastAPI(
         title="apollo-config-query-mcp",
         description="Apollo 配置查询 MCP 服务 - 为 Apollo 配置中心提供标准化工具调用接口",
-        version="2.0.0"
+        version="3.0.0"
     )
     
     class ApolloConfigQueryParams(BaseModel):
         appId: str
+        apolloHostId: Optional[int] = None
         env: Optional[str] = "PRO"
         clusterName: Optional[str] = "default"
         namespaceName: Optional[str] = "application"
@@ -806,7 +752,7 @@ if HAS_FASTAPI:
     def root():
         return {
             "service": "apollo-config-query-mcp",
-            "version": "2.0.0",
+            "version": "3.0.0",
             "description": "Apollo 配置查询 MCP 服务",
             "mcp_protocol": "standard",
             "capabilities": ["tools/list", "tools/call"],
@@ -819,7 +765,7 @@ if HAS_FASTAPI:
         return {
             "status": "healthy",
             "service": "apollo-config-query-mcp",
-            "version": "2.0.0",
+            "version": "3.0.0",
             "environment": client.config.current_env,
             "mock_enabled": USE_MOCK,
             "openapi_base": client.config.openapi_base,
@@ -844,9 +790,7 @@ if HAS_FASTAPI:
     
     @app.post("/mcp", tags=["MCP 协议"])
     async def mcp_endpoint(request: dict):
-        response, should_broadcast = mcp_handler.handle_message(request)
-        if should_broadcast:
-            mcp_handler.broadcast(response)
+        response, _ = mcp_handler.handle_message(request)
         return JSONResponse(content=response)
     
     @app.get("/tools", tags=["平台兼容"])
@@ -885,7 +829,8 @@ if HAS_FASTAPI:
             env=params.env,
             clusterName=params.clusterName,
             namespaceName=params.namespaceName,
-            key=params.key
+            key=params.key,
+            apolloHostId=params.apolloHostId
         )
         return JSONResponse(content=result)
     

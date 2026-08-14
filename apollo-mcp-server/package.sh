@@ -15,7 +15,7 @@ NC='\033[0m'
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-VERSION="2.0.0"
+VERSION="3.0.0"
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 PKG_NAME="apollo-mcp-server-${VERSION}-${TIMESTAMP}.tar.gz"
 DIST_DIR="dist"
@@ -29,7 +29,6 @@ echo ""
 echo -e "${YELLOW}[1/4] 检查必需文件${NC}"
 REQUIRED_FILES=(
     "scripts/mcp_server.py"
-    "config/api_endpoints.json"
     "deploy/docker-compose.yml"
     "deploy/Dockerfile"
     "requirements.txt"
@@ -76,21 +75,11 @@ APOLLO_ENV=PRO
 # APOLLO_HOST_SESSION_ID=e5e27a7d1805758400287ae86741f889
 
 # 可选：默认 Apollo 环境名称（多套中指定一套作为默认，模糊匹配；不填取第一条）。
-# 查询时仍可通过 apollo_config_query 的 hostName 参数指定任意套
+# 查询时仍可通过 apollo_config_query / apollo_app_list 的 apolloHostId 参数指定任意套
 # APOLLO_HOST_NAME=天翼云眼贵州
 
-# 可选：强制替换 host 端口（第三方返回端口与 OpenAPI 实际端口不一致时）
-# APOLLO_HOST_PORT_OVERRIDE=8070
-
-# ================================================
-# 备用方式：直接指定 Apollo 地址与 Token（仅当第三方接口不可用时才需要）
-# ================================================
-
-# Apollo OpenAPI 统一服务地址（端口 8070，查询配置/应用列表共用）
-APOLLO_OPENAPI_HOST=http://apollo-config.tech.ctseelink.cn:8070
-
-# Apollo OpenAPI Token（备用方式必填；推荐方式下留空，由第三方接口解密提供）
-APOLLO_OPENAPI_TOKEN=
+# 第三方接口配置刷新间隔（秒）
+# CONFIG_SERVICE_REFRESH_SEC=60
 
 # 日志级别：DEBUG/INFO/WARNING/ERROR
 LOG_LEVEL=INFO
@@ -148,4 +137,4 @@ echo "  mkdir -p apollo-mcp-server && cd apollo-mcp-server"
 echo "  tar xzf ${PKG_NAME}"
 echo "  cd deploy && chmod +x deploy-prod.sh && ./deploy-prod.sh"
 echo ""
-echo -e "${YELLOW}⚠️ 注意: 打包已排除 config/auth.json，服务器上通过 deploy-prod.sh 交互输入或 .env 配置 Token${NC}"
+echo -e "${YELLOW}⚠️ 注意: 打包已排除敏感文件（.env 等），服务器上通过 deploy-prod.sh 生成配置并启动${NC}"

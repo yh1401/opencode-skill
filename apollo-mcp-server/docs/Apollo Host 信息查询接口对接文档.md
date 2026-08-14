@@ -6,10 +6,13 @@
 | -------- | --------------------------- |
 | **接口名称** | 获取 Apollo Host 信息           |
 | **接口地址** | https://easyops.tech.ctseelink.cn  |
-| **接口路径** | `/api/getApolloHostInfo`    |
+| **接口路径** | `/thirdApi/getApolloHostInfo`    |
 | **请求方法** | `GET`                       |
 | **接口类型** | 第三方外部接口                     |
 | **认证方式** | 第三方访问认证（`AuthRequireThird`） |
+
+> 返回列表中每条记录的 `id` 即 **`apolloHostId`**，是 apollo-mcp-server 查询链路的入口：
+> `apollo_host_list` 返回该 id，`apollo_config_query` / `apollo_app_list` 通过它指定查询哪一套 Apollo。
 
 ## 2. 认证说明
 
@@ -39,7 +42,7 @@
 ### 请求示例
 
 ```http
-GET /api/getApolloHostInfo?pageIndex=1&pageSize=10&name=apollo-test HTTP/1.1
+GET /thirdApi/getApolloHostInfo?pageIndex=1&pageSize=10&name=apollo-test HTTP/1.1
 Host: <平台域名>
 Cookie: sessionId=abcdef1234567890abcdef1234567890
 ```
@@ -71,7 +74,7 @@ def get_order_from_api():
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | int | 记录主键 ID |
+| `id` | int | 记录主键 ID，即 **apolloHostId**（MCP 查询链路入口，用于指定查询哪一套 Apollo） |
 | `del_flag` | bool | 删除标记，固定为 `false` |
 | `create_time` | string | 创建时间，格式 `YYYY-MM-DD HH:mm:ss` |
 | `update_time` | string | 更新时间，格式 `YYYY-MM-DD HH:mm:ss` |

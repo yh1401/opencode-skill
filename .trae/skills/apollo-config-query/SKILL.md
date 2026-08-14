@@ -1,7 +1,7 @@
 ---
 name: Apollo配置查询助手
 description: 查询 Apollo 配置中心的配置数据（应用配置/Namespace/配置项/应用列表），通过 MCP 工具与 Apollo 交互。当用户询问 Apollo、配置、appid、namespace、配置项 key、应用列表等信息时调用。
-version: 2.1.0
+version: 3.0.0
 author: Skill Agent Team
 ---
 
@@ -13,7 +13,7 @@ author: Skill Agent Team
 
 | 技能 ID | 功能描述 | 状态 | 触发关键词 |
 |---------|----------|------|------------|
-| apollo-config-search | Apollo 配置查询/环境列表/应用列表 | ✅ 可用 | Apollo、配置、appid、namespace、配置项、key、应用列表、Apollo环境 |
+| apollo-config-search | Apollo 配置查询/Apollo服务(套)列表/应用列表 | ✅ 可用 | Apollo、配置、appid、namespace、配置项、key、应用列表、Apollo服务、Apollo套 |
 
 ---
 
@@ -31,11 +31,17 @@ author: Skill Agent Team
 
 ### Apollo 环境（多套）说明
 
+> **术语判定规则**（消除"环境"歧义，务必遵守）：
+> - 用户提到 **开发/测试/生产/预发/集成** 或 **DEV/FAT/UAT/PRO/SIT** 等**环境名关键词** → 指 **应用环境 env**
+> - 其他提到"环境"的表述（如"贵州环境"、"有哪些环境"、"广州4那套"）→ 指 **多套 Apollo 服务**（apolloHostId）
+> - 一句话：**"环境"不带环境名关键词 = 哪套 Apollo；带环境名关键词 = env。**
+> - 边界情况：同时出现地名+环境名（如"广州4生产"）→ 地名→套(apolloHostId)、环境名→env，两者都生效
+
 第三方接口会返回多套 Apollo（各产品线/环境独立部署）。`apollo_host_list` 工具**每次调用实时查询**所有可用环境，供展示与确认：
 
-1. **实时查询**：用户想看有哪些 Apollo 环境时，调用 `apollo_host_list`（实时获取，不读缓存）
-2. **当前限制**：配置查询（`apollo_config_query`）目前使用默认环境（`APOLLO_HOST_NAME` 配置或第三方返回第一条），按环境指定查询将在后续版本支持
-3. **默认兜底**：不传环境时使用 MCP 默认环境
+1. **实时查询**：用户想看有哪些 Apollo 环境时，调用 `apollo_host_list`（实时获取，不读缓存），返回每条记录的 `apolloHostId`
+2. **完整查询链路**：配置查询/应用列表通过 `apolloHostId` 指定任意一套 Apollo，链路为：**哪套Apollo(apolloHostId) → 环境(env) → 应用(appId) → 集群(clusterName) → Namespace(namespaceName) → 配置项(key)**
+3. **默认兜底**：未指定 `apolloHostId` 时，MCP 自动使用默认 Apollo（`APOLLO_HOST_NAME` 配置或第三方返回第一条）
 
 ---
 
@@ -81,7 +87,7 @@ author: Skill Agent Team
 |----------|----------|
 | "搜索 {keyword}" | 保持当前查询条件，按 keyword 过滤配置项 |
 | "查看 {appId} 的配置" | 更新 appId，保持其他参数 |
-| "切换到 {env} 环境" | 更新 env，保持其他参数 |
+| "切换到 {DEV/FAT/UAT/PRO/SIT} 环境" | 更新应用环境(env)，保持其他参数 |
 
 **重置触发**：用户使用"新的/重新/重置"等关键词，或输入全新查询条件时重置上下文。
 
@@ -101,7 +107,7 @@ author: Skill Agent Team
 
 ```
 优先级 1：应用（appId）→ 缺少时先问，这是查询的前提
-优先级 2：查询内容（queryMode）→ 不确定时默认查配置列表
+优先级 2：查询意图（查配置 / 查应用列表）→ 不确定时默认查配置（apollo_config_query）
 优先级 3：环境/集群/Namespace → 有默认值，不急着问
 优先级 4：具体配置 Key → 结果多时才需要收窄
 ```
@@ -110,7 +116,7 @@ author: Skill Agent Team
 
 | 场景 | 触发条件 | 处理方式 | 示例话术 |
 |------|---------|----------|---------|
-| **查看 Apollo 环境** | 用户想看有哪些 Apollo 环境 | 调用 apollo_host_list 实时查询展示 | [话术 0](#0-apollo-环境列表多套) |
+| **查看 Apollo 服务（多套）** | 用户想看有哪些 Apollo 环境/服务 | 调用 apollo_host_list 实时查询展示 | [话术 0](#0-apollo-服务列表多套) |
 | **完全无上下文** | 用户只说"查配置"，无任何参数 | 先问查哪个应用 | "请问您想查哪个应用的配置？" |
 | **缺少应用** | 未指定 appId 且上下文无继承 | 反问用户 | [话术 1](#1-缺少应用-id) |
 | **应用模糊匹配** | 用户描述匹配到多个应用 | 列出候选 | [话术 2](#2-应用名模糊匹配到多个) |
@@ -122,19 +128,22 @@ author: Skill Agent Team
 
 ### 交互话术
 
-#### 0. Apollo 环境列表（多套）
+#### 0. Apollo 服务列表（多套）
 
 ```
-已为您实时查询到当前 N 套可用的 Apollo 环境：
+已为您实时查询到当前 N 套可用的 Apollo 服务（多套，按产品线/地域划分）：
 
-| 序号 | 环境名称 | 地址 | Token |
-|------|---------|------|-------|
-| 1 | 天翼云眼贵州测试Apollo-亿讯专用 | https://... | 有 |
-| 2 | 天翼云眼广州4多AZ生产Apollo | https://... | 有 |
+| 序号 | 服务名称 | 地址 | Token | 是否默认 |
+|------|---------|------|-------|---------|
+| 1 | 天翼云眼贵州测试Apollo-亿讯专用 | https://... | 有 | 是 |
+| 2 | 天翼云眼广州4多AZ生产Apollo | https://... | 有 | 否 |
 ...
 
-注：当前版本配置查询使用默认环境（APOLLO_HOST_NAME 或第一条），
-按环境指定查询将在后续版本支持。
+请告诉我要查询哪一套（如"贵州"、"广州4"、"P2P"），
+我将把对应的 apolloHostId 带入后续的配置/应用查询；
+或直接说"默认"，使用默认 Apollo 继续。
+
+（提示：这里的"环境"指哪套 Apollo 服务；如果您说的是生产/DEV 等应用环境，直接说环境名即可）
 ```
 
 #### 1. 缺少应用 ID
@@ -170,7 +179,7 @@ author: Skill Agent Team
 您可以说：
 - "查看 {namespace} 配置" - 切换到指定 Namespace
 - "搜索 {keyword}" - 按关键词过滤
-- "切换到 {DEV/FAT/UAT} 环境" - 切换环境
+- "切换到 {DEV/FAT/UAT} 环境" - 切换应用环境(env)
 ```
 
 #### 4. 查询模式不确定
@@ -227,16 +236,16 @@ author: Skill Agent Team
   │    ├─ 否 → 输出[话术1]，等待用户补充
   │    └─ 是 → 继续
   │
-  ├─ 检查: queryMode 是否明确？
-  │    ├─ 否 → 默认 "config"，输出中提示[话术4]
+  ├─ 检查: 用户查询意图（查配置 / 查应用列表）是否明确？
+  │    ├─ 否 → 默认查配置（apollo_config_query），输出中提示[话术4]
   │    └─ 是 → 继续
   │
-  ├─ 如果 queryMode = "apps"
-  │    └─ 直接调用 API 返回应用列表
+  ├─ 如果是查应用列表（"有哪些应用"）
+  │    └─ 调用 apollo_app_list 返回应用列表
   │
-  ├─ 如果 queryMode = "config"
-  │    ├─ env/hamespace 有默认值，直接用
-  │    └─ 调用 API
+  ├─ 如果是查配置（apollo_config_query）
+  │    ├─ env/namespace 有默认值，直接用
+  │    └─ 调用 apollo_config_query
   │         ├─ 成功 → 检查结果数量
   │         │    ├─ 结果 = 0 → 输出[话术5]
   │         │    ├─ 结果 > 15 → 输出配置 + [话术6]
@@ -288,9 +297,6 @@ MCP 启动时通过第三方接口 `GET {api_base}/thirdApi/getApolloHostInfo`�
 # 第三方接口（推荐，默认值已内置在代码中）
 # APOLLO_HOST_API_BASE=https://easyops.tech.ctseelink.cn
 # APOLLO_HOST_SESSION_ID=<32位sessionId>
-# 备用方式：直接指定 Apollo 地址与 Token（第三方接口不可用时）
-# APOLLO_OPENAPI_HOST=http://apollo-config.tech.ctseelink.cn:8070
-# APOLLO_OPENAPI_TOKEN=<OpenAPI Token>
 ```
 
 ### API 文档
@@ -310,7 +316,8 @@ apollo-config-query/
 │   └── apollo-config-search/
 │       ├── SKILL.md                      # Apollo 配置查询工具（含完整工具定义）
 │       └── references/
-│           ├── apollo-hosts.md           # Apollo 环境（多套）关键词映射
+│           ├── apollo-hosts.md           # Apollo 服务（多套）关键词映射 → apolloHostId
+│           ├── apollo-param-guide.md     # 参数转换完整指南（唯一权威来源）
 │           ├── app-options.md            # 应用可选值列表
 │           └── namespace-options.md      # Namespace 可选值列表
 ```
@@ -319,8 +326,9 @@ apollo-config-query/
 
 ## 版本信息
 
-- **版本**: 2.1.0
+- **版本**: 3.0.0
 - **可用技能**: 1 个（apollo-config-search）
 - **MCP 工具**: 3 个（apollo_config_query, apollo_host_list, apollo_app_list）
-- **架构**: MCP 工具调用（apollo-mcp-server）
+- **查询链路**: 哪套Apollo(apolloHostId) → 环境(env) → 应用(appId) → 集群(clusterName) → Namespace(namespaceName) → 配置项(key)
+- **架构**: MCP 工具调用（apollo-mcp-server v3.0.0，EasyOps 代理接口）
 - **设计模式**: 渐进式披露
