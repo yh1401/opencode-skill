@@ -231,6 +231,9 @@ python3 scripts/mcp_server.py --port 8062
 | `/tools/call` | POST | 调用工具（平台兼容） |
 | `/api/config` | POST | 配置查询（REST 兼容） |
 | `/api/apps` | GET | 应用列表（REST 兼容） |
+| `/log/status` | GET | 查询日志开关状态 |
+| `/log/off` | POST | 关闭日志（立即生效，完全静默） |
+| `/log/on` | POST | 开启日志（立即生效） |
 | `/docs` | GET | Swagger API 文档 |
 
 ---
@@ -295,3 +298,172 @@ tail -f logs/apollo-mcp.log
 - [ ] StarAgent MCP 注册完成
 - [ ] Skill 绑定 MCP 服务完成
 - [ ] 端到端调用测试通过（`apollo_host_list` → `apollo_config_query`）
+
+---
+
+## 10. 调用过程链
+
+### 10.1 整体架构
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 调用方（StarAgent 平台 / Skill / curl）                                    │
+└──────────────────────────────┬──────────────────────────────────────────┘
+                               │ JSON-RPC 2.0 / REST
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ FastAPI HTTP 服务层（uvicorn, 端口 8062）                                 │
+│  /mcp │ /tools/call │ /api/config │ /api/apps │ /health │ /log/*        │
+└──────────────────────────────┬──────────────────────────────────────────┘
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ MCP 协议层 MCPProtocolHandler                                            │
+│  handle_message → _execute_tool（工具分发）                                │
+└──────────────────────────────┬──────────────────────────────────────────┘
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 业务层 ApolloAPIClient                                                   │
+│  query_hosts │ query_config │ query_apps                                 │
+└──────────────────────────────┬──────────────────────────────────────────┘
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 数据源层 ConfigClient（日志最详细的一层）                                   │
+│  fetch_host_list │ get_default_host_id │ _proxy_get                      │
+└──────────────────────────────┬──────────────────────────────────────────┘
+                               │ HTTPS + Cookie sessionId
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ EasyOps 代理接口（easyops.tech.ctseelink.cn）                              │
+│  /thirdApi/getApolloHostInfo │ /thirdApi/apollo/apps │ /thirdApi/apollo/namespace │
+└──────────────────────────────┬──────────────────────────────────────────┘
+                               │ 由 EasyOps 统一转发（内部）
+                               ▼
+                        ┌────────────────┐
+                        │   Apollo OpenAPI │
+                        │ （多套，按 apolloHostId 选择）│
+                        └────────────────┘
+```
+
+**关键设计**：调用方只连 EasyOps 代理，**不直连 Apollo**；Apollo 地址和 Token 由 EasyOps 统一保存，解决了多套 Apollo 白名单重复申请的问题。
+
+### 10.2 入口层（3 种入口，汇入同一业务层）
+
+| 入口 | 端点 | 代码（scripts/mcp_server.py） | 用途 |
+|---|---|---|---|
+| MCP 标准 | `POST /mcp` | `mcp_endpoint` | StarAgent 平台主用，JSON-RPC 2.0 |
+| 平台兼容 | `GET /tools/list`、`POST /tools/call` | `platform_tools_call` | 兼容非标准 MCP 客户端 |
+| REST 兼容 | `POST /api/config`、`GET /api/apps` | `http_config_query` / `http_apps_list` | 简单 HTTP 调试 |
+
+每次 HTTP 请求进来，FastAPI 先把请求体交给 `handle_message`（/mcp）或直接 `_execute_tool`（/tools/call、/api/config），并打印 `[HTTP]` 层出入参数日志。
+
+### 10.3 MCP 协议层
+
+`handle_message` 负责 JSON-RPC 消息路由：
+
+1. 校验 `jsonrpc == "2.0"`，否则返回 `-32600 Invalid Request`
+2. 按 `method` 分发：
+   - `initialize` → 返回协议版本、能力、服务端信息（握手）
+   - `notifications/initialized` → 无响应（通知类）
+   - `tools/list` → 返回 `MCP_TOOLS`（3 个工具 Schema）
+   - `tools/call` → 解析 `params.name` + `params.arguments`，交给 `_execute_tool`
+   - 其它 → `-32601 Method not found`
+3. 工具结果包装成 MCP 标准格式：`{"content": [{"type": "text", "text": json.dumps(result)}], "isError": false}`
+4. 校验失败（如 appId 缺失）→ `-32602`；执行异常 → `-32603`
+
+### 10.4 工具分发（_execute_tool）
+
+| 工具 | 业务方法 | 参数 |
+|---|---|---|
+| `apollo_host_list` | `query_hosts()` | 无 |
+| `apollo_config_query` | `query_config(appId, env, clusterName, namespaceName, key, apolloHostId)` | appId 必填 |
+| `apollo_app_list` | `query_apps(apolloHostId)` | 可选 |
+
+`apolloHostId` 统一经 `_to_int()` 安全转换（兼容字符串形式）。
+
+### 10.5 业务层（3 个工具的具体路径）
+
+**apollo_host_list → query_hosts**（实时查询不缓存，每次调用都打第三方接口，是查询链路第一步）：
+
+```
+query_hosts → fetch_host_list() → _fetch_host_list_raw()
+→ GET {api_base}/thirdApi/getApolloHostInfo（Cookie: sessionId）
+→ 返回全部套 Apollo 记录（id/name/host/has_token/is_default）
+```
+
+**apollo_config_query → query_config**（最核心，查询链路：哪套Apollo → 环境 → 应用 → 集群 → Namespace → 配置项）：
+
+```
+query_config(apolloHostId?, env=PRO, appId, cluster=default, namespace=application, key?)
+   │
+   ├─ apolloHostId 缺省 → get_default_host_id()（未缓存时先请求 getApolloHostInfo 取第一条）
+   │
+   ├─ fetch_proxy_namespace(hostId, env, appId, cluster, namespace)
+   │     └─ _proxy_get() → GET {api_base}/thirdApi/apollo/namespace?apolloHostId=&env=&appId=&clusterName=&namespaceName=
+   │           └─ EasyOps 后端 → 目标 Apollo OpenAPI → 返回 {"code":200,"data":{"items":[{key,value},...]}}
+   │
+   ├─ 成功（code=200/success）→ _normalize_config_result()
+   │     └─ items 数组 → configurations 字典；key 模糊过滤 + _total_count/_filtered_count 统计
+   │
+   └─ 失败：
+         ├─ HTTP 异常 → 返回 {"code":503, "message":"查询失败，EasyOps 代理接口不可用: ..."}
+         └─ 业务错误 → 原样透传（如 404 未授权/无此环境）
+```
+
+**apollo_app_list → query_apps**：
+
+```
+query_apps(apolloHostId?) → fetch_proxy_apps(hostId) → _proxy_get()
+→ GET {api_base}/thirdApi/apollo/apps?apolloHostId=
+→ 返回该套 Apollo 全部应用（appId/name/orgName）
+```
+
+**Mock 分支**：每个工具开头都有 `if USE_MOCK:` 分支（`_get_mock_response`），Mock 模式下直接读 `mock/mock_responses.json`，不请求任何外部接口——这就是日志里"Mock 模式启用"的来源。
+
+### 10.6 数据源层（ConfigClient，日志最详细）
+
+`_proxy_get` 是代理请求的统一出口，所有出入参数日志都在这层：
+
+```
+[ConfigClient] 代理接口请求: url=..., params={...}, sessionId=e5e27a7d...(脱敏)
+[ConfigClient] 代理接口响应: status=503, 耗时=3ms, url=..., body={...}
+[ConfigClient] 代理接口返回异常状态码: status=503, body="..."   ← ERROR 级
+```
+
+要点：
+
+- 鉴权靠 **Cookie: sessionId**（第三方接口统一保存各套 Apollo 地址与 Token）
+- `timeout=30`，连接失败抛异常给业务层转 503
+- 成功/失败都打印**响应体**（排查 503 的关键——能看到 EasyOps 返回的 `{"code":503,"message":"无法连接Apollo服务"}`）
+
+### 10.7 一次完整请求的旅程（以 apollo_config_query 为例）
+
+```
+① Skill 发起 → POST /mcp
+② [HTTP] /mcp 收到请求: {"method":"tools/call",...}
+③ [MCP] 收到 tools/call: tool=apollo_config_query, arguments={appId...}
+④ [MCP] 执行工具: tool=apollo_config_query, arguments={...}
+⑤ [apollo-config-query] 查询配置: apolloHostId=15, env=PRO, appId=vcp-openapi...
+⑥ [ConfigClient] 代理接口请求: url=.../thirdApi/apollo/namespace, params={apolloHostId:15, env:PRO, appId:vcp-openapi...}
+   └─ EasyOps → Apollo OpenAPI 实际执行查询
+⑦ [ConfigClient] 代理接口响应: status=503, body={"code":503,"message":"无法连接Apollo服务"}
+⑧ [apollo-config-query] 代理接口调用失败: HTTPError, ...
+⑨ [MCP] 工具执行完成: result={"code":503,"message":"查询失败，EasyOps 代理接口不可用: ..."}
+⑩ [HTTP] /mcp 返回: {...} → 调用方收到 JSON
+```
+
+每次请求在日志里按 `[HTTP] → [MCP] → [模块标识] → [ConfigClient] → [模块标识] → [MCP] → [HTTP]` 顺序打点，出入参数齐全。
+
+### 10.8 异常与日志开关
+
+- **503 链路**：`_proxy_get` 打印异常状态码和 body → `raise_for_status()` 抛 HTTPError → 业务层 catch 后返回 `{"code":503,...}`（**对外格式稳定**，客户端无感知）
+- **日志开关**：`_apply_log_enabled` 通过 `logger.disabled` 控制 apollo-mcp + uvicorn 三件套（`uvicorn` / `uvicorn.error` / `uvicorn.access`），关闭后整条链路静默，不影响业务。HTTP 端点：`POST /log/off`、`POST /log/on`、`GET /log/status`
+
+### 10.9 部署拓扑
+
+```
+堡垒机/服务器 → Docker(host 网络) → uvicorn:8062 → EasyOps 代理 → 多套 Apollo
+                              ↓
+                  日志文件 /app/logs/apollo-mcp.log（docker volume）
+```
+
+`docker-compose.yml` 用 `network_mode: host` 复用宿主机网络，解决容器访问内网域名（easyops/各套 Apollo）的 DNS/路由问题。

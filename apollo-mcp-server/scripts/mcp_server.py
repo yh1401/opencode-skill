@@ -81,6 +81,44 @@ _file_handler.setFormatter(logging.Formatter(_log_format))
 logger.addHandler(_file_handler)
 
 
+def _fmt(obj, max_len=2000):
+    """将请求/响应对象转为单行 JSON 字符串用于日志，超长截断，便于阅读"""
+    try:
+        s = json.dumps(obj, ensure_ascii=False)
+    except Exception:
+        s = str(obj)
+    if len(s) > max_len:
+        return s[:max_len] + f"...(已截断, 总长{len(s)})"
+    return s
+
+
+# ============================================================================
+# 日志开关：HTTP 动态控制，随时开启/关闭（完全静默），无需重启
+# ============================================================================
+_LOG_ENABLED = True
+
+# uvicorn 框架日志（启动信息/访问日志/错误日志）
+_UVICORN_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access")
+
+
+def _apply_log_enabled(enabled: bool):
+    """应用日志开关：关闭时禁用 apollo-mcp 与 uvicorn 全部日志，完全静默"""
+    global _LOG_ENABLED
+    _LOG_ENABLED = enabled
+    if enabled:
+        logger.disabled = False
+        for name in _UVICORN_LOGGERS:
+            _uv_logger = logging.getLogger(name)
+            _uv_logger.disabled = False
+            _uv_logger.setLevel(logging.INFO)
+        logger.info("[LOG] 日志开关已开启")
+    else:
+        logger.info("[LOG] 日志开关已关闭")
+        logger.disabled = True
+        for name in _UVICORN_LOGGERS:
+            logging.getLogger(name).disabled = True
+
+
 class ConfigClient:
     """通过第三方「Apollo Host 信息查询接口」获取 Apollo 连接配置（地址 + Token）的客户端
 
@@ -131,23 +169,28 @@ class ConfigClient:
     def _fetch_host_list_raw(self) -> list:
         """调用第三方接口获取原始 Apollo Host 列表"""
         url = f"{self.api_base}/thirdApi/getApolloHostInfo"
-        logger.info(f"[ConfigClient] 从第三方接口拉取 Apollo Host 信息: {url}")
-
+        params = {"paginator": False, "pageIndex": 1, "pageSize": 100}
         # 鉴权：Cookie sessionId（既是认证凭证，也是 token 解密密钥）
-        logger.info(f"[ConfigClient] 请求 Cookie: sessionId={self.session_id[:8]}...(脱敏)")
-
+        logger.info(f"[ConfigClient] 请求 Apollo Host 列表: url={url}, params={_fmt(params)}, "
+                    f"sessionId={self.session_id[:8]}...(脱敏)")
+        start = time.time()
         resp = requests.get(
             url,
-            params={"paginator": False, "pageIndex": 1, "pageSize": 100},
+            params=params,
             headers={"Content-Type": "application/json"},
             cookies={"sessionId": self.session_id},
             timeout=10,
             verify=False
         )
+        duration = round((time.time() - start) * 1000)
+        logger.info(f"[ConfigClient] 响应: status={resp.status_code}, 耗时={duration}ms, url={resp.url}")
+        if resp.status_code >= 400:
+            logger.error(f"[ConfigClient] 响应异常: status={resp.status_code}, body={_fmt(resp.text)}")
         resp.raise_for_status()
         data = resp.json()
 
         if data.get('code') != 'success':
+            logger.error(f"[ConfigClient] 响应业务失败: body={_fmt(data)}")
             raise RuntimeError(f"第三方接口返回失败: {data.get('message', '未知错误')}")
         host_list = data.get('list', [])
         logger.info(f"[ConfigClient] 第三方接口返回 {len(host_list)} 条 Apollo Host 记录")
@@ -225,6 +268,30 @@ class ConfigClient:
             logger.warning(f"[ConfigClient] 获取默认 Apollo Host ID 失败: {e}")
         return self._default_host_id
 
+    def _proxy_get(self, url: str, params: dict) -> requests.Response:
+        """调用 EasyOps 代理接口 GET，统一打印完整出入参数日志（URL/参数/状态码/耗时/响应体）"""
+        logger.info(f"[ConfigClient] 代理接口请求: url={url}, params={_fmt(params)}, "
+                    f"sessionId={self.session_id[:8]}...(脱敏)")
+        start = time.time()
+        resp = requests.get(
+            url,
+            params=params,
+            headers={"Content-Type": "application/json"},
+            cookies={"sessionId": self.session_id},
+            timeout=30,
+            verify=False
+        )
+        duration = round((time.time() - start) * 1000)
+        try:
+            body = _fmt(resp.json())
+        except Exception:
+            body = _fmt(resp.text)
+        logger.info(f"[ConfigClient] 代理接口响应: status={resp.status_code}, 耗时={duration}ms, url={resp.url}, body={body}")
+        if resp.status_code >= 400:
+            logger.error(f"[ConfigClient] 代理接口返回异常状态码: status={resp.status_code}, body={_fmt(resp.text)}")
+        resp.raise_for_status()
+        return resp
+
     def fetch_proxy_apps(self, apollo_host_id) -> dict:
         """通过 EasyOps 代理接口获取指定 Apollo 的应用列表（获取所有 app）
 
@@ -232,16 +299,7 @@ class ConfigClient:
         鉴权：Cookie sessionId（EasyOps 统一保存 Apollo 地址与 Token，调用方无需传 Token）
         """
         url = f"{self.api_base}/thirdApi/apollo/apps"
-        logger.info(f"[ConfigClient] 代理接口查询应用列表: apolloHostId={apollo_host_id}")
-        resp = requests.get(
-            url,
-            params={"apolloHostId": apollo_host_id},
-            headers={"Content-Type": "application/json"},
-            cookies={"sessionId": self.session_id},
-            timeout=30,
-            verify=False
-        )
-        resp.raise_for_status()
+        resp = self._proxy_get(url, {"apolloHostId": apollo_host_id})
         return resp.json()
 
     def fetch_proxy_namespace(self, apollo_host_id, env: str, app_id: str,
@@ -259,17 +317,7 @@ class ConfigClient:
             "clusterName": cluster_name,
             "namespaceName": namespace_name,
         }
-        logger.info(f"[ConfigClient] 代理接口查询配置: apolloHostId={apollo_host_id}, env={env}, appId={app_id}, "
-                    f"cluster={cluster_name}, namespace={namespace_name}")
-        resp = requests.get(
-            url,
-            params=params,
-            headers={"Content-Type": "application/json"},
-            cookies={"sessionId": self.session_id},
-            timeout=30,
-            verify=False
-        )
-        resp.raise_for_status()
+        resp = self._proxy_get(url, params)
         return resp.json()
 
     def _load_local_template(self) -> dict:
@@ -465,19 +513,30 @@ class ApolloAPIClient:
                     f"cluster={clusterName}, namespace={namespaceName}, key={key or '(全部)'}")
 
         # ---- 通过 EasyOps 代理接口查询 ----
+        start = time.time()
         try:
             self._request_count += 1
             proxy_result = self.config.config_client.fetch_proxy_namespace(
                 apolloHostId, env, appId, clusterName, namespaceName)
         except Exception as e:
-            logger.error(f"[apollo-config-query] 代理接口调用失败: {e}")
+            duration = round((time.time() - start) * 1000)
+            logger.error(f"[apollo-config-query] 代理接口调用失败: {type(e).__name__}, 耗时={duration}ms, error={e}")
             return {"code": 503, "message": f"查询失败，EasyOps 代理接口不可用: {e}", "data": {}}
+        duration = round((time.time() - start) * 1000)
+        logger.info(f"[apollo-config-query] 代理接口返回: 耗时={duration}ms, result={_fmt(proxy_result)}")
 
         if proxy_result is not None and str(proxy_result.get('code')) in ('200', 'success'):
             self._success_count += 1
-            return self._normalize_config_result(proxy_result, appId, env, clusterName, namespaceName, key)
+            result = self._normalize_config_result(proxy_result, appId, env, clusterName, namespaceName, key)
+            data = result.get('data') or {}
+            logger.info(f"[apollo-config-query] 查询成功: appId={appId}, env={env}, namespace={namespaceName}, "
+                        f"configCount={len(data.get('configurations', {}))}, result={_fmt(result)}")
+            return result
 
         # 代理返回业务错误（如 404 未授权/无此环境），原样返回
+        err_code = proxy_result.get('code') if proxy_result else '空'
+        err_msg = proxy_result.get('message') if proxy_result else '代理接口返回为空'
+        logger.warning(f"[apollo-config-query] 代理返回业务错误: code={err_code}, message={err_msg}")
         return proxy_result or {"code": 500, "message": "代理接口返回为空", "data": {}}
 
     def _normalize_config_result(self, result: dict, appId: str, env: str,
@@ -507,9 +566,14 @@ class ApolloAPIClient:
         供 skill 引导用户选择在哪套 Apollo（apolloHostId）上查询
         """
         try:
+            start = time.time()
             hosts = self.config.config_client.fetch_host_list()
+            duration = round((time.time() - start) * 1000)
+            logger.info(f"[apollo-host-list] 查询成功: 耗时={duration}ms, hostCount={len(hosts)}, "
+                        f"hostIds={[h.get('apolloHostId') for h in hosts]}")
         except Exception as e:
-            logger.error(f"[ApolloAPIClient] 查询 Apollo 环境列表失败: {e}")
+            duration = round((time.time() - start) * 1000)
+            logger.error(f"[apollo-host-list] 查询失败: {type(e).__name__}, 耗时={duration}ms, error={e}")
             return {"code": 503, "message": f"查询 Apollo 环境列表失败: {e}",
                     "data": {"default_host": self.config.openapi_base, "hosts": [], "count": 0}}
         return {
@@ -536,17 +600,26 @@ class ApolloAPIClient:
         logger.info(f"查询应用列表: apolloHostId={apolloHostId}")
 
         # ---- 通过 EasyOps 代理接口查询 ----
+        start = time.time()
         try:
             self._request_count += 1
             proxy_result = self.config.config_client.fetch_proxy_apps(apolloHostId)
         except Exception as e:
-            logger.error(f"[apollo-app-list] 代理接口调用失败: {e}")
+            duration = round((time.time() - start) * 1000)
+            logger.error(f"[apollo-app-list] 代理接口调用失败: {type(e).__name__}, 耗时={duration}ms, error={e}")
             return {"code": 503, "message": f"查询失败，EasyOps 代理接口不可用: {e}", "data": {}}
+        duration = round((time.time() - start) * 1000)
+        logger.info(f"[apollo-app-list] 代理接口返回: 耗时={duration}ms, result={_fmt(proxy_result)}")
 
         if proxy_result is not None and str(proxy_result.get('code')) in ('200', 'success'):
             self._success_count += 1
+            apps = (proxy_result.get('data') or {}).get('items') or []
+            logger.info(f"[apollo-app-list] 查询成功: apolloHostId={apolloHostId}, appCount={len(apps) if isinstance(apps, list) else '未知'}")
             return proxy_result
 
+        err_code = proxy_result.get('code') if proxy_result else '空'
+        err_msg = proxy_result.get('message') if proxy_result else '代理接口返回为空'
+        logger.warning(f"[apollo-app-list] 代理返回业务错误: code={err_code}, message={err_msg}")
         return proxy_result or {"code": 500, "message": "代理接口返回为空", "data": {}}
 
 
@@ -633,6 +706,7 @@ class MCPProtocolHandler:
         return error
     
     def _execute_tool(self, tool_name: str, arguments: dict) -> dict:
+        logger.info(f"[MCP] 执行工具: tool={tool_name}, arguments={_fmt(arguments)}")
         if tool_name == "apollo_config_query":
             appId = arguments.get("appId")
             if not appId:
@@ -660,10 +734,12 @@ class MCPProtocolHandler:
         
         if jsonrpc != "2.0":
             return self._build_response(request_id, error=self._build_error(-32600, "Invalid Request")), False
-        
+
+        logger.info(f"[MCP] 收到请求: id={request_id}, method={method}, params={_fmt(params)}")
+
         try:
             if method == "initialize":
-                print(f"[MCP] initialize")
+                logger.info("[MCP] 处理 initialize 握手")
                 # 标准 MCP 握手：返回协议版本、服务端能力与标识
                 client_version = params.get("protocolVersion", "2024-11-05")
                 response = self._build_response(request_id, {
@@ -680,18 +756,18 @@ class MCPProtocolHandler:
 
             elif method == "notifications/initialized":
                 # 通知类消息无 id，无需响应
-                print(f"[MCP] notifications/initialized")
+                logger.info("[MCP] 处理 notifications/initialized")
                 return {}, False
             
             elif method == "tools/list":
-                print(f"[MCP] tools/list")
+                logger.info("[MCP] 处理 tools/list")
                 response = self._build_response(request_id, {"tools": MCP_TOOLS})
                 return response, False
             
             elif method == "tools/call":
                 tool_name = params.get("name")
                 arguments = params.get("arguments", {})
-                print(f"[MCP] tools/call: {tool_name}")
+                logger.info(f"[MCP] 收到 tools/call: tool={tool_name}, arguments={_fmt(arguments)}")
                 
                 if not tool_name:
                     return self._build_response(request_id, error=self._build_error(-32602, "tool name is required")), False
@@ -700,7 +776,7 @@ class MCPProtocolHandler:
                     start_time = time.time()
                     result = self._execute_tool(tool_name, arguments)
                     duration = time.time() - start_time
-                    print(f"[MCP] tool [{tool_name}] executed in {round(duration*1000)}ms")
+                    logger.info(f"[MCP] 工具执行完成: tool={tool_name}, 耗时={round(duration*1000)}ms, result={_fmt(result)}")
                     
                     response = self._build_response(request_id, {
                         "content": [
@@ -713,17 +789,17 @@ class MCPProtocolHandler:
                     })
                     return response, False
                 except ValueError as e:
-                    print(f"[MCP] tool [{tool_name}] validation error: {str(e)}")
+                    logger.error(f"[MCP] 工具参数校验失败: tool={tool_name}, error={e}")
                     return self._build_response(request_id, error=self._build_error(-32602, str(e))), False
                 except Exception as e:
-                    print(f"[MCP] tool [{tool_name}] error: {str(e)}")
+                    logger.error(f"[MCP] 工具执行异常: tool={tool_name}, error={e}")
                     return self._build_response(request_id, error=self._build_error(-32603, f"Internal error: {str(e)}")), False
             
             else:
                 return self._build_response(request_id, error=self._build_error(-32601, f"Method not found: {method}")), False
         
         except Exception as e:
-            print(f"[ERROR] MCP 消息处理异常: {e}")
+            logger.error(f"[MCP] 消息处理异常: method={method}, error={e}")
             return self._build_response(request_id, error=self._build_error(-32603, f"Internal error: {str(e)}")), False
 
 
@@ -768,6 +844,7 @@ if HAS_FASTAPI:
             "version": "3.0.0",
             "environment": client.config.current_env,
             "mock_enabled": USE_MOCK,
+            "log_enabled": _LOG_ENABLED,
             "openapi_base": client.config.openapi_base,
             "has_openapi_token": bool(client.config.openapi_token),
             "config_source": {
@@ -788,17 +865,38 @@ if HAS_FASTAPI:
             ]
         }
     
+    @app.post("/log/off", tags=["日志管理"])
+    def log_off():
+        """关闭日志（立即生效，无需重启）：完全静默，不再记录任何日志"""
+        _apply_log_enabled(False)
+        return {"code": 200, "message": "日志已关闭", "log_enabled": False}
+    
+    @app.post("/log/on", tags=["日志管理"])
+    def log_on():
+        """开启日志（立即生效，无需重启）"""
+        _apply_log_enabled(True)
+        return {"code": 200, "message": "日志已开启", "log_enabled": True}
+    
+    @app.get("/log/status", tags=["日志管理"])
+    def log_status():
+        """查询日志开关当前状态"""
+        return {"code": 200, "log_enabled": _LOG_ENABLED}
+    
     @app.post("/mcp", tags=["MCP 协议"])
     async def mcp_endpoint(request: dict):
+        logger.info(f"[HTTP] /mcp 收到请求: {_fmt(request)}")
         response, _ = mcp_handler.handle_message(request)
+        logger.info(f"[HTTP] /mcp 返回: {_fmt(response)}")
         return JSONResponse(content=response)
     
     @app.get("/tools", tags=["平台兼容"])
     def platform_tools_endpoint():
+        logger.info("[HTTP] GET /tools 返回工具列表")
         return JSONResponse(content={"tools": MCP_TOOLS})
     
     @app.get("/tools/list", tags=["平台兼容"])
     def platform_tools_list_endpoint():
+        logger.info("[HTTP] GET /tools/list 返回工具列表")
         return JSONResponse(content={"tools": MCP_TOOLS})
     
     @app.post("/tools/call", tags=["平台兼容"])
@@ -806,8 +904,10 @@ if HAS_FASTAPI:
         params = request.get("params", {})
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
+        logger.info(f"[HTTP] POST /tools/call 收到请求: tool={tool_name}, arguments={_fmt(arguments)}")
         try:
             result = mcp_handler._execute_tool(tool_name, arguments)
+            logger.info(f"[HTTP] POST /tools/call 返回: tool={tool_name}, result={_fmt(result)}")
             return JSONResponse(content={
                 "jsonrpc": "2.0",
                 "id": request.get("id", 1),
@@ -816,6 +916,7 @@ if HAS_FASTAPI:
                 }
             })
         except Exception as e:
+            logger.error(f"[HTTP] POST /tools/call 执行异常: tool={tool_name}, error={e}")
             return JSONResponse(content={
                 "jsonrpc": "2.0",
                 "id": request.get("id", 1),
@@ -824,6 +925,7 @@ if HAS_FASTAPI:
     
     @app.post("/api/config", tags=["兼容层 - 配置查询"])
     def http_config_query(params: ApolloConfigQueryParams):
+        logger.info(f"[HTTP] POST /api/config 收到请求: {_fmt(params.model_dump())}")
         result = client.query_config(
             appId=params.appId,
             env=params.env,
@@ -832,11 +934,14 @@ if HAS_FASTAPI:
             key=params.key,
             apolloHostId=params.apolloHostId
         )
+        logger.info(f"[HTTP] POST /api/config 返回: {_fmt(result)}")
         return JSONResponse(content=result)
     
     @app.get("/api/apps", tags=["兼容层 - 应用列表"])
     def http_apps_list():
+        logger.info("[HTTP] GET /api/apps 收到请求")
         result = client.query_apps()
+        logger.info(f"[HTTP] GET /api/apps 返回: {_fmt(result)}")
         return JSONResponse(content=result)
 
 
