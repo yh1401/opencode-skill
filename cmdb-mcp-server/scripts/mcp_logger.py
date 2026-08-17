@@ -14,15 +14,19 @@ class MCPLogger:
             cls._instance = super().__new__(cls)
         return cls._instance
     
-    def __init__(self, log_level: str = "INFO", log_dir: str = "logs"):
+    def __init__(self, log_level: str = "INFO", log_dir: str = "logs", log_to_file: Optional[bool] = None):
         if hasattr(self, '_initialized') and self._initialized:
             return
         
         self._initialized = True
         self.log_dir = log_dir
         self.log_level = log_level.upper()
+        # 文件日志开关：默认开启；服务器上可设置 LOG_TO_FILE=false 关闭文件日志，
+        # 仅保留控制台输出（Docker 容器 stdout 由 json-file 驱动自动轮转，无需手动清理）
+        self.log_to_file = (os.environ.get('LOG_TO_FILE', 'true').lower() == 'true') if log_to_file is None else log_to_file
         
-        os.makedirs(log_dir, exist_ok=True)
+        if self.log_to_file:
+            os.makedirs(log_dir, exist_ok=True)
         
         self.logger = logging.getLogger('cmdb-mcp-server')
         self.logger.setLevel(getattr(logging, self.log_level))
@@ -71,19 +75,24 @@ class MCPLogger:
             if current_size <= self.MAX_TOTAL_SIZE:
                 break
             file_size = os.path.getsize(f_path)
-            os.remove(f_path)
+            # 清空文件内容而不是删除文件（不要用 os.remove/rm）：
+            # 删除正在写入的日志文件会导致进程丢失句柄，后续日志写入丢失
+            # 且已删除的 inode 空间不会释放（直到进程退出）；清空则句柄有效、空间立即释放
+            with open(f_path, 'w'):
+                pass
             current_size -= file_size
-        
-        for date_folder in os.listdir(self.log_dir):
-            date_path = os.path.join(self.log_dir, date_folder)
-            if os.path.isdir(date_path) and len(os.listdir(date_path)) == 0:
-                os.rmdir(date_path)
     
     def _setup_handlers(self):
         self.logger.handlers.clear()
         
         console_handler = logging.StreamHandler()
         console_handler.setLevel(getattr(logging, self.log_level))
+        
+        self.logger.addHandler(console_handler)
+        self.console_handler = console_handler
+        
+        if not self.log_to_file:
+            return
         
         file_handler = logging.FileHandler(
             os.path.join(self._get_today_dir(), 'mcp_server.log'),
@@ -110,11 +119,9 @@ class MCPLogger:
         file_handler.addFilter(create_cleanup_filter())
         error_handler.addFilter(create_cleanup_filter())
         
-        self.logger.addHandler(console_handler)
         self.logger.addHandler(file_handler)
         self.logger.addHandler(error_handler)
         
-        self.console_handler = console_handler
         self.file_handler = file_handler
         self.error_handler = error_handler
     
@@ -124,16 +131,22 @@ class MCPLogger:
             datefmt='%Y-%m-%d %H:%M:%S'
         )
         
+        self.console_handler.setFormatter(console_formatter)
+        
+        if not self.log_to_file:
+            return
+        
         file_formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
         
-        self.console_handler.setFormatter(console_formatter)
         self.file_handler.setFormatter(file_formatter)
         self.error_handler.setFormatter(file_formatter)
     
     def _update_handlers_date(self):
+        if not self.log_to_file:
+            return
         today_dir = self._get_today_dir()
         
         def create_cleanup_filter():
