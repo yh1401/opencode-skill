@@ -130,7 +130,7 @@ docker compose down
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `MCP_USE_MOCK` | Mock 数据开关 | `false` |
-| `APOLLO_ENV` | Apollo 环境（PRO/DEV/SIT/LOCAL） | 配置文件 `default_env` |
+| `APOLLO_ENV` | 应用环境（PRO/DEV/SIT/LOCAL） | 配置文件 `default_env` |
 | `APOLLO_HOST_API_BASE` | 第三方「Apollo Host 信息查询接口」地址（推荐方式） | `https://easyops.tech.ctseelink.cn` |
 | `APOLLO_HOST_SESSION_ID` | 第三方鉴权 sessionId（32 位，同时是 token 解密密钥） | 内置默认值 |
 | `APOLLO_HOST_NAME` | 默认 Apollo 套的模糊过滤名称（不填取第一条） | - |

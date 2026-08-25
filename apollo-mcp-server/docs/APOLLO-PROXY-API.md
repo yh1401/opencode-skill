@@ -37,7 +37,7 @@ EasyOps 后端统一转发 Apollo OpenAPI 请求，用于解决多个 Apollo 服
 接口使用 EasyOps 第三方接口鉴权。调用方需要在 Cookie 中传递分配的 `sessionId`：
 
 ```http
-Cookie: sessionId=<THIRD_PARTY_SESSION_ID>
+Cookie: sessionId=e5e27a7d1805758400287ae86741f889
 ```
 
 EasyOps 后端会同时校验：
@@ -67,9 +67,9 @@ GET /thirdApi/apollo/apps?apolloHostId={apolloHostId}
 
 ```bash
 curl -G \
-  -H "Cookie: sessionId=<THIRD_PARTY_SESSION_ID>" \
+  -H "Cookie: sessionId=e5e27a7d1805758400287ae86741f889" \
   --data-urlencode "apolloHostId=1" \
-  "https://easyops.example.com/thirdApi/apollo/apps"
+  "https://easyops.tech.ctseelink.cn/thirdApi/apollo/apps"
 ```
 
 ### 4.4 成功响应
@@ -104,7 +104,7 @@ GET /thirdApi/apollo/namespace
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |---|---|---|---|---|
 | `apolloHostId` | integer | 是 | - | EasyOps 中配置的 Apollo 服务 ID |
-| `env` | string | 是 | - | Apollo 环境，例如 `PRO`、`SIT`、`DEV` |
+| `env` | string | 是 | - | 应用环境，例如 `PRO`、`SIT`、`DEV` |
 | `appId` | string | 是 | - | Apollo 应用 ID |
 | `clusterName` | string | 否 | `default` | Apollo 集群名 |
 | `namespaceName` | string | 否 | `application` | Apollo Namespace 名 |
@@ -113,24 +113,24 @@ GET /thirdApi/apollo/namespace
 
 ```bash
 curl -G \
-  -H "Cookie: sessionId=<THIRD_PARTY_SESSION_ID>" \
+  -H "Cookie: sessionId=e5e27a7d1805758400287ae86741f889" \
   --data-urlencode "apolloHostId=1" \
   --data-urlencode "env=PRO" \
   --data-urlencode "appId=rule-engine" \
-  "https://easyops.example.com/thirdApi/apollo/namespace"
+  "https://easyops.tech.ctseelink.cn/thirdApi/apollo/namespace"
 ```
 
 ### 5.4 指定 Cluster 和 Namespace
 
 ```bash
 curl -G \
-  -H "Cookie: sessionId=<THIRD_PARTY_SESSION_ID>" \
+  -H "Cookie: sessionId=e5e27a7d1805758400287ae86741f889" \
   --data-urlencode "apolloHostId=1" \
   --data-urlencode "env=PRO" \
   --data-urlencode "appId=rule-engine" \
   --data-urlencode "clusterName=default" \
   --data-urlencode "namespaceName=application" \
-  "https://easyops.example.com/thirdApi/apollo/namespace"
+  "https://easyops.tech.ctseelink.cn/thirdApi/apollo/namespace"
 ```
 
 ### 5.5 成功响应

@@ -83,7 +83,7 @@ curl -sS -m 15 -X POST http://localhost:8062/mcp \
 
 **正常返回**：3 个工具 `apollo_host_list` / `apollo_config_query` / `apollo_app_list`。
 
-### 3.3 工具：apollo\_host\_list（Apollo 环境列表）
+### 3.3 工具：apollo\_host\_list（Apollo 服务列表）
 
 ```bash
 curl -sS -m 15 -X POST http://localhost:8062/mcp \
@@ -114,13 +114,14 @@ curl -sS -m 15 -X POST http://localhost:8062/mcp \
     "method": "tools/call",
     "params": {
       "name": "apollo_app_list",
-      "arguments": {"apolloHostId": 14}
+      "arguments": {}
     }
   }' | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin), ensure_ascii=False, indent=2))"
 ```
 
-- `apolloHostId` **可选**：不传使用默认 Apollo 套
-- **正常返回**：`data` 为该套 Apollo 的应用列表（appId、name、orgName 等）
+- `apolloHostId` **可选**：不传时工具自动遍历所有可用套，取第一个能成功返回应用列表的套（默认套不可用时会自动切换到其它可用套）
+- **正常返回**：`data` 为该套 Apollo 的应用列表（appId、name、orgName 等）；未传 `apolloHostId` 时结果顶层带 `usedHostId` / `hostName` 标注实际使用的套
+- **用途**：用户未提供 appId 时，先调用本工具拿到真实应用列表，选择 appId 后再用 `apollo_config_query` 查询配置（两阶段引导）
 
 ### 3.5 工具：apollo\_config\_query（配置查询）
 
@@ -202,7 +203,7 @@ curl -sS -m 15 http://localhost:8062/api/apps | python3 -c "import sys,json; pri
 
 ## 6. 快速全流程测试
 
-一条命令验证「环境列表 → 应用列表 → 配置查询」完整链路：
+一条命令验证「服务列表 → 应用列表 → 配置查询」完整链路：
 
 ```bash
 # 1. 健康检查
@@ -240,4 +241,45 @@ curl -sS -m 15 -X POST http://localhost:8062/tools/call \
 | `{"jsonrpc":"2.0","error":{"code":-32602,...}}`     | 参数错误（如 appId 缺失）                               | 检查必填参数                                                |
 
 > 代理接口 503（EasyOps 无法连接目标 Apollo）：先用 `apollo_host_list` 确认 `apolloHostId`，再用 `curl -m 10 -b "sessionId=..." "https://easyops.tech.ctseelink.cn/thirdApi/apollo/apps?apolloHostId=15"` 复现；重点检查该套 Apollo 的服务状态、网络与白名单（EasyOps 出口 IP 需在 Apollo 白名单内）。
+
+
+
+
+
+
+
+curl -sS -m 30 -X POST http://localhost:8062/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"apollo_app_list","arguments":{"apolloHostId": 2}}}' \
+  | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin), ensure_ascii=False, indent=2))"
+
+
+
+session_id="e5e27a7d1805758400287ae86741f889"
+for hid in $(curl -s -m 10 -b "sessionId=$session_id" \
+  "https://easyops.tech.ctseelink.cn/thirdApi/getApolloHostInfo" \
+  | python3 -c "import sys,json; [print(x['id']) for x in json.load(sys.stdin)['list']]"); do
+  echo "===== apolloHostId=$hid ====="
+  curl -m 15 -b "sessionId=$session_id" \
+    "https://easyops.tech.ctseelink.cn/thirdApi/apollo/apps?apolloHostId=$hid"
+  echo
+done
+
+
+
+curl -G \
+  -H "Cookie: sessionId=e5e27a7d1805758400287ae86741f889" \
+  --data-urlencode "apolloHostId=1" \
+  "https://easyops.tech.ctseelink.cn/thirdApi/apollo/apps" \
+    | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin), ensure_ascii=False, indent=2))"
+
+
+
+---
+现在的问题是请求的地址是不对的
+ -- https://easyops.tech.ctseelink.cn/thirdApi/apollo/apps
+ 还有这个也不对 -- https://easyops.tech.ctseelink.cn/thirdApi/apollo/apps
+
+
+
 

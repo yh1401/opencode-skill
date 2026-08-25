@@ -6,11 +6,11 @@ Apollo MCP Server 为 Apollo 配置中心提供标准化的 MCP (Model Context P
 
 **查询链路**：哪套Apollo(apolloHostId) → 环境(env) → 应用(appId) → 集群(clusterName) → Namespace(namespaceName) → 配置项(key)
 
-- 支持**多套 Apollo**（各产品线/环境独立部署），通过 `apolloHostId` 指定任意一套
+- 支持**多套 Apollo 服务实例**（各产品线/地域独立部署），通过 `apolloHostId` 指定任意一套
 - 配置/应用查询统一走 **EasyOps 代理接口**（无需本地保存 Apollo Token，按 `apolloHostId` 指定任意一套）；调用不通时直接返回错误提示
 - 提供 3 个工具：`apollo_host_list` / `apollo_config_query` / `apollo_app_list`
 
-**版本**：v3.0.0
+**版本**：v3.2.0
 **协议**：MCP Streamable HTTP (JSON-RPC 2.0)
 **端口**：8062
 
@@ -172,7 +172,7 @@ python3 scripts/mcp_server.py --port 8062
 ### 步骤 6：测试调用
 
 在 Skill 测试面板中输入：
-- `"有哪些 Apollo 环境"` → 触发 `apollo_host_list`（确定哪套 Apollo）
+- `"有哪些 Apollo 服务实例"` → 触发 `apollo_host_list`（确定哪套 Apollo）
 - `"查一下 user-service 的配置"` → 触发 `apollo_config_query`
 - `"当前有哪些应用"` → 触发 `apollo_app_list`
 - `"查一下贵州那套 Apollo 上 user-service 的配置"` → `apollo_host_list` 取 apolloHostId → `apollo_config_query`（完整链路）

@@ -233,7 +233,7 @@ class ConfigClient:
         return configs
 
     def fetch_host_list(self) -> list:
-        """实时调用第三方接口查询所有可用的 Apollo 环境列表（供 apollo_host_list 每次调用时查询，不做缓存）。
+        """实时调用第三方接口查询所有可用的 Apollo 服务实例列表（供 apollo_host_list 每次调用时查询，不做缓存）。
 
         返回的 apolloHostId（即第三方记录 id）作为查询链路的入口：
         哪套Apollo(apolloHostId) → 环境(env) → 应用(appId) → 集群(clusterName) → Namespace(namespaceName) → 配置项(key)
@@ -302,6 +302,40 @@ class ConfigClient:
         resp = self._proxy_get(url, {"apolloHostId": apollo_host_id})
         return resp.json()
 
+    def fetch_proxy_apps_first_available(self) -> tuple:
+        """不带 apolloHostId 时遍历可用套：默认套优先，按序尝试各套，返回第一个能成功获取应用列表的套。
+
+        用于"先出应用列表、用户选择后再查配置"的交互引导：
+        默认套（如 15）不可用时自动切换到其它可用套，避免列表查询整体失败。
+
+        返回: (proxy_result, used_host_id, host_name)
+        - proxy_result 顶层附加 usedHostId / hostName 字段，标注实际使用的套
+        - 全部套都失败时抛 RuntimeError（由业务层统一转 503）
+        """
+        host_list = self._fetch_host_list_raw()
+        default_id = self._select_target_host(host_list).get('id')
+        # 默认套优先，其余按第三方返回顺序
+        ordered = sorted(host_list, key=lambda item: 0 if item.get('id') == default_id else 1)
+        errors = []
+        for item in ordered:
+            hid = item.get('id')
+            name = item.get('name', '')
+            try:
+                result = self.fetch_proxy_apps(hid)
+                if str(result.get('code')) in ('200', 'success'):
+                    data = result.get('data') or []
+                    apps = (data.get('items') or []) if isinstance(data, dict) else data
+                    logger.info(f"[ConfigClient] 遍历套找到可用应用列表: apolloHostId={hid}, name={name}, "
+                                f"appCount={len(apps) if isinstance(apps, list) else '未知'}")
+                    result['usedHostId'] = hid
+                    result['hostName'] = name
+                    return result, hid, name
+                errors.append(f"套{hid}({name}) 业务错误: {result.get('message', '未知')}")
+            except Exception as e:
+                errors.append(f"套{hid}({name}) 异常: {e}")
+        detail = '; '.join(errors) if errors else '无可用套'
+        raise RuntimeError(f"遍历所有 Apollo 套均无法获取应用列表: {detail}")
+
     def fetch_proxy_namespace(self, apollo_host_id, env: str, app_id: str,
                               cluster_name: str = "default", namespace_name: str = "application") -> dict:
         """通过 EasyOps 代理接口获取指定 Apollo 单个 Namespace 配置
@@ -319,6 +353,38 @@ class ConfigClient:
         }
         resp = self._proxy_get(url, params)
         return resp.json()
+
+    def fetch_proxy_namespace_first_match(self, env: str, app_id: str,
+                                          cluster_name: str = "default",
+                                          namespace_name: str = "application") -> tuple:
+        """不带 apolloHostId 时遍历可用套，按 appId 定位所在套：默认套优先，按序尝试各套，
+        返回第一个能成功查询到该应用配置的套（"只传 appId 也能自动定位"）。
+
+        返回: (proxy_result, used_host_id, host_name)
+        - proxy_result 顶层附加 usedHostId / hostName 字段，标注实际使用的套
+        - 全部套都失败时抛 RuntimeError（由业务层统一转 503）
+        """
+        host_list = self._fetch_host_list_raw()
+        default_id = self._select_target_host(host_list).get('id')
+        # 默认套优先，其余按第三方返回顺序
+        ordered = sorted(host_list, key=lambda item: 0 if item.get('id') == default_id else 1)
+        errors = []
+        for item in ordered:
+            hid = item.get('id')
+            name = item.get('name', '')
+            try:
+                result = self.fetch_proxy_namespace(hid, env, app_id, cluster_name, namespace_name)
+                if str(result.get('code')) in ('200', 'success'):
+                    logger.info(f"[ConfigClient] 遍历套定位到应用配置: apolloHostId={hid}, name={name}, "
+                                f"appId={app_id}, env={env}, namespace={namespace_name}")
+                    result['usedHostId'] = hid
+                    result['hostName'] = name
+                    return result, hid, name
+                errors.append(f"套{hid}({name}) 业务错误: {result.get('message', '未知')}")
+            except Exception as e:
+                errors.append(f"套{hid}({name}) 异常: {e}")
+        detail = '; '.join(errors) if errors else '无可用套'
+        raise RuntimeError(f"遍历所有 Apollo 套均未找到应用 {app_id} 的配置: {detail}")
 
     def _load_local_template(self) -> dict:
         """加载本地模板 api_endpoints.json（作为组装远程配置的基底）"""
@@ -506,18 +572,20 @@ class ApolloAPIClient:
             return self._get_mock_response('apollo-config-query', appId=appId, env=env,
                                            clusterName=clusterName, namespaceName=namespaceName, key=key)
 
-        if apolloHostId is None:
-            apolloHostId = self.config.config_client.get_default_host_id()
-
-        logger.info(f"查询配置: apolloHostId={apolloHostId}, env={env}, appId={appId}, "
-                    f"cluster={clusterName}, namespace={namespaceName}, key={key or '(全部)'}")
-
         # ---- 通过 EasyOps 代理接口查询 ----
         start = time.time()
         try:
             self._request_count += 1
-            proxy_result = self.config.config_client.fetch_proxy_namespace(
-                apolloHostId, env, appId, clusterName, namespaceName)
+            if apolloHostId is None:
+                proxy_result, used_host_id, host_name = self.config.config_client.fetch_proxy_namespace_first_match(
+                    env, appId, clusterName, namespaceName)
+                logger.info(f"查询配置: apolloHostId 未指定，遍历可用套定位，命中套={used_host_id}({host_name}), "
+                            f"env={env}, appId={appId}, cluster={clusterName}, namespace={namespaceName}, key={key or '(全部)'}")
+            else:
+                proxy_result = self.config.config_client.fetch_proxy_namespace(
+                    apolloHostId, env, appId, clusterName, namespaceName)
+                logger.info(f"查询配置: apolloHostId={apolloHostId}, env={env}, appId={appId}, "
+                            f"cluster={clusterName}, namespace={namespaceName}, key={key or '(全部)'}")
         except Exception as e:
             duration = round((time.time() - start) * 1000)
             logger.error(f"[apollo-config-query] 代理接口调用失败: {type(e).__name__}, 耗时={duration}ms, error={e}")
@@ -562,7 +630,7 @@ class ApolloAPIClient:
     
     def query_hosts(self) -> dict:
         """
-        实时查询所有可用的 Apollo 环境列表（每次调用第三方接口，不做缓存）
+        实时查询所有可用的 Apollo 服务实例列表（每次调用第三方接口，不做缓存）
         供 skill 引导用户选择在哪套 Apollo（apolloHostId）上查询
         """
         try:
@@ -574,7 +642,7 @@ class ApolloAPIClient:
         except Exception as e:
             duration = round((time.time() - start) * 1000)
             logger.error(f"[apollo-host-list] 查询失败: {type(e).__name__}, 耗时={duration}ms, error={e}")
-            return {"code": 503, "message": f"查询 Apollo 环境列表失败: {e}",
+            return {"code": 503, "message": f"查询 Apollo 服务实例列表失败: {e}",
                     "data": {"default_host": self.config.openapi_base, "hosts": [], "count": 0}}
         return {
             "code": 200,
@@ -591,19 +659,22 @@ class ApolloAPIClient:
         """
         查询 Apollo 应用列表（链路：哪套Apollo(apolloHostId) → 应用列表）。
         通过 EasyOps 代理接口查询（按 apolloHostId 指定任意一套 Apollo，无需 Token）；调用不通时直接返回错误提示。
+
+        apolloHostId 缺省时：遍历所有可用套，取第一个能成功返回应用列表的套
+        （结果顶层带 usedHostId / hostName 标注实际使用的套），供"先出列表再选应用"的交互引导使用。
         """
         if USE_MOCK:
             return self._get_mock_response('apollo-app-list')
 
-        if apolloHostId is None:
-            apolloHostId = self.config.config_client.get_default_host_id()
-        logger.info(f"查询应用列表: apolloHostId={apolloHostId}")
-
-        # ---- 通过 EasyOps 代理接口查询 ----
         start = time.time()
         try:
             self._request_count += 1
-            proxy_result = self.config.config_client.fetch_proxy_apps(apolloHostId)
+            if apolloHostId is None:
+                proxy_result, used_host_id, host_name = self.config.config_client.fetch_proxy_apps_first_available()
+                logger.info(f"查询应用列表: apolloHostId 未指定，遍历可用套，命中套={used_host_id}({host_name})")
+            else:
+                proxy_result = self.config.config_client.fetch_proxy_apps(apolloHostId)
+                logger.info(f"查询应用列表: apolloHostId={apolloHostId}")
         except Exception as e:
             duration = round((time.time() - start) * 1000)
             logger.error(f"[apollo-app-list] 代理接口调用失败: {type(e).__name__}, 耗时={duration}ms, error={e}")
@@ -613,8 +684,10 @@ class ApolloAPIClient:
 
         if proxy_result is not None and str(proxy_result.get('code')) in ('200', 'success'):
             self._success_count += 1
-            apps = (proxy_result.get('data') or {}).get('items') or []
-            logger.info(f"[apollo-app-list] 查询成功: apolloHostId={apolloHostId}, appCount={len(apps) if isinstance(apps, list) else '未知'}")
+            data = proxy_result.get('data') or []
+            apps = (data.get('items') or []) if isinstance(data, dict) else data
+            used = proxy_result.get('usedHostId') or apolloHostId
+            logger.info(f"[apollo-app-list] 查询成功: apolloHostId={used}, appCount={len(apps) if isinstance(apps, list) else '未知'}")
             return proxy_result
 
         err_code = proxy_result.get('code') if proxy_result else '空'
@@ -642,11 +715,11 @@ def _to_int(value):
 MCP_TOOLS = [
     {
         "name": "apollo_config_query",
-        "description": "查询 Apollo 配置中心的配置项列表。查询链路：哪套Apollo(apolloHostId) → 环境(env) → 应用(appId) → 集群(clusterName) → Namespace(namespaceName) → 具体配置(key)。apolloHostId 缺省时使用默认 Apollo，env 缺省为 PRO。支持按 Key 关键词过滤。",
+        "description": "查询 Apollo 配置中心的配置项列表。查询链路：哪套Apollo(apolloHostId) → 环境(env) → 应用(appId) → 集群(clusterName) → Namespace(namespaceName) → 具体配置(key)。apolloHostId 缺省时自动遍历所有可用套定位应用所在套（结果带 usedHostId/hostName 标注实际使用的套），env 缺省为 PRO。支持按 Key 关键词过滤。当用户未提供 appId 时，先调用 apollo_app_list 获取可选应用列表（其中 usedHostId 为实际可用套），让用户选择 appId 后再用本工具查询。",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "apolloHostId": {"type": "integer", "description": "Apollo 服务 ID，来自 apollo_host_list 返回的 apolloHostId，用于指定查询哪一套 Apollo；不传时使用默认 Apollo"},
+                "apolloHostId": {"type": "integer", "description": "Apollo 服务 ID，来自 apollo_host_list 返回的 apolloHostId，用于指定查询哪一套 Apollo；不传时自动遍历所有可用套定位应用所在套"},
                 "appId": {"type": "string", "description": "应用ID，如 'rule-engine'。必填参数"},
                 "env": {"type": "string", "description": "环境，如 PRO(生产)、DEV(开发)、SIT(集成测试)、FAT(测试)、UAT(预发)，以目标 Apollo 实际环境名为准"},
                 "clusterName": {"type": "string", "description": "集群名称，默认 'default'"},
@@ -666,7 +739,7 @@ MCP_TOOLS = [
     },
     {
         "name": "apollo_app_list",
-        "description": "获取指定 Apollo 服务中的所有应用列表（AppId、应用名称、所属部门）。apolloHostId 缺省时使用默认 Apollo。",
+        "description": "获取 Apollo 服务中的应用列表（AppId、应用名称、所属部门）。apolloHostId 缺省时自动遍历所有可用套，取第一个能成功返回应用列表的套（结果顶层带 usedHostId/hostName 标注实际使用的套）。当用户想查配置但未提供 appId 时，先调用本工具获取可选应用列表，让用户选择后再用选中的 appId 调用 apollo_config_query。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -749,7 +822,7 @@ class MCPProtocolHandler:
                     },
                     "serverInfo": {
                         "name": "apollo-config-query-mcp",
-                        "version": "3.0.0"
+                        "version": "3.2.0"
                     }
                 })
                 return response, False
@@ -813,7 +886,7 @@ if HAS_FASTAPI:
     app = FastAPI(
         title="apollo-config-query-mcp",
         description="Apollo 配置查询 MCP 服务 - 为 Apollo 配置中心提供标准化工具调用接口",
-        version="3.0.0"
+        version="3.1.0"
     )
     
     class ApolloConfigQueryParams(BaseModel):
@@ -828,7 +901,7 @@ if HAS_FASTAPI:
     def root():
         return {
             "service": "apollo-config-query-mcp",
-            "version": "3.0.0",
+            "version": "3.2.0",
             "description": "Apollo 配置查询 MCP 服务",
             "mcp_protocol": "standard",
             "capabilities": ["tools/list", "tools/call"],
@@ -841,7 +914,7 @@ if HAS_FASTAPI:
         return {
             "status": "healthy",
             "service": "apollo-config-query-mcp",
-            "version": "3.0.0",
+            "version": "3.2.0",
             "environment": client.config.current_env,
             "mock_enabled": USE_MOCK,
             "log_enabled": _LOG_ENABLED,

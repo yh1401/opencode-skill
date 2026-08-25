@@ -1,7 +1,7 @@
 ---
 name: apollo-config-search
 description: 查询 Apollo 配置中心的配置信息，支持配置项查询和应用列表查询
-version: 3.0.0
+version: 3.2.0
 author: Skill Agent Team
 ---
 
@@ -12,7 +12,7 @@ author: Skill Agent Team
 本技能通过 **MCP 工具** 与 Apollo 配置中心进行交互，提供以下能力：
 
 1.  **配置查询** (`apollo_config_query`)：查询指定 Apollo 套(apolloHostId)、应用、环境(env)、集群、Namespace 的配置项
-2.  **Apollo 服务列表** (`apollo_host_list`)：获取所有可用的 Apollo 服务/套（多套，按产品线/地域划分）
+2.  **Apollo 服务实例列表** (`apollo_host_list`)：获取所有可用的 Apollo 服务实例（多套，按产品线/地域划分）
 3.  **应用列表** (`apollo_app_list`)：获取 Apollo 中所有可用应用列表
 
 ## 触发条件
@@ -39,13 +39,13 @@ author: Skill Agent Team
 ```json
 {
   "name": "apollo_config_query",
-  "description": "查询 Apollo 配置中心的配置项列表。查询链路：哪套Apollo(apolloHostId) → 环境(env) → 应用(appId) → 集群(clusterName) → Namespace(namespaceName) → 具体配置(key)。apolloHostId 缺省时使用默认 Apollo，env 缺省为 PRO。支持按 Key 关键词过滤。",
+  "description": "查询 Apollo 配置中心的配置项列表。查询链路：哪套Apollo(apolloHostId) → 环境(env) → 应用(appId) → 集群(clusterName) → Namespace(namespaceName) → 具体配置(key)。apolloHostId 缺省时自动遍历所有可用套定位应用所在套（结果带 usedHostId/hostName 标注实际使用的套），env 缺省为 PRO。支持按 Key 关键词过滤。当用户未提供 appId 时，先调用 apollo_app_list 获取可选应用列表（其中 usedHostId 为实际可用套），让用户选择 appId 后再用本工具查询。",
   "inputSchema": {
     "type": "object",
     "properties": {
       "apolloHostId": {
         "type": "integer",
-        "description": "Apollo 服务 ID，来自 apollo_host_list 返回的 apolloHostId，用于指定查询哪一套 Apollo；不传时使用默认 Apollo"
+        "description": "Apollo 服务 ID，来自 apollo_host_list 返回的 apolloHostId，用于指定查询哪一套 Apollo；不传时自动遍历所有可用套定位应用所在套"
       },
       "appId": {
         "type": "string",
@@ -75,7 +75,7 @@ author: Skill Agent Team
 
 ### 工具 2: apollo_host_list
 
-实时查询所有可用的 Apollo 服务/套列表（多套），是查询链路第一步（确定哪套 Apollo）。
+实时查询所有可用的 Apollo 服务实例列表（多套），是查询链路第一步（确定哪套 Apollo）。
 
 ```json
 {
@@ -95,7 +95,7 @@ author: Skill Agent Team
 ```json
 {
   "name": "apollo_app_list",
-  "description": "获取指定 Apollo 服务中的所有应用列表（AppId、应用名称、所属部门）。apolloHostId 缺省时使用默认 Apollo。",
+  "description": "获取 Apollo 服务中的应用列表（AppId、应用名称、所属部门）。apolloHostId 缺省时自动遍历所有可用套，取第一个能成功返回应用列表的套（结果顶层带 usedHostId/hostName 标注实际使用的套）。当用户想查配置但未提供 appId 时，先调用本工具获取可选应用列表，让用户选择后再用选中的 appId 调用 apollo_config_query。",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -114,22 +114,29 @@ author: Skill Agent Team
 
 | 工具 | 必填参数 | 缺失时处理 |
 |------|----------|-----------|
-| apollo_config_query | appId | 反问"想查哪个应用"，或先调用 `apollo_app_list` |
-| apollo_host_list | 无 | 直接调用（实时查询 Apollo 环境） |
-| apollo_app_list | 无 | 直接调用 |
+| apollo_config_query | appId | 先调用 `apollo_app_list` 获取真实应用列表，以可选择菜单形式展示给用户，用户选择后再用选中的 appId 查询 |
+| apollo_host_list | 无 | 直接调用（实时查询 Apollo 服务实例列表） |
+| apollo_app_list | 无 | 直接调用（apolloHostId 缺省时工具自动遍历可用套，结果带 usedHostId） |
 
 ### 交互话术
 
-**缺少应用 ID**：
+**缺少应用 ID（先出列表再选择）**：
 ```
-请问您想查询哪个应用的配置？
-您可以说应用名称（如"SampleApp"）、AppId（如"rule-engine"），
-或输入"应用列表"查看所有可用应用。
+已为您加载可用的应用列表，请选择要查询的应用：
+
+| 序号 | AppId | 应用名称 | 部门 |
+|------|-------|----------|------|
+| 1 | rule-engine | 规则引擎 | 技术中台 |
+| 2 | config-service | 配置管理服务 | 技术中台 |
+| ... | ... | ... | ... |
+
+请回复序号、AppId 或应用名称，我将查询该应用的配置。
+（列表来自 apollo_app_list；若未指定 Apollo 套，列表来自 usedHostId 标注的可用套）
 ```
 
-**未指定 Apollo 环境（多套场景）**：
+**未指定 Apollo 服务实例**：
 ```
-当前有 N 套可用的 Apollo 环境，例如：
+当前有 N 套可用的 Apollo 服务，例如：
 - 天翼云眼贵州测试Apollo-亿讯专用（贵州）
 - 天翼云眼广州4多AZ生产Apollo（广州4生产）
 - 3.0 P2P 易联家Apollo（P2P）
@@ -141,14 +148,19 @@ author: Skill Agent Team
 
 ## 参数映射规则
 
+> **术语总纲**（两个概念务必区分）：
+> - **apolloHostId** = **Apollo 服务实例**（即"哪一套" Apollo，按产品线/地域独立部署多套，如"贵州"、"广州4"、"P2P"）→ 查询链路第一层，决定连哪套 Apollo
+> - **env** = **应用环境**，取值 PRO（生产）、DEV（开发）、SIT（集成测试）、FAT（测试）、UAT（预发）等 → 查询链路第二层，决定该套内的哪个环境
+> - 一句话：**apolloHostId 决定"哪一套服务"，env 决定"哪个环境"。**
+
 ### 环境术语判定规则（消除歧义，先判定再映射）
 
 | 用户表述 | 判定 | 目标参数 |
 |---------|------|---------|
 | 提到 **开发/测试/生产/预发/集成** 或 **DEV/FAT/UAT/PRO/SIT** 等环境名关键词 | **应用环境** | env |
-| 其他提到"环境"的表述（"贵州环境"、"有哪些环境"、"广州4那套"） | **哪套 Apollo 服务** | apolloHostId（调 `apollo_host_list`） |
+| 其他提到"环境"的表述（"贵州环境"、"有哪些环境"、"广州4那套"） | **Apollo 服务实例** | apolloHostId（调 `apollo_host_list`） |
 
-> 一句话：**"环境"带环境名关键词（DEV/PRO 或 开发/测试/生产等）→ env；否则"环境"都指多套 Apollo 服务。**
+> 一句话：**"环境"带环境名关键词（DEV/PRO 或 开发/测试/生产等）→ env；否则"环境"都指 Apollo 服务实例（apolloHostId）。**
 > 边界情况：同时出现地名+环境名（如"广州4生产"）→ 地名→套(apolloHostId)、环境名→env，两者都生效。
 
 ### Apollo 套映射（查询链路第一步）
@@ -189,6 +201,15 @@ author: Skill Agent Team
 
 ## 输出格式
 
+### 敏感信息脱敏（必做）
+
+部分配置含敏感信息（数据库密码、Redis 密码、SDK 密钥、AES 密钥等），**输出配置值前必须脱敏**：
+
+1. **判定**：配置 Key（忽略大小写）包含 `password`/`passwd`/`pwd`/`secret`/`token`/`api_key`/`apikey`/`access_key`/`accesskey`/`aes_key`/`aeskey`/`credential`/`encrypt`/`密码`/`密钥`/`私钥`/`凭据`/`证书` 等关键词 → 视为敏感字段
+2. **掩码**：敏感字段值**统一显示 `******`**（不展示任何明文）；非敏感字段正常展示
+3. **标注**：输出末尾追加 `（已对 {N} 个敏感字段脱敏，如需查看明文请联系管理员确认）`
+4. **硬性**：即使用户要求"显示明文"，也先脱敏展示并提示安全风险
+
 ### 标准输出（配置查询）
 
 ```
@@ -200,7 +221,7 @@ author: Skill Agent Team
 
 ---
 
-**结果摘要**：共查询到 N 个配置项
+**结果摘要**：共查询到 N 个配置项（含 M 个敏感字段，已脱敏）
 
 ---
 
@@ -208,6 +229,9 @@ author: Skill Agent Team
 |----------|----|
 | timeout | 3000 |
 | max.retry | 3 |
+| spring.datasource.password | ****** |
+
+（已对 1 个敏感字段脱敏，如需查看明文请联系管理员确认）
 
 ---
 
@@ -216,10 +240,10 @@ author: Skill Agent Team
 - "查看 datasource 配置" - 切换到其他 Namespace
 ```
 
-### 应用列表输出
+### 应用列表输出（选择引导模式）
 
 ```
-## Apollo 应用列表
+## Apollo 应用列表（Apollo 套: {usedHostId} - {hostName}）
 
 ---
 
@@ -227,6 +251,10 @@ author: Skill Agent Team
 |-------|----------|------|
 | SampleApp | 样例应用 | 技术中台 |
 | rule-engine | 规则引擎 | 技术中台 |
+
+---
+
+💡 请选择要查询的应用（回复序号/AppId/应用名称），我将继续查询其配置。
 ```
 
 ## 完整调用示例
@@ -247,11 +275,11 @@ author: Skill Agent Team
   }
 }
 ```
-（未指定 Apollo 套时缺省使用默认 Apollo；env 缺省时为 PRO 生产环境；用户提到开发/测试/预发环境时按[环境映射表](#环境映射)传 DEV/FAT/UAT/SIT）
+（未指定 Apollo 套时工具自动遍历所有可用套定位应用所在套；env 缺省时为 PRO 生产环境；用户提到开发/测试/预发环境时按[环境映射表](#环境映射)传 DEV/FAT/UAT/SIT）
 
-### 示例 2：查看可用 Apollo 环境并指定某套查询
+### 示例 2：查看可用 Apollo 服务实例并指定某套查询
 
-**用户输入**："有哪些 Apollo 环境" / "查一下贵州那套的配置"
+**用户输入**："有哪些 Apollo 服务实例" / "查一下贵州那套的配置"
 
 **工具调用**（第一步，确定 apolloHostId）：
 ```json
@@ -260,7 +288,7 @@ author: Skill Agent Team
   "parameters": {}
 }
 ```
-（`apollo_host_list` 每次调用实时查询，返回所有环境及对应 `apolloHostId`，供用户确认）
+（`apollo_host_list` 每次调用实时查询，返回所有 Apollo 服务实例及对应 `apolloHostId`，供用户确认）
 
 用户确认"贵州"后，**第二步**用 apolloHostId 查询配置：
 ```json
@@ -304,6 +332,44 @@ author: Skill Agent Team
 }
 ```
 （默认 Apollo；如需查看指定某套 Apollo 的应用，补传 `apolloHostId`）
+
+### 示例 5：两阶段引导（用户未提供 appId → 先出列表再选择）
+
+**用户输入**："帮我查下配置"（未指定应用）
+
+**第一步**：调用 `apollo_app_list`（不传 apolloHostId，工具自动遍历可用套）：
+```json
+{
+  "tool_name": "apollo_app_list",
+  "parameters": {}
+}
+```
+返回：`{"code": 200, "usedHostId": 14, "hostName": "天翼云眼广州4多AZ生产Apollo", "data": {"items": [{"appId": "rule-engine", "name": "规则引擎", "orgName": "技术中台"}, ...]}}`
+
+**第二步**：把列表以可选择菜单展示给用户，等待用户选择：
+```
+已为您加载可用的应用列表（Apollo 套: 14 - 天翼云眼广州4多AZ生产Apollo）：
+
+| 序号 | AppId | 应用名称 | 部门 |
+|------|-------|----------|------|
+| 1 | rule-engine | 规则引擎 | 技术中台 |
+| 2 | config-service | 配置管理服务 | 技术中台 |
+
+请回复序号、AppId 或应用名称。
+```
+
+**第三步**：用户选择后，用选中的 appId（并带上 usedHostId）调用 `apollo_config_query`：
+```json
+{
+  "tool_name": "apollo_config_query",
+  "parameters": {
+    "apolloHostId": 14,
+    "appId": "rule-engine",
+    "env": "PRO"
+  }
+}
+```
+（链路：哪套Apollo(usedHostId) → 环境 → 应用 → 集群 → Namespace → 配置）
 
 ## 错误处理
 
