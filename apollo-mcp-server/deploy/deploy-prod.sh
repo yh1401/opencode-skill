@@ -35,6 +35,7 @@ APOLLO_ENV=PRO
 # APOLLO_HOST_API_BASE=https://easyops.tech.ctseelink.cn
 # APOLLO_HOST_SESSION_ID=e5e27a7d1805758400287ae86741f889
 LOG_LEVEL=INFO
+LOG_TO_FILE=false
 EOF
     fi
     chmod 600 .env

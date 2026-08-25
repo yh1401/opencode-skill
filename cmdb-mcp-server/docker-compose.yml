@@ -11,10 +11,11 @@ services:
       - MCP_USE_MOCK=${MCP_USE_MOCK:-false}
       - MCP_API_BASE_URL=${MCP_API_BASE_URL:-https://oss.tech.ctseelink.cn}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # 线上不写日志文件，仅控制台输出（Docker json-file 自动轮转）
+      - LOG_TO_FILE=false
     volumes:
       - ./config:/app/config:ro
       - ./mock:/app/mock:ro
-      - cmdb-mcp-logs:/app/logs
     networks:
       - cmdb-network
     logging:
@@ -26,6 +27,3 @@ services:
 networks:
   cmdb-network:
     driver: bridge
-
-volumes:
-  cmdb-mcp-logs:

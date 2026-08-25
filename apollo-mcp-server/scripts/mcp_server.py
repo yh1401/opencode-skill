@@ -64,6 +64,9 @@ import logging
 
 _log_format = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 _log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
+# 文件日志开关：默认开启（本地/开发）；线上部署设置 LOG_TO_FILE=false 关闭文件日志，
+# 仅保留控制台输出（Docker 容器 stdout 由 json-file 驱动自动轮转，无需手动清理）
+_log_to_file = os.environ.get('LOG_TO_FILE', 'true').lower() == 'true'
 
 logging.basicConfig(
     level=getattr(logging, _log_level, logging.INFO),
@@ -72,13 +75,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger("apollo-mcp")
 
-# 同时输出到控制台和文件
-_log_dir = os.environ.get('LOG_DIR', os.path.join(_root_dir, 'logs'))
-os.makedirs(_log_dir, exist_ok=True)
-_log_file = os.path.join(_log_dir, 'apollo-mcp.log')
-_file_handler = logging.FileHandler(_log_file)
-_file_handler.setFormatter(logging.Formatter(_log_format))
-logger.addHandler(_file_handler)
+# 同时输出到控制台和文件（LOG_TO_FILE=false 时仅控制台，不写日志文件）
+if _log_to_file:
+    _log_dir = os.environ.get('LOG_DIR', os.path.join(_root_dir, 'logs'))
+    os.makedirs(_log_dir, exist_ok=True)
+    _log_file = os.path.join(_log_dir, 'apollo-mcp.log')
+    _file_handler = logging.FileHandler(_log_file)
+    _file_handler.setFormatter(logging.Formatter(_log_format))
+    logger.addHandler(_file_handler)
 
 
 def _fmt(obj, max_len=2000):

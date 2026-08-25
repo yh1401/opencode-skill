@@ -21,10 +21,11 @@ services:
       - CONFIG_SERVICE_REFRESH_SEC=${CONFIG_SERVICE_REFRESH_SEC:-60}
       # 日志级别
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # 线上不写日志文件，仅控制台输出（Docker json-file 自动轮转）
+      - LOG_TO_FILE=false
     volumes:
       - ../config:/app/config:ro
       - ../mock:/app/mock:ro
-      - apollo-mcp-logs:/app/logs
     logging:
       driver: json-file
       options:
@@ -57,5 +58,4 @@ networks:
     driver: bridge
 
 volumes:
-  apollo-mcp-logs:
   apollo-mcp-mock-logs:
