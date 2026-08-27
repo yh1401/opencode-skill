@@ -31,6 +31,18 @@ chmod +x deploy-prod.sh
 ./deploy-prod.sh
 ```
 
+> 首次执行时脚本会从 `../.env.example` 自动生成 `deploy/.env` 并提示编辑（`vi .env`），确认后重新执行本脚本完成部署。
+
+## 一键更新（版本升级）
+
+```bash
+# 1. 上传新安装包到项目根目录（rz -bey 或 scp）
+# 2. 执行更新脚本（自动保留 deploy/.env 配置）
+./deploy/update-prod.sh
+```
+
+> 脚本自动完成：解压新包 → 备份并恢复 `deploy/.env` → 构建启动 → 健康检查，部署配置不会丢失。
+
 ## 手动部署
 
 ### 1. 检测 Compose 版本

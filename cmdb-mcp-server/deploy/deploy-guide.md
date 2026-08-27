@@ -84,6 +84,17 @@ Uvicorn running on http://0.0.0.0:8061
 curl -s http://localhost:8061/health
 ```
 
+## 九、一键更新（版本升级）
+
+```bash
+# 1. 上传新安装包到项目根目录（rz -bey 或 scp）
+# 2. 执行更新脚本（自动保留 deploy/.env 配置）
+cd /data/mcp/cmdb-mcp
+./deploy/update-prod.sh
+```
+
+> 脚本自动完成：解压新包 → 备份并恢复 `deploy/.env` → 构建启动 → 健康检查，部署配置不会丢失。
+
 ## 常用运维命令
 
 ```bash
