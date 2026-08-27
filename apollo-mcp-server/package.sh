@@ -81,6 +81,27 @@ APOLLO_ENV=PRO
 # 第三方接口配置刷新间隔（秒）
 # CONFIG_SERVICE_REFRESH_SEC=60
 
+# ================================================
+# 超时与重试（影响 agent 响应速度）
+# 正常请求毫秒级返回不受影响；以下仅在异常/超时时触发，快速失败避免 agent 卡死。
+# 配置服务下发的 timeout/max_retries/traversal_budget 会覆盖这里的默认值。
+# ================================================
+
+# 业务查询单次超时（秒）：配置/应用/Namespace 查询。默认 8
+# APOLLO_REQUEST_TIMEOUT=8
+
+# Apollo Host 列表单次超时（秒）。默认 5
+# APOLLO_HOST_LIST_TIMEOUT=5
+
+# 单请求失败重试次数（0=不重试）。默认 1
+# APOLLO_MAX_RETRIES=1
+
+# 重试间隔（秒）。默认 1
+# APOLLO_RETRY_DELAY=1
+
+# 遍历可用套总预算（秒）：超过则提前终止，避免多套全超时累加。默认 20
+# APOLLO_TRAVERSAL_BUDGET=20
+
 # 日志级别：DEBUG/INFO/WARNING/ERROR
 LOG_LEVEL=INFO
 
