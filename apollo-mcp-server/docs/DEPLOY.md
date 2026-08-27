@@ -23,17 +23,19 @@
 在服务器上依次执行：
 
 ```bash
-# 1. 克隆或上传代码
-cd /opt
-git clone https://github.com/yh1401/opencode-skill.git
-cd opencode-skill/apollo-mcp-server
+# 1. 上传安装包到服务器
+scp dist/apollo-mcp-server-*.tar.gz user@server:/data/mcp/
 
-# 2. 执行部署脚本（默认通过第三方接口获取 Apollo 地址/Token，无需手动配置）
+# 2. 解压并进入项目根目录
+cd /data/mcp && mkdir -p apollo-mcp && cd apollo-mcp
+tar xzf apollo-mcp-server-*.tar.gz
+
+# 3. 执行部署脚本（默认通过第三方接口获取 Apollo 地址/Token，无需手动配置）
 cd deploy
 chmod +x deploy-prod.sh
 ./deploy-prod.sh
 
-# 3. 记录输出的服务地址，前往 StarAgent 注册
+# 4. 记录输出的服务地址，前往 StarAgent 注册
 # 例如: http://180.101.21.13:8080/gateway/apollo/mcp
 ```
 
@@ -48,7 +50,7 @@ chmod +x deploy-prod.sh
 ### 步骤 1: 创建配置
 
 ```bash
-cd /opt/opencode-skill/apollo-mcp-server/deploy
+cd /data/mcp/apollo-mcp/deploy
 
 cat > .env << 'EOF'
 MCP_USE_MOCK=false

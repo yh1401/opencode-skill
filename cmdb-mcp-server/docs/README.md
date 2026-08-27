@@ -415,16 +415,12 @@ curl -X POST http://localhost:8061/api/cmdb-server-query \
 
 ```bash
 # 1. 上传/解压部署包到服务器
-cd /opt
-mkdir -p cmdb-mcp-server && cd cmdb-mcp-server
+scp dist/cmdb-mcp-server-*.tar.gz user@server:/data/mcp/
+cd /data/mcp && mkdir -p cmdb-mcp && cd cmdb-mcp
 tar xzf cmdb-mcp-server-*.tar.gz
 
-# 2. 进入 deploy 目录，按需修改 .env
+# 2. 进入 deploy 目录一键部署（脚本自动生成 .env）
 cd deploy
-cp .env.example .env
-# 编辑 .env：MCP_USE_MOCK=false, MCP_API_BASE_URL=...
-
-# 3. 一键部署
 chmod +x deploy-prod.sh
 ./deploy-prod.sh
 ```
@@ -432,7 +428,7 @@ chmod +x deploy-prod.sh
 ### 方式二：Python 直接运行
 
 ```bash
-cd cmdb-mcp-server
+cd /data/mcp/cmdb-mcp
 
 # 安装依赖
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
@@ -456,8 +452,8 @@ After=network.target
 [Service]
 Type=simple
 User=appuser
-WorkingDirectory=/opt/cmdb-mcp-server
-ExecStart=/usr/bin/python3 /opt/cmdb-mcp-server/scripts/mcp_server.py --transport http --port 8061
+WorkingDirectory=/data/mcp/cmdb-mcp
+ExecStart=/usr/bin/python3 /data/mcp/cmdb-mcp/scripts/mcp_server.py --transport http --port 8061
 Restart=always
 RestartSec=10
 Environment=MCP_USE_MOCK=false

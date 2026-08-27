@@ -18,15 +18,12 @@
 
 ```bash
 # 1. 上传部署包并解压
-cd /opt
+scp dist/cmdb-mcp-server-*.tar.gz user@server:/data/mcp/
+cd /data/mcp && mkdir -p cmdb-mcp && cd cmdb-mcp
 tar xzf cmdb-mcp-server-*.tar.gz
-cd cmdb-mcp-server/deploy
+cd deploy
 
-# 2. 配置环境变量
-cp ../.env.example .env
-# 按需编辑 .env
-
-# 3. 执行部署脚本（自动适配 Compose V1/V2）
+# 2. 执行部署脚本（自动适配 Compose V1/V2）
 chmod +x deploy-prod.sh
 ./deploy-prod.sh
 ```
@@ -48,7 +45,7 @@ chmod +x deploy-prod.sh
 ### 1. 检测 Compose 版本
 
 ```bash
-cd /opt/cmdb-mcp-server/deploy
+cd /data/mcp/cmdb-mcp/deploy
 
 if docker compose version >/dev/null 2>&1; then
     dc="docker compose"

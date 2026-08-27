@@ -40,31 +40,27 @@ cd cmdb-mcp-server
 ## 三、上传到服务器
 
 ```bash
-scp dist/cmdb-mcp-server-*.tar.gz user@服务器IP:/opt/
+scp dist/cmdb-mcp-server-*.tar.gz user@服务器IP:/data/mcp/
 ```
 
 ## 四、解压
 
 ```bash
-cd /opt
+cd /data/mcp && mkdir -p cmdb-mcp && cd cmdb-mcp
 tar xzf cmdb-mcp-server-*.tar.gz
-cd cmdb-mcp-server/deploy
+cd deploy
 ```
 
-## 五、配置环境变量
+## 五、执行一键部署脚本
 
 ```bash
-cp ../.env.example .env
-# 按需修改: vi .env
+chmod +x deploy-prod.sh
+./deploy-prod.sh
 ```
 
-## 六、构建并启动
+> 脚本会自动生成 `deploy/.env`（不存在时），无需手动配置。
 
-```bash
-$dc up -d --build
-```
-
-## 七、查看启动日志（必做）
+## 六、查看启动日志（必做）
 
 ```bash
 $dc logs --tail=30 cmdb-mcp
@@ -78,13 +74,13 @@ $dc logs --tail=30 cmdb-mcp
 Uvicorn running on http://0.0.0.0:8061
 ```
 
-## 八、健康检查
+## 七、健康检查
 
 ```bash
 curl -s http://localhost:8061/health
 ```
 
-## 九、一键更新（版本升级）
+## 八、一键更新（版本升级）
 
 ```bash
 # 1. 上传新安装包到项目根目录（rz -bey 或 scp）
