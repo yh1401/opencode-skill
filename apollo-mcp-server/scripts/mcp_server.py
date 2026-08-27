@@ -20,6 +20,7 @@ Apollo 配置查询 MCP 服务器
 import json
 import os
 import sys
+import re
 import argparse
 import time
 import threading
@@ -94,6 +95,49 @@ def _fmt(obj, max_len=2000):
     if len(s) > max_len:
         return s[:max_len] + f"...(已截断, 总长{len(s)})"
     return s
+
+
+# ============================================================================
+# 敏感配置脱敏（与 skill 层规则保持一致，MCP 工具返回前先行脱敏，双层保险）
+# 规则来源：.trae/skills/apollo-config-query/SKILL.md「敏感信息脱敏」
+# ============================================================================
+_SENSITIVE_KEYWORDS = (
+    # 密码类
+    "password", "passwd", "pwd", "密码",
+    # 密钥类
+    "secret", "secret_key", "私钥", "密钥", "credential", "凭据",
+    # Token 类
+    "token", "api_key", "apikey", "access_key", "accesskey", "session_key", "sign_key",
+    # 加密类
+    "aes_key", "aeskey", "encrypt", "加密", "证书", "cert", "iv",
+)
+
+_MASKED_VALUE = "******"
+
+# 关键词归一化（去分隔符 . _ - 并小写）后预计算，匹配时对 key 同样归一化，
+# 使 aes.key / aes_key / aes-key 都能命中 aeskey 关键词，避免点号分隔的敏感 key 漏判
+_SEP_RE = re.compile(r'[._\-]')
+_SENSITIVE_KEYWORDS_NORM = tuple(_SEP_RE.sub('', kw).lower() for kw in _SENSITIVE_KEYWORDS)
+
+
+def _is_sensitive_key(key: str) -> bool:
+    """配置 Key（忽略大小写、忽略分隔符 . _ -）包含任一敏感关键词 → 视为敏感字段。
+    归一化后匹配，覆盖点号/下划线/横线分隔的 key（如 aes.key / aes_key / aes-key）。"""
+    norm = _SEP_RE.sub('', str(key)).lower()
+    return any(kw in norm for kw in _SENSITIVE_KEYWORDS_NORM)
+
+
+def _mask_sensitive_configs(configurations: dict) -> tuple:
+    """对 configurations 字典的敏感字段值统一掩码为 ******，返回 (脱敏后字典, 脱敏字段数)"""
+    masked = {}
+    count = 0
+    for k, v in (configurations or {}).items():
+        if _is_sensitive_key(k):
+            masked[k] = _MASKED_VALUE
+            count += 1
+        else:
+            masked[k] = v
+    return masked, count
 
 
 # ============================================================================
@@ -646,7 +690,7 @@ class ApolloAPIClient:
 
     def _normalize_config_result(self, result: dict, appId: str, env: str,
                                  clusterName: str, namespaceName: str, key: str = None) -> dict:
-        """统一处理：OpenAPI items 数组 → configurations 字典 + key 模糊过滤（保持输出格式稳定）"""
+        """统一处理：OpenAPI items 数组 → configurations 字典 + key 模糊过滤 + 敏感字段脱敏（保持输出格式稳定）"""
         if str(result.get('code')) in ('200', 'success'):
             data = result.get('data', {})
             if isinstance(data, dict) and 'items' in data:
@@ -662,6 +706,14 @@ class ApolloAPIClient:
                 data['_filtered_by'] = key
                 data['_total_count'] = total_count
                 data['_filtered_count'] = len(filtered)
+            # 敏感字段脱敏（硬性规则：MCP 返回前先行脱敏，与 skill 层规则一致）
+            configurations = data.get('configurations', {})
+            masked_configs, masked_count = _mask_sensitive_configs(configurations)
+            data['configurations'] = masked_configs
+            data['maskedCount'] = masked_count
+            if masked_count > 0:
+                data['maskedFieldsTip'] = f"（已对 {masked_count} 个敏感字段脱敏，如需查看明文请联系管理员确认）"
+            logger.info(f"[apollo-config-query] 脱敏完成: 共 {len(masked_configs)} 项，敏感字段 {masked_count} 个已掩码")
             result['data'] = data
         return result
     
