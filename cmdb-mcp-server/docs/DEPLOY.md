@@ -31,7 +31,7 @@ chmod +x deploy-prod.sh
 ./deploy-prod.sh
 ```
 
-> 首次执行时脚本会从 `../.env.example` 自动生成 `deploy/.env` 并提示编辑（`vi .env`），确认后重新执行本脚本完成部署。
+> 脚本会自动生成 `deploy/.env`（不存在时），无需区分首次部署，一次执行即完成部署。
 
 ## 一键更新（版本升级）
 

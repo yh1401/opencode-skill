@@ -23,7 +23,7 @@ else
     exit 1
 fi
 
-# 2. 配置 .env (不存在则从 .env.example 生成)
+# 2. 配置 .env (不存在则自动生成，不区分首次部署)
 if [ ! -f .env ]; then
     if [ -f ../.env.example ]; then
         cp ../.env.example .env
@@ -39,10 +39,8 @@ LOG_TO_FILE=false
 EOF
     fi
     chmod 600 .env
-    echo "⚠️  .env 已生成（使用第三方接口获取 Apollo 地址/Token，默认无需填写）"
+    echo "ℹ️  .env 不存在，已自动生成（使用第三方接口获取 Apollo 地址/Token，默认无需填写）"
     echo "   如需覆盖第三方接口地址或 sessionId，请编辑 .env 后重新执行本脚本"
-    echo "   vi .env"
-    exit 0
 fi
 
 # 校验：第三方接口 sessionId 未配置时给出提示（不再阻断，代码内置默认第三方接口）

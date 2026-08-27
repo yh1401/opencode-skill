@@ -30,7 +30,7 @@ else
     exit 1
 fi
 
-# 3. 配置 .env (不存在则从 .env.example 生成)
+# 3. 配置 .env (不存在则自动生成，不区分首次部署)
 if [ ! -f .env ]; then
     if [ -f ../.env.example ]; then
         cp ../.env.example .env
@@ -43,10 +43,8 @@ LOG_TO_FILE=false
 EOF
     fi
     chmod 600 .env
-    echo "⚠️  .env 已生成（默认使用 CMDB API: https://oss.tech.ctseelink.cn）"
-    echo "   如需调整请先编辑 .env，然后重新执行本脚本"
-    echo "   vi .env"
-    exit 0
+    echo "ℹ️  .env 不存在，已自动生成（默认使用 CMDB API: https://oss.tech.ctseelink.cn）"
+    echo "   如需调整请编辑 .env 后重新执行本脚本"
 fi
 
 # 4. 停旧容器、构建并启动（禁用 BuildKit 避免 rpc EOF）
