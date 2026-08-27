@@ -153,6 +153,12 @@ class ConfigClient:
         self._default_host_id: Optional[int] = None # 默认 Apollo Host 的 id（作为 apolloHostId 兜底）
         self.last_error: str = ""                   # 最近一次拉取失败原因（用于健康检查排查）
         self._lock = threading.Lock()
+        # 超时与重试（环境变量兜底；ApolloConfig 拉取配置服务后会回写覆盖）
+        self.timeout = int(os.environ.get('APOLLO_REQUEST_TIMEOUT', '8'))      # 业务查询单次超时（秒）
+        self.host_timeout = int(os.environ.get('APOLLO_HOST_LIST_TIMEOUT', '5'))  # Host 列表单次超时（秒）
+        self.max_retries = int(os.environ.get('APOLLO_MAX_RETRIES', '1'))     # 单请求失败重试次数
+        self.retry_delay = float(os.environ.get('APOLLO_RETRY_DELAY', '1'))   # 重试间隔（秒）
+        self._traversal_budget = int(os.environ.get('APOLLO_TRAVERSAL_BUDGET', '20'))  # 遍历可用套总预算（秒）
 
     @staticmethod
     def decrypt_token(encrypted_token: str, session_id: str) -> str:
@@ -177,17 +183,8 @@ class ConfigClient:
         # 鉴权：Cookie sessionId（既是认证凭证，也是 token 解密密钥）
         logger.info(f"[ConfigClient] 请求 Apollo Host 列表: url={url}, params={_fmt(params)}, "
                     f"sessionId={self.session_id[:8]}...(脱敏)")
-        start = time.time()
-        resp = requests.get(
-            url,
-            params=params,
-            headers={"Content-Type": "application/json"},
-            cookies={"sessionId": self.session_id},
-            timeout=10,
-            verify=False
-        )
-        duration = round((time.time() - start) * 1000)
-        logger.info(f"[ConfigClient] 响应: status={resp.status_code}, 耗时={duration}ms, url={resp.url}")
+        resp = self._send_request(url, params, self.host_timeout, "Host列表")
+        duration = 0  # 耗时已在 _send_request 内打印
         if resp.status_code >= 400:
             logger.error(f"[ConfigClient] 响应异常: status={resp.status_code}, body={_fmt(resp.text)}")
         resp.raise_for_status()
@@ -276,25 +273,44 @@ class ConfigClient:
         """调用 EasyOps 代理接口 GET，统一打印完整出入参数日志（URL/参数/状态码/耗时/响应体）"""
         logger.info(f"[ConfigClient] 代理接口请求: url={url}, params={_fmt(params)}, "
                     f"sessionId={self.session_id[:8]}...(脱敏)")
-        start = time.time()
-        resp = requests.get(
-            url,
-            params=params,
-            headers={"Content-Type": "application/json"},
-            cookies={"sessionId": self.session_id},
-            timeout=30,
-            verify=False
-        )
-        duration = round((time.time() - start) * 1000)
+        resp = self._send_request(url, params, self.timeout, "代理接口")
         try:
             body = _fmt(resp.json())
         except Exception:
             body = _fmt(resp.text)
-        logger.info(f"[ConfigClient] 代理接口响应: status={resp.status_code}, 耗时={duration}ms, url={resp.url}, body={body}")
+        logger.info(f"[ConfigClient] 代理接口响应: status={resp.status_code}, url={resp.url}, body={body}")
         if resp.status_code >= 400:
             logger.error(f"[ConfigClient] 代理接口返回异常状态码: status={resp.status_code}, body={_fmt(resp.text)}")
         resp.raise_for_status()
         return resp
+
+    def _send_request(self, url: str, params: dict, timeout: int, tag: str) -> "requests.Response":
+        """统一发请求 + 短重试。超时/连接异常时按 max_retries 重试（间隔 retry_delay 秒），
+        正常请求毫秒级返回不受影响；异常时快速失败，避免 agent 长时间卡死。"""
+        last_exc = None
+        total_attempts = self.max_retries + 1
+        for attempt in range(total_attempts):
+            try:
+                start = time.time()
+                resp = requests.get(
+                    url,
+                    params=params,
+                    headers={"Content-Type": "application/json"},
+                    cookies={"sessionId": self.session_id},
+                    timeout=timeout,
+                    verify=False
+                )
+                duration = round((time.time() - start) * 1000)
+                logger.info(f"[ConfigClient] {tag}请求: attempt={attempt + 1}/{total_attempts}, "
+                            f"status={resp.status_code}, 耗时={duration}ms, url={resp.url}")
+                return resp
+            except Exception as e:
+                last_exc = e
+                logger.warning(f"[ConfigClient] {tag}请求异常: attempt={attempt + 1}/{total_attempts}, "
+                                f"error={type(e).__name__}: {e}")
+                if attempt < self.max_retries:
+                    time.sleep(self.retry_delay)
+        raise last_exc
 
     def fetch_proxy_apps(self, apollo_host_id) -> dict:
         """通过 EasyOps 代理接口获取指定 Apollo 的应用列表（获取所有 app）
@@ -321,7 +337,13 @@ class ConfigClient:
         # 默认套优先，其余按第三方返回顺序
         ordered = sorted(host_list, key=lambda item: 0 if item.get('id') == default_id else 1)
         errors = []
+        budget_start = time.time()
+        budget_sec = self._traversal_budget   # 遍历总预算（秒），超此提前终止
         for item in ordered:
+            if time.time() - budget_start > budget_sec:
+                logger.warning(f"[ConfigClient] 遍历应用列表超总预算 {budget_sec}s，提前终止（已试 {len(errors)} 套）")
+                errors.append(f"超遍历预算{budget_sec}s终止")
+                break
             hid = item.get('id')
             name = item.get('name', '')
             try:
@@ -373,7 +395,13 @@ class ConfigClient:
         # 默认套优先，其余按第三方返回顺序
         ordered = sorted(host_list, key=lambda item: 0 if item.get('id') == default_id else 1)
         errors = []
+        budget_start = time.time()
+        budget_sec = self._traversal_budget   # 遍历总预算（秒），超此提前终止
         for item in ordered:
+            if time.time() - budget_start > budget_sec:
+                logger.warning(f"[ConfigClient] 遍历应用配置超总预算 {budget_sec}s，提前终止（已试 {len(errors)} 套）")
+                errors.append(f"超遍历预算{budget_sec}s终止")
+                break
             hid = item.get('id')
             name = item.get('name', '')
             try:
@@ -438,8 +466,8 @@ class ApolloConfig:
         self.openapi_token = ""
         self.endpoints = {}
         self.current_env = os.environ.get('APOLLO_ENV', '')  # 先留空，load_config 中从配置文件补充
-        self.timeout = 30
-        self.max_retries = 2
+        self.timeout = 8
+        self.max_retries = 1
         self.retry_delay = 1
         self.config_client = ConfigClient()
         self.load_config()
@@ -448,9 +476,17 @@ class ApolloConfig:
     def _apply_remote_config(self, data: dict):
         """应用配置服务拉取的配置（地址、环境、endpoints、超时等）"""
         self.endpoints = data.get('endpoints', {})
-        self.timeout = data.get('timeout', 30)
-        self.max_retries = data.get('max_retries', 2)
+        # 超时/重试：优先用配置服务下发的值，默认值与 ConfigClient 一致（8s/1次/1s）
+        self.timeout = data.get('timeout', 8)
+        self.max_retries = data.get('max_retries', 1)
         self.retry_delay = data.get('retry_delay', 1)
+        # 回写到 ConfigClient，让配置服务的超时/重试真正生效（取代之前的"僵尸配置"）
+        self.config_client.timeout = self.timeout
+        self.config_client.max_retries = self.max_retries
+        self.config_client.retry_delay = self.retry_delay
+        budget = data.get('traversal_budget')
+        if budget:
+            self.config_client._traversal_budget = int(budget)
 
         # 环境与地址：来自第三方接口（默认套地址仅用于信息展示，查询走代理接口，不直连）
         environments = data.get('environments', {})
@@ -477,11 +513,8 @@ class ApolloConfig:
             self._apply_remote_config(remote)
             return
 
-        # 配置服务不可用：代理查询不受影响，直接使用内置默认值
+        # 配置服务不可用：代理查询不受影响，使用内置默认值（ConfigClient 已在 __init__ 读取环境变量）
         logger.warning("[ConfigClient] 第三方接口拉取配置失败，使用内置默认值（代理查询不受影响）")
-        self.timeout = 30
-        self.max_retries = 2
-        self.retry_delay = 1
         self.endpoints = {}
 
     def load_auth(self):
