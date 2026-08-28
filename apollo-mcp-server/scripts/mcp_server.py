@@ -118,13 +118,27 @@ _MASKED_VALUE = "******"
 # 使 aes.key / aes_key / aes-key 都能命中 aeskey 关键词，避免点号分隔的敏感 key 漏判
 _SEP_RE = re.compile(r'[._\-]')
 _SENSITIVE_KEYWORDS_NORM = tuple(_SEP_RE.sub('', kw).lower() for kw in _SENSITIVE_KEYWORDS)
+# iv 作为子串会误伤 active/driver/private/archive/delivery 等常见词（均含 iv 子串），
+# 故 iv 不参与子串匹配，改为下方"独立段匹配"：仅当 iv 作为 key 的某一段（如 aes.iv）才视为敏感
+_IV_SEGMENT = "iv"
 
 
 def _is_sensitive_key(key: str) -> bool:
     """配置 Key（忽略大小写、忽略分隔符 . _ -）包含任一敏感关键词 → 视为敏感字段。
-    归一化后匹配，覆盖点号/下划线/横线分隔的 key（如 aes.key / aes_key / aes-key）。"""
-    norm = _SEP_RE.sub('', str(key)).lower()
-    return any(kw in norm for kw in _SENSITIVE_KEYWORDS_NORM)
+
+    除 iv 外的关键词用"归一化子串包含"匹配（aes.key/aes_key/aes-key 都命中 aeskey）；
+    iv 因过短易误伤（active/driver/private 等均含 iv 子串），改为"独立段匹配"——
+    仅当按分隔符切分后存在某段恰好等于 iv（如 aes.iv / encrypt.iv）才视为敏感。
+    """
+    s = str(key)
+    norm = _SEP_RE.sub('', s).lower()
+    for kw in _SENSITIVE_KEYWORDS_NORM:
+        if kw == _IV_SEGMENT:
+            continue  # iv 走独立段匹配，避免子串误伤
+        if kw in norm:
+            return True
+    # iv 独立段匹配：覆盖 aes.iv / encrypt.iv / secret.iv 等真正的初始化向量配置
+    return _IV_SEGMENT in _SEP_RE.split(s.lower())
 
 
 def _mask_value(value) -> str:
