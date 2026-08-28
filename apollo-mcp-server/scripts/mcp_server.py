@@ -259,13 +259,13 @@ class ConfigClient:
         self.last_error: str = ""                   # 最近一次拉取失败原因（用于健康检查排查）
         self._lock = threading.Lock()
         # 按工具区分超时（环境变量兜底；ApolloConfig 拉取配置服务后会回写覆盖）
-        # apollo_app_list 数据简单应快速返回：5s 超时 + 0 重试，快速失败避免 agent 卡死
-        self.apps_timeout = int(os.environ.get('APOLLO_APPS_TIMEOUT', '5'))
-        # apollo_config_query 可能涉及遍历多套，给宽一点
-        self.timeout = int(os.environ.get('APOLLO_REQUEST_TIMEOUT', '10'))     # namespace 配置查询单次超时（秒）
-        # apollo_host_list 第三方接口，10s
-        self.host_timeout = int(os.environ.get('APOLLO_HOST_LIST_TIMEOUT', '10'))  # Host 列表单次超时（秒）
-        self.max_retries = int(os.environ.get('APOLLO_MAX_RETRIES', '1'))     # 单请求失败重试次数（apps 工具内部固定 0）
+        # apollo_app_list / apollo_config_query：6s 超时 + 0 重试，快速失败避免 agent 卡死
+        self.apps_timeout = int(os.environ.get('APOLLO_APPS_TIMEOUT', '6'))
+        # namespace 配置查询（apollo_config_query）单次超时（秒）
+        self.timeout = int(os.environ.get('APOLLO_REQUEST_TIMEOUT', '6'))
+        # apollo_host_list 第三方接口，8s + 1 次重试
+        self.host_timeout = int(os.environ.get('APOLLO_HOST_LIST_TIMEOUT', '8'))  # Host 列表单次超时（秒）
+        self.max_retries = int(os.environ.get('APOLLO_MAX_RETRIES', '1'))     # host_list 单请求失败重试次数（apps/config 内部固定 0）
         self.retry_delay = float(os.environ.get('APOLLO_RETRY_DELAY', '1'))   # 重试间隔（秒）
         self._traversal_budget = int(os.environ.get('APOLLO_TRAVERSAL_BUDGET', '20'))  # 遍历可用套总预算（秒）
 
@@ -503,7 +503,7 @@ class ConfigClient:
             "clusterName": cluster_name,
             "namespaceName": namespace_name,
         }
-        resp = self._proxy_get(url, params, timeout=self.timeout, tag="配置查询")
+        resp = self._proxy_get(url, params, timeout=self.timeout, max_retries=0, tag="配置查询")
         return resp.json()
 
     def fetch_proxy_namespace_first_match(self, env: str, app_id: str,

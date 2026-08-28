@@ -87,14 +87,14 @@ APOLLO_ENV=PRO
 # 配置服务下发的 timeout/max_retries/traversal_budget 会覆盖这里的默认值。
 # ================================================
 
-# 业务查询单次超时（秒）：配置/应用/Namespace 查询（apollo_config_query / apollo_host_list）。默认 10
-# APOLLO_REQUEST_TIMEOUT=10
+# 业务查询单次超时（秒）：apollo_config_query 配置查询，6s 不重试快速失败。默认 6
+# APOLLO_REQUEST_TIMEOUT=6
 
-# 应用列表查询单次超时（秒）：apollo_app_list 数据简单应快速返回。默认 5
-# APOLLO_APPS_TIMEOUT=5
+# 应用列表查询单次超时（秒）：apollo_app_list，6s 不重试快速失败。默认 6
+# APOLLO_APPS_TIMEOUT=6
 
-# Apollo Host 列表单次超时（秒）。默认 10
-# APOLLO_HOST_LIST_TIMEOUT=10
+# Apollo Host 列表单次超时（秒）：apollo_host_list，8s + 1 次重试。默认 8
+# APOLLO_HOST_LIST_TIMEOUT=8
 
 # 单请求失败重试次数（0=不重试）。默认 1
 # APOLLO_MAX_RETRIES=1

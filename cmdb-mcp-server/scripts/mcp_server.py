@@ -165,89 +165,113 @@ class CMDBAPIClient:
             logger.log_error(error_msg)
             return {"code": 500, "message": error_msg, "data": {"records": [], "total": 0}}
         
-        try:
-            start_time = time.time()
-            self._ensure_session()
-            
-            logger.log_info(f"[API] [{skill_id}] 请求开始: method={method}, url={url}, params_keys={list(params.keys())}, description={description}")
-            
-            resp = self._session.request(
-                method, url,
-                json=params,
-                headers=self.config.auth_headers,
-                timeout=30
-            )
-            duration = time.time() - start_time
-            
-            logger.log_info(f"[API] [{skill_id}] 请求完成: status_code={resp.status_code}, duration_ms={round(duration*1000, 2)}, url={url}")
-            
-            resp.raise_for_status()
-            
+        timeout = int(os.environ.get('CMDB_REQUEST_TIMEOUT', '8'))      # 单次请求超时（秒）
+        max_retries = int(os.environ.get('CMDB_MAX_RETRIES', '1'))       # 超时/连接失败重试次数
+        retry_delay = float(os.environ.get('CMDB_RETRY_DELAY', '1'))     # 重试间隔（秒）
+
+        for attempt in range(max_retries + 1):
             try:
-                result = resp.json()
-                data_size = len(json.dumps(result)) if result else 0
-                self._success_count += 1
-                
-                logger.log_api_response(skill_id, resp.status_code, duration, True)
-                logger.log_info(f"[API] [{skill_id}] 响应解析成功: code={result.get('code')}, data_total={result.get('data', {}).get('total', 0)}, response_size={data_size} bytes")
-                
-                return _normalize_pagination(skill_id, result)
-            except ValueError as json_error:
-                raw_content = resp.text[:500] if resp.text else ""
-                error_msg = f"[API] [{skill_id}] 响应 JSON 解析失败: {str(json_error)}, raw_response={raw_content}"
-                logger.log_error(error_msg)
-                
+                start_time = time.time()
+                self._ensure_session()
+
+                logger.log_info(f"[API] [{skill_id}] 请求开始: method={method}, url={url}, "
+                                 f"params_keys={list(params.keys())}, description={description}, "
+                                 f"attempt={attempt + 1}/{max_retries + 1}")
+
+                resp = self._session.request(
+                    method, url,
+                    json=params,
+                    headers=self.config.auth_headers,
+                    timeout=timeout
+                )
+                duration = time.time() - start_time
+
+                logger.log_info(f"[API] [{skill_id}] 请求完成: status_code={resp.status_code}, "
+                                f"duration_ms={round(duration*1000, 2)}, url={url}, "
+                                f"attempt={attempt + 1}/{max_retries + 1}")
+
+                resp.raise_for_status()
+
+                try:
+                    result = resp.json()
+                    data_size = len(json.dumps(result)) if result else 0
+                    self._success_count += 1
+
+                    logger.log_api_response(skill_id, resp.status_code, duration, True)
+                    logger.log_info(f"[API] [{skill_id}] 响应解析成功: code={result.get('code')}, "
+                                    f"data_total={result.get('data', {}).get('total', 0)}, response_size={data_size} bytes")
+
+                    return _normalize_pagination(skill_id, result)
+                except ValueError as json_error:
+                    raw_content = resp.text[:500] if resp.text else ""
+                    error_msg = f"[API] [{skill_id}] 响应 JSON 解析失败: {str(json_error)}, raw_response={raw_content}"
+                    logger.log_error(error_msg)
+
+                    if USE_MOCK:
+                        logger.log_warning(f"[API] [{skill_id}] JSON 解析失败，降级使用 Mock 数据")
+                        return self._get_mock_response(skill_id)
+                    return {"code": 500, "message": "API 响应解析失败", "data": {"records": [], "total": 0}}
+
+            except requests.exceptions.Timeout as e:
+                duration = time.time() - start_time
+                logger.log_warning(f"[API] [{skill_id}] 请求超时: attempt={attempt + 1}/{max_retries + 1}, "
+                                   f"duration_ms={round(duration*1000, 2)}, url={url}")
+                if attempt < max_retries:
+                    logger.log_info(f"[API] [{skill_id}] {retry_delay}s 后重试...")
+                    time.sleep(retry_delay)
+                    continue
+                logger.log_api_response(skill_id, None, duration, False, "Timeout")
+                logger.log_error(f"[API] [{skill_id}] 请求超时（重试耗尽）: {str(e)}, "
+                                f"duration_ms={round(duration*1000, 2)}, url={url}")
+
                 if USE_MOCK:
-                    logger.log_warning(f"[API] [{skill_id}] JSON 解析失败，降级使用 Mock 数据")
+                    logger.log_warning(f"[API] [{skill_id}] 请求超时，降级使用 Mock 数据")
                     return self._get_mock_response(skill_id)
-                return {"code": 500, "message": "API 响应解析失败", "data": {"records": [], "total": 0}}
-                
-        except requests.exceptions.Timeout as e:
-            duration = time.time() - start_time
-            logger.log_api_response(skill_id, None, duration, False, "Timeout")
-            logger.log_error(f"[API] [{skill_id}] 请求超时: {str(e)}, duration_ms={round(duration*1000, 2)}, url={url}")
-            
-            if USE_MOCK:
-                logger.log_warning(f"[API] [{skill_id}] 请求超时，降级使用 Mock 数据")
-                return self._get_mock_response(skill_id)
-            return {"code": 504, "message": "API 请求超时", "data": {"records": [], "total": 0}}
-            
-        except requests.exceptions.SSLError as e:
-            logger.log_api_response(skill_id, None, 0, False, "SSL Error")
-            logger.log_error(f"[API] [{skill_id}] SSL 连接失败: {str(e)}, url={url}, 请检查网络环境或配置代理")
-            
-            if USE_MOCK:
-                logger.log_warning(f"[API] [{skill_id}] SSL 连接失败，降级使用 Mock 数据")
-                return self._get_mock_response(skill_id)
-            return {"code": 500, "message": "SSL 连接失败", "data": {"records": [], "total": 0}}
-            
-        except requests.exceptions.ConnectionError as e:
-            logger.log_api_response(skill_id, None, 0, False, "Connection Error")
-            logger.log_error(f"[API] [{skill_id}] 网络连接失败: {str(e)}, url={url}, 请检查网络连通性或配置代理")
-            
-            if USE_MOCK:
-                logger.log_warning(f"[API] [{skill_id}] 网络连接失败，降级使用 Mock 数据")
-                return self._get_mock_response(skill_id)
-            return {"code": 503, "message": "网络连接失败", "data": {"records": [], "total": 0}}
-            
-        except requests.exceptions.RequestException as e:
-            duration = time.time() - start_time
-            logger.log_api_response(skill_id, None, duration, False, str(e))
-            logger.log_error(f"[API] [{skill_id}] 请求异常: {str(e)}, duration_ms={round(duration*1000, 2)}, url={url}")
-            
-            if USE_MOCK:
-                logger.log_warning(f"[API] [{skill_id}] 请求异常，降级使用 Mock 数据")
-                return self._get_mock_response(skill_id)
-            return {"code": 500, "message": f"API 请求失败: {str(e)}", "data": {"records": [], "total": 0}}
-            
-        except Exception as e:
-            logger.log_api_response(skill_id, None, 0, False, str(e))
-            logger.log_error(f"[API] [{skill_id}] 未知异常: {str(e)}, url={url}")
-            
-            if USE_MOCK:
-                logger.log_warning(f"[API] [{skill_id}] 未知异常，降级使用 Mock 数据")
-                return self._get_mock_response(skill_id)
-            return {"code": 500, "message": f"API 处理异常: {str(e)}", "data": {"records": [], "total": 0}}
+                return {"code": 504, "message": "API 请求超时（已重试）", "data": {"records": [], "total": 0}}
+
+            except requests.exceptions.SSLError as e:
+                logger.log_api_response(skill_id, None, 0, False, "SSL Error")
+                logger.log_error(f"[API] [{skill_id}] SSL 连接失败: {str(e)}, url={url}, 请检查网络环境或配置代理")
+
+                if USE_MOCK:
+                    logger.log_warning(f"[API] [{skill_id}] SSL 连接失败，降级使用 Mock 数据")
+                    return self._get_mock_response(skill_id)
+                return {"code": 500, "message": "SSL 连接失败", "data": {"records": [], "total": 0}}
+
+            except requests.exceptions.ConnectionError as e:
+                logger.log_warning(f"[API] [{skill_id}] 网络连接失败: attempt={attempt + 1}/{max_retries + 1}, url={url}")
+                if attempt < max_retries:
+                    logger.log_info(f"[API] [{skill_id}] {retry_delay}s 后重试...")
+                    time.sleep(retry_delay)
+                    continue
+                logger.log_api_response(skill_id, None, 0, False, "Connection Error")
+                logger.log_error(f"[API] [{skill_id}] 网络连接失败（重试耗尽）: {str(e)}, url={url}, 请检查网络连通性或配置代理")
+
+                if USE_MOCK:
+                    logger.log_warning(f"[API] [{skill_id}] 网络连接失败，降级使用 Mock 数据")
+                    return self._get_mock_response(skill_id)
+                return {"code": 503, "message": "网络连接失败（已重试）", "data": {"records": [], "total": 0}}
+
+            except requests.exceptions.RequestException as e:
+                duration = time.time() - start_time
+                logger.log_api_response(skill_id, None, duration, False, str(e))
+                logger.log_error(f"[API] [{skill_id}] 请求异常: {str(e)}, duration_ms={round(duration*1000, 2)}, url={url}")
+
+                if USE_MOCK:
+                    logger.log_warning(f"[API] [{skill_id}] 请求异常，降级使用 Mock 数据")
+                    return self._get_mock_response(skill_id)
+                return {"code": 500, "message": f"API 请求失败: {str(e)}", "data": {"records": [], "total": 0}}
+
+            except Exception as e:
+                logger.log_api_response(skill_id, None, 0, False, str(e))
+                logger.log_error(f"[API] [{skill_id}] 未知异常: {str(e)}, url={url}")
+
+                if USE_MOCK:
+                    logger.log_warning(f"[API] [{skill_id}] 未知异常，降级使用 Mock 数据")
+                    return self._get_mock_response(skill_id)
+                return {"code": 500, "message": f"API 处理异常: {str(e)}", "data": {"records": [], "total": 0}}
+
+        return {"code": 500, "message": "API 请求失败", "data": {"records": [], "total": 0}}
     
     def query_server(self, **params) -> dict:
         return self._request('cmdb-server-query', params)
