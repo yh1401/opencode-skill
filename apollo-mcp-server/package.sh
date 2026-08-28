@@ -105,6 +105,16 @@ APOLLO_ENV=PRO
 # 遍历可用套总预算（秒）：超过则提前终止，避免多套全超时累加。默认 20
 # APOLLO_TRAVERSAL_BUDGET=20
 
+# ================================================
+# Host 探活（探测各套 Apollo 是否可用，标记后遍历优先可用套）
+# ================================================
+
+# 是否开启探活。默认 true（关闭后 host_list 不探活，遍历回退原全量逻辑）
+# APOLLO_HOST_PROBE_ENABLED=true
+
+# 探活结果缓存秒数（60s 内复用，避免每次 host_list 重复探活）。默认 60
+# APOLLO_HOST_PROBE_TTL=60
+
 # 日志级别：DEBUG/INFO/WARNING/ERROR
 LOG_LEVEL=INFO
 

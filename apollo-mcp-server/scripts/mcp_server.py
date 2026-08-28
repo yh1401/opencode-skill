@@ -297,6 +297,10 @@ class ConfigClient:
         self.max_retries = int(os.environ.get('APOLLO_MAX_RETRIES', '1'))     # host_list 单请求失败重试次数（apps/config 内部固定 0）
         self.retry_delay = float(os.environ.get('APOLLO_RETRY_DELAY', '1'))   # 重试间隔（秒）
         self._traversal_budget = int(os.environ.get('APOLLO_TRAVERSAL_BUDGET', '20'))  # 遍历可用套总预算（秒）
+        # ---- Host 探活（探测各套 Apollo 是否可用，标记后遍历时优先可用套，避免无效超时等待）----
+        self._host_probe_cache: dict = {}           # {host_id: {available, app_count, error, checked_at}}
+        self._host_probe_ttl = float(os.environ.get('APOLLO_HOST_PROBE_TTL', '60'))   # 探活结果缓存秒数（60s 内复用）
+        self._host_probe_enabled = os.environ.get('APOLLO_HOST_PROBE_ENABLED', 'true').lower() != 'false'
 
     @staticmethod
     def decrypt_token(encrypted_token: str, session_id: str) -> str:
@@ -371,30 +375,109 @@ class ConfigClient:
         logger.info(f"[ConfigClient] 组装远程配置: 环境={env_key}, OpenAPI={host}, 有Token={bool(raw_token)}, 来源={target.get('name', '')}")
         return configs
 
+    def _probe_host_available(self, host_id, name: str) -> dict:
+        """探活单套 Apollo：调用 fetch_proxy_apps（轻量、6s 0 重试快速失败），判定是否可用。
+
+        返回 {available, app_count, error}：available=True 表示该套代理接口可达且能正常返回应用列表。
+        探活目的：标记后遍历时优先走可用套，跳过超时/空响应套，省去无效等待。
+        """
+        try:
+            result = self.fetch_proxy_apps(host_id)
+            if str(result.get('code')) in ('200', 'success'):
+                data = result.get('data') or []
+                apps = (data.get('items') or []) if isinstance(data, dict) else data
+                count = len(apps) if isinstance(apps, list) else 0
+                logger.info(f"[ConfigClient] 探活套 {host_id}({name}): 可用, appCount={count}")
+                return {"available": True, "app_count": count, "error": ""}
+            logger.warning(f"[ConfigClient] 探活套 {host_id}({name}): 不可用(业务错误), message={result.get('message', '')}")
+            return {"available": False, "app_count": 0, "error": f"业务错误: {result.get('message', '未知')}"}
+        except Exception as e:
+            logger.warning(f"[ConfigClient] 探活套 {host_id}({name}): 不可用(异常), {type(e).__name__}: {e}")
+            return {"available": False, "app_count": 0, "error": f"{type(e).__name__}: {e}"}
+
+    def _probe_hosts_concurrent(self, host_list: list) -> dict:
+        """并发探活所有 Apollo 套，返回 {host_id: probe_result}。
+
+        利用 _host_probe_ttl 缓存：60s 内已探活过的套直接复用结果，不发请求；
+        未缓存/过期的套用线程池并发探活（N 套并发≈单套耗时，而非串行 N×6s）。
+        关闭探活（APOLLO_HOST_PROBE_ENABLED=false）时返回空 dict，遍历回退原全量逻辑。
+        """
+        if not self._host_probe_enabled:
+            return {}
+        now = time.time()
+        result: dict = {}
+        to_probe: list = []
+        for item in host_list:
+            hid = item.get('id')
+            if hid is None:
+                continue
+            cached = self._host_probe_cache.get(hid)
+            if cached and (now - cached.get('checked_at', 0)) < self._host_probe_ttl:
+                result[hid] = cached  # 命中缓存，复用
+            else:
+                to_probe.append(item)
+
+        if to_probe:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            workers = min(8, len(to_probe))
+            logger.info(f"[ConfigClient] 并发探活 {len(to_probe)} 套 Apollo（workers={workers}），"
+                        f"命中缓存 {len(result)} 套")
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = {
+                    executor.submit(self._probe_host_available, item.get('id'), item.get('name', '')): item.get('id')
+                    for item in to_probe
+                }
+                for future in as_completed(futures):
+                    hid = futures[future]
+                    try:
+                        probe = future.result()
+                    except Exception as e:
+                        probe = {"available": False, "app_count": 0, "error": f"{type(e).__name__}: {e}"}
+                    probe['checked_at'] = now
+                    self._host_probe_cache[hid] = probe  # 更新缓存
+                    result[hid] = probe
+        elif result:
+            logger.info(f"[ConfigClient] 探活全部命中缓存（{len(result)} 套），跳过请求")
+        return result
+
     def fetch_host_list(self) -> list:
-        """实时调用第三方接口查询所有可用的 Apollo 服务实例列表（供 apollo_host_list 每次调用时查询，不做缓存）。
+        """实时调用第三方接口查询所有可用的 Apollo 服务实例列表，并并发探活标记可用性。
 
         返回的 apolloHostId（即第三方记录 id）作为查询链路的入口：
         哪套Apollo(apolloHostId) → 环境(env) → 应用(appId) → 集群(clusterName) → Namespace(namespaceName) → 配置项(key)
+
+        探活：对每套并发调用应用列表接口探活，结果带 available/appCount 标记并缓存（默认 60s），
+        供后续遍历优先走可用套、跳过不可用套，省去无效超时等待。
         """
         host_list = self._fetch_host_list_raw()
         default_id = self._select_target_host(host_list).get('id')
         self._default_host_id = default_id  # 顺带缓存默认套，避免 query_hosts 额外请求
-        logger.info(f"[ConfigClient] 实时查询到 {len(host_list)} 条 Apollo Host 记录")
+        logger.info(f"[ConfigClient] 实时查询到 {len(host_list)} 条 Apollo Host 记录，开始探活标记可用性")
 
-        return [
-            {
-                'apolloHostId': item.get('id'),
-                'id': item.get('id'),
+        # 并发探活（命中缓存则跳过请求），结果用于 host 字段标记 + 后续遍历排序
+        probe_map = self._probe_hosts_concurrent(host_list)
+
+        hosts = []
+        for item in host_list:
+            hid = item.get('id')
+            probe = probe_map.get(hid, {})
+            hosts.append({
+                'apolloHostId': hid,
+                'id': hid,
                 'name': item.get('name', ''),
                 'host': item.get('host', ''),
                 'has_token': bool(self.decrypt_token(item.get('token', ''), self.session_id)),
                 'secondProductId': item.get('secondProductId', []),
                 'user': item.get('user', ''),
-                'is_default': item.get('id') == default_id,
-            }
-            for item in host_list
-        ]
+                'is_default': hid == default_id,
+                # 探活标记：available=true 表示该套代理接口可达、可正常查询
+                'available': probe.get('available', None),
+                'appCount': probe.get('app_count', None),
+                'availableDetail': probe.get('error', '') if not probe.get('available') else '',
+            })
+        avail_count = sum(1 for h in hosts if h.get('available'))
+        logger.info(f"[ConfigClient] 探活完成: 可用 {avail_count}/{len(hosts)} 套")
+        return hosts
 
     def get_default_host_id(self) -> Optional[int]:
         """获取默认 Apollo Host 的 id（作为 apolloHostId 兜底，配置查询/应用列表缺省时使用）"""
@@ -478,10 +561,13 @@ class ConfigClient:
         return resp.json()
 
     def fetch_proxy_apps_first_available(self) -> tuple:
-        """不带 apolloHostId 时遍历可用套：默认套优先，按序尝试各套，返回第一个能成功获取应用列表的套。
+        """不带 apolloHostId 时遍历可用套：默认套优先 + 探活可用套优先，返回第一个能成功获取应用列表的套。
 
         用于"先出应用列表、用户选择后再查配置"的交互引导：
         默认套（如 15）不可用时自动切换到其它可用套，避免列表查询整体失败。
+
+        探活优化：遍历前并发探活各套（命中缓存则跳过请求），按 available=true 优先排序，
+        不可用套（超时/空）排最后，受总预算限制基本不会被试到，省去无效超时等待。
 
         返回: (proxy_result, used_host_id, host_name)
         - proxy_result 顶层附加 usedHostId / hostName 字段，标注实际使用的套
@@ -489,8 +575,18 @@ class ConfigClient:
         """
         host_list = self._fetch_host_list_raw()
         default_id = self._select_target_host(host_list).get('id')
-        # 默认套优先，其余按第三方返回顺序
-        ordered = sorted(host_list, key=lambda item: 0 if item.get('id') == default_id else 1)
+        probe_map = self._probe_hosts_concurrent(host_list)  # 探活（命中缓存则不发请求）
+        # 排序：探活可用优先（最重要，避免在不可用套上等待）→ 默认套优先 → 原顺序
+        ordered = sorted(
+            host_list,
+            key=lambda item: (
+                0 if probe_map.get(item.get('id'), {}).get('available') else 1,
+                0 if item.get('id') == default_id else 1,
+            )
+        )
+        skipped_unavail = sum(1 for it in ordered if probe_map.get(it.get('id'), {}).get('available') is False)
+        if skipped_unavail:
+            logger.info(f"[ConfigClient] 遍历应用列表：探活标记 {skipped_unavail} 套不可用，已排到最后")
         errors = []
         budget_start = time.time()
         budget_sec = self._traversal_budget   # 遍历总预算（秒），超此提前终止
@@ -538,8 +634,11 @@ class ConfigClient:
     def fetch_proxy_namespace_first_match(self, env: str, app_id: str,
                                           cluster_name: str = "default",
                                           namespace_name: str = "application") -> tuple:
-        """不带 apolloHostId 时遍历可用套，按 appId 定位所在套：默认套优先，按序尝试各套，
+        """不带 apolloHostId 时遍历可用套，按 appId 定位所在套：默认套优先 + 探活可用套优先，
         返回第一个能成功查询到该应用配置的套（"只传 appId 也能自动定位"）。
+
+        探活优化：遍历前并发探活各套（命中缓存则跳过请求），按 available=true 优先排序，
+        不可用套排最后，省去在不可用套上的无效超时等待。
 
         返回: (proxy_result, used_host_id, host_name)
         - proxy_result 顶层附加 usedHostId / hostName 字段，标注实际使用的套
@@ -547,8 +646,18 @@ class ConfigClient:
         """
         host_list = self._fetch_host_list_raw()
         default_id = self._select_target_host(host_list).get('id')
-        # 默认套优先，其余按第三方返回顺序
-        ordered = sorted(host_list, key=lambda item: 0 if item.get('id') == default_id else 1)
+        probe_map = self._probe_hosts_concurrent(host_list)  # 探活（命中缓存则不发请求）
+        # 排序：探活可用优先（最重要，避免在不可用套上等待）→ 默认套优先 → 原顺序
+        ordered = sorted(
+            host_list,
+            key=lambda item: (
+                0 if probe_map.get(item.get('id'), {}).get('available') else 1,
+                0 if item.get('id') == default_id else 1,
+            )
+        )
+        skipped_unavail = sum(1 for it in ordered if probe_map.get(it.get('id'), {}).get('available') is False)
+        if skipped_unavail:
+            logger.info(f"[ConfigClient] 遍历应用配置：探活标记 {skipped_unavail} 套不可用，已排到最后")
         errors = []
         budget_start = time.time()
         budget_sec = self._traversal_budget   # 遍历总预算（秒），超此提前终止

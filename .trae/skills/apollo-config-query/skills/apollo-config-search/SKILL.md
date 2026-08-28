@@ -75,12 +75,12 @@ author: Skill Agent Team
 
 ### 工具 2: apollo_host_list
 
-实时查询所有可用的 Apollo 服务实例列表（多套），是查询链路第一步（确定哪套 Apollo）。
+实时查询所有可用的 Apollo 服务实例列表（多套），并**并发探活标记每套是否可用**，是查询链路第一步（确定哪套 Apollo）。
 
 ```json
 {
   "name": "apollo_host_list",
-  "description": "实时查询所有可用的 Apollo 服务列表（apolloHostId、服务名称、地址、Token 是否有、所属产品线、是否默认），每次调用都会实时获取，用于确定查询哪一套 Apollo（查询链路第一步）。",
+  "description": "实时查询所有可用的 Apollo 服务列表（apolloHostId、服务名称、地址、Token 是否有、所属产品线、是否默认、是否可用 available），每次调用都会实时获取并并发探活各套可用性（结果缓存 60s）。available=true 表示该套代理接口可达、可正常查询配置/应用；available=false 表示超时或空响应，后续查询遍历时会自动跳过不可用套、优先走可用套。用于确定查询哪一套 Apollo（查询链路第一步）。",
   "inputSchema": {
     "type": "object",
     "properties": {}
@@ -136,14 +136,18 @@ author: Skill Agent Team
 
 **未指定 Apollo 服务实例**：
 ```
-当前有 N 套可用的 Apollo 服务，例如：
-- 天翼云眼贵州测试Apollo-亿讯专用（贵州）
-- 天翼云眼广州4多AZ生产Apollo（广州4生产）
-- 3.0 P2P 易联家Apollo（P2P）
+当前有 N 套 Apollo 服务（已探活，M 套可用）：
 
-请告诉我要查询哪一套（如"贵州"、"广州4"、"P2P"），
-我会将对应的 apolloHostId 带入配置/应用查询；
-或直接说"默认"使用默认 Apollo 继续。
+| 序号 | 服务名称 | 是否可用 | 备注 |
+|------|---------|---------|------|
+| 1 | 天翼云眼贵州测试Apollo-亿讯专用 | ✅ 可用 | 默认套 |
+| 2 | 天翼云眼广州4多AZ生产Apollo | ❌ 不可用 | 超时/空响应 |
+| 3 | 3.0 P2P 易联家Apollo | ✅ 可用 | |
+
+请告诉我要查询哪一套（如"贵州"、"P2P"），我会将对应的 apolloHostId 带入配置/应用查询；
+建议优先选择"✅ 可用"的套；或直接说"默认"使用默认 Apollo 继续。
+
+（提示：available=false 的套即使指定也可能超时失败；这里的"环境"指哪一套 Apollo 服务实例）
 ```
 
 ## 参数映射规则

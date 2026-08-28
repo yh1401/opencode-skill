@@ -27,7 +27,7 @@ author: Skill Agent Team
 
 **业务处理**：参数映射、MCP 工具调用、输出格式化等业务逻辑由子技能 [apollo-config-search/SKILL.md](skills/apollo-config-search/SKILL.md) 负责。
 
-**MCP 服务**：`apollo-mcp-server` 提供 3 个工具：`apollo_config_query`、`apollo_host_list`、`apollo_app_list`
+**MCP 服务**：`apollo-mcp-server` 提供 3 个工具：`apollo_config_query`、`apollo_host_list`（并发探活标记每套 available）、`apollo_app_list`
 
 ### Apollo 服务实例（多套）与应用环境（ENV）的区别
 
@@ -176,16 +176,18 @@ author: Skill Agent Team
 #### 0. Apollo 服务实例列表（多套）
 
 ```
-已为您实时查询到当前 N 套可用的 Apollo 服务实例（多套，按产品线/地域划分）：
+已为您实时查询并探活当前 N 套 Apollo 服务实例（多套，按产品线/地域划分），其中 M 套可用：
 
-| 序号 | 服务名称 | 地址 | Token | 是否默认 |
-|------|---------|------|-------|---------|
-| 1 | 天翼云眼贵州测试Apollo-亿讯专用 | https://... | 有 | 是 |
-| 2 | 天翼云眼广州4多AZ生产Apollo | https://... | 有 | 否 |
+| 序号 | 服务名称 | 地址 | Token | 是否可用 | 是否默认 |
+|------|---------|------|-------|---------|---------|
+| 1 | 天翼云眼贵州测试Apollo-亿讯专用 | https://... | 有 | ✅ 可用 | 是 |
+| 2 | 天翼云眼广州4多AZ生产Apollo | https://... | 有 | ❌ 不可用 | 否 |
+| 3 | 3.0 P2P 易联家Apollo | https://... | 有 | ✅ 可用 | 否 |
 ...
 
 请告诉我要查询哪一套（如"贵州"、"广州4"、"P2P"），
 我将把对应的 apolloHostId 带入后续的配置/应用查询；
+建议优先选择"✅ 可用"的套（不可用套即使指定也可能超时失败）；
 或直接说"默认"，使用默认 Apollo 继续。
 
 （提示：这里的"环境"指哪一套 Apollo 服务实例；如果您说的是生产/DEV 等应用环境，直接说环境名即可）

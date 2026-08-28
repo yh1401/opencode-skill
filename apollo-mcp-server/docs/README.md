@@ -113,6 +113,8 @@ python3 scripts/mcp_server.py --port 8062
 | `APOLLO_HOST_SESSION_ID` | 否 | 内置默认值 | 第三方鉴权 sessionId（32 位），同时是 token 解密密钥 |
 | `APOLLO_HOST_NAME` | 否 | - | 默认 Apollo 套的模糊过滤名称（多套中指定一套，不填取第一条） |
 | `CONFIG_SERVICE_REFRESH_SEC` | 否 | `60` | 第三方接口配置刷新间隔（秒） |
+| `APOLLO_HOST_PROBE_ENABLED` | 否 | `true` | 是否开启 Host 探活（关闭后 host_list 不探活，遍历回退原全量逻辑） |
+| `APOLLO_HOST_PROBE_TTL` | 否 | `60` | 探活结果缓存秒数（60s 内复用，避免每次重复探活） |
 | `LOG_LEVEL` | 否 | `INFO` | 日志级别：DEBUG/INFO/WARNING/ERROR |
 
 ---
@@ -183,11 +185,11 @@ python3 scripts/mcp_server.py --port 8062
 
 ### Tool: `apollo_host_list`
 
-实时查询所有可用的 Apollo 服务列表（查询链路第一步，用于确定哪套 Apollo）。
+实时查询所有可用的 Apollo 服务列表（查询链路第一步，用于确定哪套 Apollo），并**并发探活标记每套可用性**。
 
 **参数**：无
 
-**返回要点**：每条记录含 `apolloHostId`（即第三方记录 `id`）、`name`、`host`、`has_token`、`secondProductId`、`user`、`is_default`。
+**返回要点**：每条记录含 `apolloHostId`（即第三方记录 `id`）、`name`、`host`、`has_token`、`secondProductId`、`user`、`is_default`、`available`（true=该套代理接口可达可查询，false=超时/空响应）、`appCount`（探活时获取的应用数）、`availableDetail`（不可用时的错误说明）。探活结果缓存 60s（`APOLLO_HOST_PROBE_TTL`），后续 `apollo_app_list`/`apollo_config_query` 遍历时自动跳过 `available=false` 的套、优先走可用套。
 
 ### Tool: `apollo_config_query`
 
