@@ -26,6 +26,7 @@ import time
 import threading
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 _root_dir = os.path.dirname(_script_dir)
@@ -301,6 +302,19 @@ class ConfigClient:
         self._host_probe_cache: dict = {}           # {host_id: {available, app_count, error, checked_at}}
         self._host_probe_ttl = float(os.environ.get('APOLLO_HOST_PROBE_TTL', '60'))   # 探活结果缓存秒数（60s 内复用）
         self._host_probe_enabled = os.environ.get('APOLLO_HOST_PROBE_ENABLED', 'true').lower() != 'false'
+        # ---- 全局搜索缓存（减少重复拉取同一 app 的配置）----
+        # app 列表缓存：{host_id: (data, ts)}，5 分钟复用
+        self._apps_cache: dict = {}
+        self._apps_cache_ttl = float(os.environ.get('APOLLO_APPS_CACHE_TTL', '300'))
+        # config 结果缓存：{(host_id, app_id, env, ns): (data, ts)}，2 分钟复用
+        self._config_cache: dict = {}
+        self._config_cache_ttl = float(os.environ.get('APOLLO_CONFIG_CACHE_TTL', '120'))
+        # 全局搜索并行度 & 总预算
+        self._global_search_workers = int(os.environ.get('APOLLO_GLOBAL_SEARCH_WORKERS', '8'))
+        self._global_search_budget = int(os.environ.get('APOLLO_GLOBAL_SEARCH_BUDGET', '60'))
+        self._global_search_max_ns = int(os.environ.get('APOLLO_GLOBAL_SEARCH_MAX_NS', '5'))  # 每个 app 扫几个 namespace
+        # 搜索过程结果去重
+        self._search_cache_lock = threading.Lock()
 
     @staticmethod
     def decrypt_token(encrypted_token: str, session_id: str) -> str:
@@ -682,6 +696,253 @@ class ConfigClient:
         detail = '; '.join(errors) if errors else '无可用套'
         raise RuntimeError(f"遍历所有 Apollo 套均未找到应用 {app_id} 的配置: {detail}")
 
+    # ========================================================================
+    # 缓存层（全局搜索时避免重复拉取同一 host 的 app 列表、同一 app 的 config）
+    # ========================================================================
+
+    def _cached_fetch_apps(self, host_id) -> Optional[List[dict]]:
+        """带缓存的应用列表查询：缓存命中直接返回，未命中请求后存入缓存。"""
+        now = time.time()
+        with self._search_cache_lock:
+            cached = self._apps_cache.get(host_id)
+            if cached and (now - cached[1]) < self._apps_cache_ttl:
+                logger.debug(f"[ConfigClient] apps_cache 命中: host_id={host_id}, apps={len(cached[0])}")
+                return cached[0]
+        # 未命中：请求
+        try:
+            result = self.fetch_proxy_apps(host_id)
+            data = result.get('data') or []
+            apps = (data.get('items') or []) if isinstance(data, dict) else data
+            if str(result.get('code')) in ('200', 'success') and isinstance(apps, list):
+                with self._search_cache_lock:
+                    self._apps_cache[host_id] = (apps, time.time())
+                return apps
+        except Exception as e:
+            logger.debug(f"[ConfigClient] 全局搜索 apps 查询失败: host_id={host_id}, error={e}")
+        return None
+
+    def _cached_fetch_namespace(self, host_id, env, app_id, ns_name) -> Optional[Dict]:
+        """带缓存的 Namespace 配置查询：缓存命中直接返回，未命中请求后存入缓存。"""
+        cache_key = (host_id, app_id, env, ns_name)
+        now = time.time()
+        with self._search_cache_lock:
+            cached = self._config_cache.get(cache_key)
+            if cached and (now - cached[1]) < self._config_cache_ttl:
+                logger.debug(f"[ConfigClient] config_cache 命中: {cache_key}")
+                return cached[0]
+        try:
+            result = self.fetch_proxy_namespace(host_id, env, app_id, 'default', ns_name)
+            if str(result.get('code')) in ('200', 'success'):
+                data = result.get('data') or {}
+                configurations = data.get('configurations') or {}
+                with self._search_cache_lock:
+                    self._config_cache[cache_key] = (configurations, time.time())
+                return configurations
+        except Exception as e:
+            logger.debug(f"[ConfigClient] 全局搜索 config 查询失败: {cache_key}, error={e}")
+        return None
+
+    def _clear_search_cache(self):
+        """清空全局搜索缓存（可手动触发）"""
+        with self._search_cache_lock:
+            self._apps_cache.clear()
+            self._config_cache.clear()
+            self._host_probe_cache.clear()
+        logger.info("[ConfigClient] 搜索缓存已清空")
+
+    # ========================================================================
+    # 全局搜索核心（并发遍历所有可用 host 的所有 app，按 keyword 匹配）
+    # ========================================================================
+
+    def fetch_global_search(self, keyword: str, search_field: str = "both",
+                            env: str = "PRO", max_results: int = 100,
+                            namespace_name: str = "application") -> dict:
+        """全局配置搜索：并发遍历所有可用 Apollo 套的所有应用，按 keyword 匹配 key 或 value。
+
+        解决的场景："哪些应用的配置用到了某个地址/关键词"——这是日常排障/比对的高频需求，
+        原来需要逐个应用调用 apollo_config_query（700 应用 × 6s = 小时级），
+        现在由 MCP 内部用 ThreadPoolExecutor 并行完成，单次调用即可返回结果。
+
+        策略：
+        1. 并发遍历可用 host（按探活结果排序，跳过不可用套）
+        2. 每个 host 并发遍历所有 app 的指定 namespace 配置
+        3. 对每个配置项按 keyword 匹配 key 或 value（search_field 控制）
+        4. 总预算 self._global_search_budget 秒，超时返回已查到的部分结果 + 未完成标记
+        5. 结果带 host_id/host_name/app_id/namespace 标注，脱敏后返回
+
+        返回结构：
+        {
+          "code": 200,
+          "message": "success",
+          "data": {
+            "keyword": "...", "searchField": "...", "env": "...", "namespace": "...",
+            "summary": {"totalScanned": N, "matchedCount": M, "elapsedMs": T},
+            "matches": [{"apolloHostId":..,"hostName":..,"appId":..,"appName":..,"namespaceName":..,"key":..,"value":..}],
+            "partial": true/false,   // 是否超预算提前终止
+            "unfinishedApps": [...]   // 超预算时未完成的应用（仅 sample，最多 20 条）
+          }
+        }
+        """
+        start = time.time()
+        kw = (keyword or '').strip().lower()
+        if not kw:
+            raise ValueError("keyword 不能为空")
+
+        # 1. 取 host 列表 + 探活排序
+        host_list = self._fetch_host_list_raw()
+        default_id = self._select_target_host(host_list).get('id')
+        probe_map = self._probe_hosts_concurrent(host_list)
+        ordered_hosts = sorted(
+            host_list,
+            key=lambda item: (
+                0 if probe_map.get(item.get('id'), {}).get('available') is not False else 1,
+                0 if item.get('id') == default_id else 1,
+            )
+        )
+        # 只保留探活可用或未探活的套（跳过明确不可用的）
+        active_hosts = [h for h in ordered_hosts if probe_map.get(h.get('id'), {}).get('available') is not False]
+        if not active_hosts:
+            active_hosts = ordered_hosts  # 全部不可用时退化为尝试所有
+
+        budget_sec = self._global_search_budget
+        budget_start = time.time()
+        matches: List[dict] = []
+        unfinished_apps: List[str] = []
+        app_id_set: set = set()  # 去重同一 appId
+        scanned_count = 0
+        max_ns = self._global_search_max_ns
+
+        # 2. 并发遍历：每个 host 内遍历 apps，每个 app 查 namespace 配置
+        def _scan_host(host_info) -> Tuple[List[dict], List[str], int]:
+            """扫描单个 host 下所有应用，返回 (matches, unfinished_apps, scanned_count)"""
+            hid = host_info.get('id')
+            hname = host_info.get('name', '')
+            local_matches: List[dict] = []
+            local_unfinished: List[str] = []
+            local_scanned = 0
+
+            # 预算检查
+            if time.time() - budget_start > budget_sec:
+                local_unfinished.append(f"host_{hid}_{hname}")
+                return local_matches, local_unfinished, local_scanned
+
+            apps = self._cached_fetch_apps(hid)
+            if not apps:
+                return local_matches, local_unfinished, local_scanned
+
+            for app in apps:
+                # 再次检查预算
+                if time.time() - budget_start > budget_sec:
+                    local_unfinished.append(f"{hid}/{app.get('appId')}")
+                    break
+
+                app_id = app.get('appId') or app.get('appid', '')
+                app_name = app.get('name', '') or app_id
+                if not app_id or app_id in app_id_set:
+                    continue
+                app_id_set.add(app_id)
+
+                # 扫描 namespace（默认 application，外加常见的几个）
+                ns_list = [namespace_name]
+                if namespace_name == 'application':
+                    # 同时扫 datasource/redis 等常见 namespace（最多 max_ns 个）
+                    extras = ['datasource', 'redis', 'common', 'logging']
+                    for ns in extras:
+                        if len(ns_list) >= max_ns:
+                            break
+                        if ns not in ns_list:
+                            ns_list.append(ns)
+
+                for ns in ns_list:
+                    if time.time() - budget_start > budget_sec:
+                        break
+                    configs = self._cached_fetch_namespace(hid, env, app_id, ns)
+                    if not configs:
+                        continue
+                    local_scanned += 1
+                    for k, v in configs.items():
+                        k_lower = str(k).lower()
+                        v_lower = str(v).lower()
+                        hit = False
+                        if search_field in ('key', 'both') and kw in k_lower:
+                            hit = True
+                        if not hit and search_field in ('value', 'both') and kw in v_lower:
+                            hit = True
+                        if hit:
+                            local_matches.append({
+                                'apolloHostId': hid,
+                                'hostName': hname,
+                                'appId': app_id,
+                                'appName': app_name,
+                                'namespaceName': ns,
+                                'key': k,
+                                'value': v,
+                            })
+            return local_matches, local_unfinished, local_scanned
+
+        # 3. 并发执行各 host 扫描（max_workers 线程池）
+        actual_workers = min(self._global_search_workers, max(len(active_hosts), 1))
+        logger.info(f"[ConfigClient] 开始全局搜索: keyword='{kw}', field={search_field}, env={env}, "
+                    f"hosts={len(active_hosts)}, workers={actual_workers}, budget={budget_sec}s")
+
+        with ThreadPoolExecutor(max_workers=actual_workers) as pool:
+            futures = {pool.submit(_scan_host, h): h for h in active_hosts}
+            for fut in as_completed(futures):
+                try:
+                    m, uf, sc = fut.result(timeout=budget_sec)
+                    matches.extend(m)
+                    unfinished_apps.extend(uf)
+                    scanned_count += sc
+                except Exception as e:
+                    logger.debug(f"[ConfigClient] 全局搜索 host 扫描异常: {e}")
+
+        elapsed_ms = round((time.time() - start) * 1000)
+        partial = (time.time() - budget_start) > budget_sec or len(unfinished_apps) > 0
+
+        # 应用脱敏（与单配置查询一致，直接调用模块顶层函数）
+        masked_count = 0
+        for m in matches:
+            if _is_sensitive_key(m['key']):
+                m['value'] = _mask_value(m['value'])
+                m['masked'] = True
+                masked_count += 1
+
+        # 截断结果（按 max_results 限制）
+        truncated = False
+        if len(matches) > max_results:
+            matches = matches[:max_results]
+            truncated = True
+
+        # 采样 unfinished_apps 避免过长
+        if len(unfinished_apps) > 20:
+            unfinished_apps = unfinished_apps[:20]
+            unfinished_apps.append(f"... 另有 {len(unfinished_apps) - 20} 项未完成")
+
+        logger.info(f"[ConfigClient] 全局搜索完成: keyword='{kw}', matches={len(matches)}, "
+                    f"scanned_apps={scanned_count}, elapsed={elapsed_ms}ms, partial={partial}")
+
+        result_data = {
+            "keyword": keyword,
+            "searchField": search_field,
+            "env": env,
+            "namespace": namespace_name,
+            "summary": {
+                "hostCount": len(active_hosts),
+                "appCount": len(app_id_set),
+                "scannedApps": scanned_count,
+                "matchedCount": len(matches),
+                "maskedCount": masked_count,
+                "elapsedMs": elapsed_ms,
+            },
+            "matches": matches,
+            "partial": partial,
+            "truncated": truncated,
+        }
+        if unfinished_apps:
+            result_data["unfinishedApps"] = unfinished_apps
+
+        return {"code": 200, "message": "success", "data": result_data}
+
     def _load_local_template(self) -> dict:
         """加载本地模板 api_endpoints.json（作为组装远程配置的基底）"""
         config_path = os.path.join(_config_dir, 'api_endpoints.json')
@@ -1005,6 +1266,116 @@ class ApolloAPIClient:
         logger.warning(f"[apollo-app-list] 代理返回业务错误: code={err_code}, message={err_msg}")
         return proxy_result or {"code": 500, "message": "代理接口返回为空", "data": {}}
 
+    def query_global_search(self, keyword: str, search_field: str = "both",
+                            env: str = "PRO", max_results: int = 100,
+                            namespace_name: str = "application") -> dict:
+        """全局配置搜索（解决"哪些应用的配置用到了某个地址/关键词"的高频排障需求）。
+
+        自动并发遍历所有可用 Apollo 套的所有应用（线程池并行），按 keyword 匹配 key 或 value。
+        单次调用返回结果——无需 agent 逐个应用调 apollo_config_query（700+ 应用原来小时级，现在 30-60 秒）。
+
+        参数:
+            keyword: 搜索关键词（必填），如 "vcpinner.cn:13302"、"password"、"timeout"
+            search_field: "key" / "value" / "both"，默认 both
+            env: 环境，默认 PRO
+            max_results: 最多返回多少条匹配（默认 100）
+            namespace_name: 搜索哪个 namespace 的配置（默认 application；值为 application 时自动扩展扫常见 namespace）
+
+        返回结构：
+            code=200，data.matches 每条含 host_id/host_name/app_id/app_name/namespace/key/value，
+            summary 有扫描统计，partial=true 表示超预算提前终止（结果可能不全）。
+        """
+        if USE_MOCK:
+            # Mock 模式：在已有的 mock app 里模拟搜索匹配
+            if not keyword or not keyword.strip():
+                raise ValueError("keyword 不能为空")
+            return self._mock_global_search(keyword, search_field, max_results)
+
+        start = time.time()
+        try:
+            self._request_count += 1
+            result = self.config.config_client.fetch_global_search(
+                keyword=keyword,
+                search_field=search_field,
+                env=env,
+                max_results=max_results,
+                namespace_name=namespace_name,
+            )
+            self._success_count += 1
+            duration = round((time.time() - start) * 1000)
+            data = result.get('data') or {}
+            summary = data.get('summary', {})
+            logger.info(f"[apollo-global-search] 全局搜索完成: keyword='{keyword}', matches={len(data.get('matches', []))}, "
+                        f"partial={data.get('partial')}, elapsed={duration}ms, result={_fmt(result)}")
+            return result
+        except Exception as e:
+            duration = round((time.time() - start) * 1000)
+            logger.error(f"[apollo-global-search] 全局搜索失败: {type(e).__name__}, 耗时={duration}ms, error={e}")
+            return _build_proxy_error(e, "全局配置搜索")
+
+    def _mock_global_search(self, keyword: str, search_field: str, max_results: int) -> dict:
+        """Mock 模式全局搜索：在 mock_responses.json 的所有 app 配置里模拟匹配"""
+        mock_data = self._load_mock_data()
+        configs_data = mock_data.get('_configs', {})
+        apps_data = mock_data.get('_apps', [])
+        kw = (keyword or '').strip().lower()
+        matches = []
+        scanned = 0
+        for app_id, ns_map in configs_data.items():
+            app_info = next((a for a in apps_data if a.get('appId') == app_id), {})
+            app_name = app_info.get('name', '') or app_id
+            for ns_name, configs in ns_map.items():
+                scanned += 1
+                for k, v in configs.items():
+                    k_lower = str(k).lower()
+                    v_lower = str(v).lower()
+                    hit = False
+                    if search_field in ('key', 'both') and kw in k_lower:
+                        hit = True
+                    if not hit and search_field in ('value', 'both') and kw in v_lower:
+                        hit = True
+                    if hit:
+                        matches.append({
+                            'apolloHostId': -1,  # mock
+                            'hostName': 'Mock-Apollo',
+                            'appId': app_id,
+                            'appName': app_name,
+                            'namespaceName': ns_name,
+                            'key': k,
+                            'value': v,
+                        })
+        # 脱敏
+        for m in matches:
+            if _is_sensitive_key(m['key']):
+                m['value'] = _mask_value(m['value'])
+                m['masked'] = True
+        truncated = False
+        if len(matches) > max_results:
+            matches = matches[:max_results]
+            truncated = True
+        print(f"[MOCK] [apollo-global-search] keyword='{keyword}', matches={len(matches)}, scanned={scanned}")
+        return {
+            "code": 200,
+            "message": "success",
+            "data": {
+                "keyword": keyword,
+                "searchField": search_field,
+                "env": "PRO",
+                "namespace": "application",
+                "summary": {
+                    "hostCount": 1,
+                    "appCount": len(configs_data),
+                    "scannedApps": scanned,
+                    "matchedCount": len(matches),
+                    "maskedCount": sum(1 for m in matches if m.get('masked')),
+                    "elapsedMs": 50,
+                },
+                "matches": matches,
+                "partial": False,
+                "truncated": truncated,
+            }
+        }
+
 
 client = ApolloAPIClient()
 
@@ -1056,6 +1427,21 @@ MCP_TOOLS = [
                 "apolloHostId": {"type": "integer", "description": "Apollo 服务 ID，来自 apollo_host_list 返回的 apolloHostId，用于指定查询哪一套 Apollo；不传时使用默认 Apollo"}
             }
         }
+    },
+    {
+        "name": "apollo_config_global_search",
+        "description": "【全局配置搜索】并发遍历所有可用 Apollo 套的所有应用，按关键词匹配配置的 Key 或 Value。解决日常排障高频需求：'哪些应用的配置用到了某个地址/关键词'、'比对所有应用是否都有某个配置项'。输入 keyword（必填），自动扫描所有 host × 所有 app × 配置，单次调用返回结果（预计 30-60 秒，比逐个应用调 apollo_config_query 快几十倍）。结果每条标注 host_id/app_id/namespace/key/value，超时返回部分结果+未完成标记。敏感字段已脱敏。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "keyword": {"type": "string", "description": "搜索关键词（必填），如 'vcpinner.cn:13302'、'password'、'timeout'、'redis.password'"},
+                "searchField": {"type": "string", "description": "匹配字段：'key' 只匹配配置项 Key，'value' 只匹配值，'both' 都匹配。默认 'both'"},
+                "env": {"type": "string", "description": "环境，默认 'PRO'。如需搜索开发环境配置传 'DEV'"},
+                "maxResults": {"type": "integer", "description": "最多返回多少条匹配结果（默认 100，避免结果过多）"},
+                "namespaceName": {"type": "string", "description": "搜索哪个 namespace 的配置（默认 'application'；设为 'application' 时自动扩展扫描 datasource/redis/common/logging 等常见 namespace）"}
+            },
+            "required": ["keyword"]
+        }
     }
 ]
 
@@ -1106,6 +1492,17 @@ class MCPProtocolHandler:
             return client.query_hosts()
         elif tool_name == "apollo_app_list":
             return client.query_apps(apolloHostId=_to_int(arguments.get("apolloHostId")))
+        elif tool_name == "apollo_config_global_search":
+            keyword = arguments.get("keyword")
+            if not keyword:
+                raise ValueError("keyword 是必填参数，请指定搜索关键词")
+            return client.query_global_search(
+                keyword=keyword,
+                search_field=arguments.get("searchField", "both"),
+                env=arguments.get("env", "PRO"),
+                max_results=int(arguments.get("maxResults", 100)),
+                namespace_name=arguments.get("namespaceName", "application"),
+            )
         else:
             raise ValueError(f"Unknown tool: {tool_name}")
     

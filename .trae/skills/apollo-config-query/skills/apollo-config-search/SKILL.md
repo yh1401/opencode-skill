@@ -108,6 +108,38 @@ author: Skill Agent Team
 }
 ```
 
+### 工具 4: apollo_config_global_search
+
+**全局配置搜索**——解决"哪些应用用到了某个地址/关键词"的日常排障高频需求。自动并发遍历所有可用 Apollo 套 × 所有应用 × 配置，按 keyword 匹配 key 或 value。单次调用返回结果，比逐个应用调 apollo_config_query 快几十倍。
+
+**何时使用**：用户说"全局查""哪些应用用到了""全部应用比对""搜 X 在哪些应用的配置里"，或用户提到"所有""全部"等全局关键词且意图是配置层面的搜索/比对。
+
+```json
+{
+  "name": "apollo_config_global_search",
+  "description": "【全局配置搜索】并发遍历所有可用 Apollo 套的所有应用配置，按关键词匹配 Key 或 Value。解决高频排障需求：'哪些应用的配置用到了某个地址/关键词'、'比对所有应用是否都有某个配置项'。keyword 必填；自动扫描所有 host × 所有 app × 配置，结果每条标注 host_id/app_id/namespace/key/value；超时返回部分结果+未完成标记。敏感字段已脱敏。预计耗时 30-60 秒。",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "keyword": {"type": "string", "description": "搜索关键词（必填），如 'vcpinner.cn:13302'、'password'、'redis.url'、'timeout'"},
+      "searchField": {"type": "string", "description": "'key' 只匹配配置项 Key（配置名），'value' 只匹配值（如数据库地址），'both' 都匹配。默认 'both'"},
+      "env": {"type": "string", "description": "环境，默认 'PRO'。如需搜索开发/预发环境配置传 'DEV'/'UAT'"},
+      "maxResults": {"type": "integer", "description": "最多返回多少条匹配结果（默认 100），避免结果过多超出界面限制"},
+      "namespaceName": {"type": "string", "description": "搜索哪个 namespace 的配置。默认 'application'（设为 application 时自动扩展扫描 datasource/redis/common/logging 等常见 namespace）"}
+    },
+    "required": ["keyword"]
+  }
+}
+```
+
+**返回数据结构**：
+- `data.summary`：扫描统计（hostCount/appCount/scannedApps/matchedCount/maskedCount/elapsedMs）
+- `data.matches[]`：每条含 `apolloHostId`/`hostName`/`appId`/`appName`/`namespaceName`/`key`/`value`/`masked`
+- `data.partial=true`：超预算提前终止，结果可能不全，附 `unfinishedApps` 列未完成应用
+- `data.truncated=true`：结果超过 maxResults 被截断
+
+**交互前提示**：全局搜索耗时较长（30-60 秒），回复前先告知用户"正在全局搜索所有应用配置，可能需要几十秒..."
+
 ## 交互引导
 
 ### 参数检查（按数据层级自顶向下递进）
@@ -404,6 +436,53 @@ author: Skill Agent Team
 > 对比旧逻辑：原来示例5直接调 app_list（用默认套），跳过了 host 层；现在自顶向下先选套再选应用，查询更精准，且用户能避开不可用套。若用户只给了 appId（如"查 rule-engine 配置"），可直接跳到第三步（config_query 自动遍历定位 host），不强制走完层级1。
 
 ## 错误处理
+
+### 示例 6：全局配置搜索（跨所有 Apollo 套 × 所有应用）
+
+**用户输入**："哪些应用的配置用到了 vcpinner.cn:13302 这个地址？" / "全局搜一下 redis.password 相关的配置"
+
+**意图判定**：用户提到"全局/哪些应用/全部"→ 触发全局配置搜索场景。先告知用户预计耗时。
+
+**先回复用户**：
+```
+正在全局搜索所有 Apollo 套和应用的配置，可能需要 30-60 秒，请稍候...
+```
+
+**工具调用**（搜 VALUE 匹配 + 限制 50 条）：
+```json
+{
+  "tool_name": "apollo_config_global_search",
+  "parameters": {
+    "keyword": "vcpinner.cn:13302",
+    "searchField": "value",
+    "env": "PRO",
+    "maxResults": 50
+  }
+}
+```
+
+**返回结构**：
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "keyword": "vcpinner.cn:13302",
+    "searchField": "value",
+    "summary": {"hostCount": 8, "appCount": 728, "scannedApps": 728, "matchedCount": 12, "maskedCount": 0, "elapsedMs": 42350},
+    "matches": [
+      {"apolloHostId": 15, "hostName": "贵州", "appId": "user-service", "appName": "用户服务", "namespaceName": "datasource", "key": "spring.datasource.url", "value": "jdbc:mysql://vcpinner.cn:13302/user_db"},
+      {"apolloHostId": 14, "hostName": "广州4", "appId": "order-service", "appName": "订单服务", "namespaceName": "datasource", "key": "spring.datasource.url", "value": "jdbc:mysql://vcpinner.cn:13302/order_db"}
+    ],
+    "partial": false,
+    "truncated": false
+  }
+}
+```
+
+**输出用户**（参考主 SKILL.md 话术 8 格式）。
+
+> 对比旧方案：原来 agent 生成脚本逐个应用调 apollo_config_query（700+ 应用 × 6s = 小时级），现在 MCP 内部 ThreadPoolExecutor 并行扫描（8 workers × 10 hosts ≈ 30-60 秒），单次调用返回。
 
 ### API 调用失败
 

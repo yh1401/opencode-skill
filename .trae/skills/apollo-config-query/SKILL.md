@@ -27,7 +27,7 @@ author: Skill Agent Team
 
 **业务处理**：参数映射、MCP 工具调用、输出格式化等业务逻辑由子技能 [apollo-config-search/SKILL.md](skills/apollo-config-search/SKILL.md) 负责。
 
-**MCP 服务**：`apollo-mcp-server` 提供 3 个工具：`apollo_config_query`、`apollo_host_list`（并发探活标记每套 available）、`apollo_app_list`
+**MCP 服务**：`apollo-mcp-server` 提供 4 个工具：`apollo_config_query`（单应用配置查询）、`apollo_host_list`（并发探活标记每套 available）、`apollo_app_list`、`apollo_config_global_search`（全局跨应用配置搜索，解决"哪些应用用到了某个地址/关键词"的排障高频需求）
 
 ### Apollo 服务实例（多套）与应用环境（ENV）的区别
 
@@ -171,7 +171,8 @@ author: Skill Agent Team
 | **缺少应用(appId)** | 未指定 appId 且上下文无继承 | 调 apollo_app_list（带 apolloHostId）出应用列表引导选择 | [话术 1](#1-缺少应用-id) |
 | **应用模糊匹配** | 用户描述匹配到多个应用 | 列出候选 | [话术 2](#2-应用名模糊匹配到多个) |
 | **范围过大** | 用户只说了 appId，没具体查什么 | 查默认 namespace 配置，结果多时提示收窄 | [话术 3](#3-范围过大-仅指定应用) |
-| **查询模式不明** | 无法判断查配置/应用列表 | 默认 config，提示其他模式 | [话术 4](#4-查询模式不确定) |
+| **查询模式不明** | 无法判断查配置/应用列表/全局搜索 | 默认 config，提示其他模式；检测到"全局/哪些应用/全部/所有"等关键词→用全局搜索 | [话术 4](#4-查询模式不确定) |
+| **全局配置搜索** | 用户要"全局查/全部应用/哪些应用用到了/比对配置/搜某个地址或关键词在哪些应用的配置里" | 调用 apollo_config_global_search(keyword, searchField, env, maxResults) | [话术 8](#8-全局配置搜索) |
 | **无查询结果** | API 返回空或 404 | 提示检查条件 | [话术 5](#5-无查询结果) |
 | **结果过多** | 配置项 > 15 条 | 提示搜索收窄 | [话术 6](#6-结果过多) |
 | **API 失败** | 服务不可用 | 直接报错，不用模拟数据 | [话术 7](#7-api-调用失败) |
@@ -285,15 +286,55 @@ author: Skill Agent Team
 **建议**：请稍后重试，如问题持续请联系管理员。
 ```
 
+#### 8. 全局配置搜索（跨所有 Apollo 套 × 所有应用）
+
+```
+## 全局配置搜索结果
+
+**搜索条件**：{keyword}（匹配 {searchField}，环境 {env}）
+
+**扫描统计**：
+- 覆盖 Apollo 套：{hostCount}（{appCount} 个应用）
+- 匹配结果：{matchedCount} 条，耗时 {elapsedMs}ms
+- {partial? "⚠️ 结果可能不全（超预算提前终止），建议缩小搜索范围或稍后重试" : ""}
+
+---
+
+| 序号 | Apollo 套 | 应用 | Namespace | 配置 Key | 值 |
+|------|----------|------|-----------|----------|----|
+| 1 | 贵州(15) | rule-engine | application | db.url | jdbc:mysql://*** |
+| 2 | 广州4(14) | user-service | datasource | spring.datasource.url | jdbc:mysql://*** |
+| ... | ... | ... | ... | ... | ... |
+
+（已对 {maskedCount} 个敏感字段脱敏，如需查看明文请联系管理员确认）
+{partial? "⚠️ 未完成应用：{unfinishedApps 前 5 个}" : ""}
+{truncated? "⚠️ 结果已截断（超过 maxResults={maxResults}），建议缩小搜索范围" : ""}
+
+---
+💡 您可以说："只看 VALUE 匹配" / "搜索 DEV 环境" / "限制在 50 条以内" 来缩小范围
+```
+
+> **工具调用**示例：
+> ```json
+> {"tool_name": "apollo_config_global_search", "parameters": {"keyword": "vcpinner.cn:13302", "searchField": "value", "env": "PRO", "maxResults": 50}}
+> ```
+> 预计耗时 30-60 秒（并发遍历 10+ 套 × 700+ 应用）。建议在回复前先告知用户"正在全局搜索，可能需要几十秒"。
+
 ### 执行决策树（自顶向下，按数据层级递进）
 
 ```
 用户输入
   │
-  ├─ 判定查询意图：查服务实例 / 查应用列表 / 查配置？
+  ├─ 判定查询意图（关键词匹配优先级）：
+  │    │
+  │    ├─ 全局配置搜索（"全局/哪些应用/全部/所有/比对/搜...在哪些/用到了/全局查...配置"）
+  │    │    → 调 apollo_config_global_search(keyword, searchField='both', env='PRO', maxResults=100)
+  │    │    → 输出[话术8]（带 summary 统计 + matches 表格，标注 partial 未完成提示）
+  │    │    → 用户可能提到"搜地址 X 在哪些应用"→ keyword 填地址；"搜所有 timeout 配置"→ keyword='timeout'
+  │    │
   │    ├─ 查服务实例（"有哪些 Apollo"/"哪套"）→ 调 apollo_host_list（探活展示）→ 输出[话术0]
   │    ├─ 查应用列表（"有哪些应用"）→ 调 apollo_app_list（结果带 usedHostId）→ 输出应用列表
-  │    └─ 查配置 → 进入下方层级递进 ↓
+  │    └─ 查配置（单应用）→ 进入下方层级递进 ↓
   │
   └─ 查配置：按层级自顶向下补齐缺失参数
        │
