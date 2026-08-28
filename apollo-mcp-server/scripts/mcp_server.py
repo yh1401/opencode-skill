@@ -127,13 +127,30 @@ def _is_sensitive_key(key: str) -> bool:
     return any(kw in norm for kw in _SENSITIVE_KEYWORDS_NORM)
 
 
+def _mask_value(value) -> str:
+    """敏感值脱敏：保留前2后2以供观察辨识，中间用 **** 替代；短值边界处理。
+    - 空值 → ****** （标识为敏感字段但无值）
+    - 1~2 位 → 全掩码（不暴露任何明文，因太短暴露比例过大）
+    - 3~4 位 → 前1 + *(中间) + 后1
+    - ≥5 位 → 前2 + **** + 后2（中间固定4星，不暴露原长度）"""
+    s = "" if value is None else str(value)
+    n = len(s)
+    if n == 0:
+        return _MASKED_VALUE
+    if n <= 2:
+        return "*" * n
+    if n <= 4:
+        return s[0] + "*" * (n - 2) + s[-1]
+    return s[:2] + "****" + s[-2:]
+
+
 def _mask_sensitive_configs(configurations: dict) -> tuple:
-    """对 configurations 字典的敏感字段值统一掩码为 ******，返回 (脱敏后字典, 脱敏字段数)"""
+    """对 configurations 字典的敏感字段值脱敏（前2后2），返回 (脱敏后字典, 脱敏字段数)"""
     masked = {}
     count = 0
     for k, v in (configurations or {}).items():
         if _is_sensitive_key(k):
-            masked[k] = _MASKED_VALUE
+            masked[k] = _mask_value(v)
             count += 1
         else:
             masked[k] = v
@@ -167,6 +184,50 @@ def _apply_log_enabled(enabled: bool):
             logging.getLogger(name).disabled = True
 
 
+class ApolloRequestError(Exception):
+    """代理接口请求失败（重试耗尽或异常）。携带 is_timeout 标记，便于业务层区分超时与其他错误，
+    返回不同提示让 agent 平台作出判断而非盲目重试。"""
+    def __init__(self, original, is_timeout: bool = False, timeout=None, tag: str = ""):
+        self.original = original
+        self.is_timeout = is_timeout
+        self.timeout = timeout
+        self.tag = tag
+        super().__init__(f"{tag}请求失败: {type(original).__name__}: {original}")
+
+
+def _build_proxy_error(e: Exception, tool_label: str) -> dict:
+    """根据异常构建代理接口错误返回，区分超时(504)与其他(503)。
+    返回含 errorType/retryable/suggestion，让 agent 平台能判断无需盲目重试。"""
+    if isinstance(e, ApolloRequestError):
+        if e.is_timeout:
+            return {
+                "code": 504,
+                "message": f"{tool_label}超时：Apollo 代理接口在 {e.timeout} 秒内未响应",
+                "data": {},
+                "errorType": "timeout",
+                "retryable": False,
+                "suggestion": f"{tool_label}已快速失败，无需重试。Apollo 代理接口可能暂时响应慢或网络不通，"
+                              f"建议告知用户稍后再试，或换一套 Apollo 查询"
+            }
+        return {
+            "code": 503,
+            "message": f"{tool_label}失败，EasyOps 代理接口不可用: {e.original}",
+            "data": {},
+            "errorType": "unavailable",
+            "retryable": False,
+            "suggestion": f"Apollo 代理接口暂不可用，建议告知用户稍后重试"
+        }
+    # 其他异常（如遍历可用套全部失败的 RuntimeError）
+    return {
+        "code": 503,
+        "message": f"{tool_label}失败: {e}",
+        "data": {},
+        "errorType": "unavailable",
+        "retryable": False,
+        "suggestion": "服务暂不可用，建议告知用户稍后重试"
+    }
+
+
 class ConfigClient:
     """通过第三方「Apollo Host 信息查询接口」获取 Apollo 连接配置（地址 + Token）的客户端
 
@@ -197,10 +258,14 @@ class ConfigClient:
         self._default_host_id: Optional[int] = None # 默认 Apollo Host 的 id（作为 apolloHostId 兜底）
         self.last_error: str = ""                   # 最近一次拉取失败原因（用于健康检查排查）
         self._lock = threading.Lock()
-        # 超时与重试（环境变量兜底；ApolloConfig 拉取配置服务后会回写覆盖）
-        self.timeout = int(os.environ.get('APOLLO_REQUEST_TIMEOUT', '8'))      # 业务查询单次超时（秒）
-        self.host_timeout = int(os.environ.get('APOLLO_HOST_LIST_TIMEOUT', '5'))  # Host 列表单次超时（秒）
-        self.max_retries = int(os.environ.get('APOLLO_MAX_RETRIES', '1'))     # 单请求失败重试次数
+        # 按工具区分超时（环境变量兜底；ApolloConfig 拉取配置服务后会回写覆盖）
+        # apollo_app_list 数据简单应快速返回：5s 超时 + 0 重试，快速失败避免 agent 卡死
+        self.apps_timeout = int(os.environ.get('APOLLO_APPS_TIMEOUT', '5'))
+        # apollo_config_query 可能涉及遍历多套，给宽一点
+        self.timeout = int(os.environ.get('APOLLO_REQUEST_TIMEOUT', '10'))     # namespace 配置查询单次超时（秒）
+        # apollo_host_list 第三方接口，10s
+        self.host_timeout = int(os.environ.get('APOLLO_HOST_LIST_TIMEOUT', '10'))  # Host 列表单次超时（秒）
+        self.max_retries = int(os.environ.get('APOLLO_MAX_RETRIES', '1'))     # 单请求失败重试次数（apps 工具内部固定 0）
         self.retry_delay = float(os.environ.get('APOLLO_RETRY_DELAY', '1'))   # 重试间隔（秒）
         self._traversal_budget = int(os.environ.get('APOLLO_TRAVERSAL_BUDGET', '20'))  # 遍历可用套总预算（秒）
 
@@ -313,26 +378,32 @@ class ConfigClient:
             logger.warning(f"[ConfigClient] 获取默认 Apollo Host ID 失败: {e}")
         return self._default_host_id
 
-    def _proxy_get(self, url: str, params: dict) -> requests.Response:
-        """调用 EasyOps 代理接口 GET，统一打印完整出入参数日志（URL/参数/状态码/耗时/响应体）"""
-        logger.info(f"[ConfigClient] 代理接口请求: url={url}, params={_fmt(params)}, "
-                    f"sessionId={self.session_id[:8]}...(脱敏)")
-        resp = self._send_request(url, params, self.timeout, "代理接口")
+    def _proxy_get(self, url: str, params: dict, timeout: int = None,
+                   max_retries: int = None, tag: str = "代理接口") -> requests.Response:
+        """调用 EasyOps 代理接口 GET，统一打印完整出入参数日志（URL/参数/状态码/耗时/响应体）。
+        timeout/max_retries 可按工具覆盖（如 apps 工具传 5s/0 重试快速失败）。"""
+        actual_timeout = self.timeout if timeout is None else timeout
+        logger.info(f"[ConfigClient] {tag}请求: url={url}, params={_fmt(params)}, "
+                    f"timeout={actual_timeout}s, sessionId={self.session_id[:8]}...(脱敏)")
+        resp = self._send_request(url, params, actual_timeout, tag, max_retries=max_retries)
         try:
             body = _fmt(resp.json())
         except Exception:
             body = _fmt(resp.text)
-        logger.info(f"[ConfigClient] 代理接口响应: status={resp.status_code}, url={resp.url}, body={body}")
+        logger.info(f"[ConfigClient] {tag}响应: status={resp.status_code}, url={resp.url}, body={body}")
         if resp.status_code >= 400:
-            logger.error(f"[ConfigClient] 代理接口返回异常状态码: status={resp.status_code}, body={_fmt(resp.text)}")
+            logger.error(f"[ConfigClient] {tag}返回异常状态码: status={resp.status_code}, body={_fmt(resp.text)}")
         resp.raise_for_status()
         return resp
 
-    def _send_request(self, url: str, params: dict, timeout: int, tag: str) -> "requests.Response":
+    def _send_request(self, url: str, params: dict, timeout: int, tag: str,
+                      max_retries: int = None) -> "requests.Response":
         """统一发请求 + 短重试。超时/连接异常时按 max_retries 重试（间隔 retry_delay 秒），
-        正常请求毫秒级返回不受影响；异常时快速失败，避免 agent 长时间卡死。"""
+        正常请求毫秒级返回不受影响；重试耗尽抛 ApolloRequestError（含 is_timeout 标记），
+        便于业务层区分超时返回 504，让 agent 平台判断而非盲目重试。"""
+        retries = self.max_retries if max_retries is None else max_retries
         last_exc = None
-        total_attempts = self.max_retries + 1
+        total_attempts = retries + 1
         for attempt in range(total_attempts):
             try:
                 start = time.time()
@@ -352,9 +423,18 @@ class ConfigClient:
                 last_exc = e
                 logger.warning(f"[ConfigClient] {tag}请求异常: attempt={attempt + 1}/{total_attempts}, "
                                 f"error={type(e).__name__}: {e}")
-                if attempt < self.max_retries:
+                if attempt < retries:
                     time.sleep(self.retry_delay)
-        raise last_exc
+        # 判断是否超时类异常（requests.exceptions.Timeout 子类或异常信息含 timeout/timed out）
+        is_timeout = False
+        try:
+            is_timeout = isinstance(last_exc, requests.exceptions.Timeout)
+        except Exception:
+            pass
+        if not is_timeout:
+            ename = type(last_exc).__name__.lower()
+            is_timeout = 'timeout' in ename or 'timed out' in str(last_exc).lower()
+        raise ApolloRequestError(last_exc, is_timeout=is_timeout, timeout=timeout, tag=tag)
 
     def fetch_proxy_apps(self, apollo_host_id) -> dict:
         """通过 EasyOps 代理接口获取指定 Apollo 的应用列表（获取所有 app）
@@ -363,7 +443,9 @@ class ConfigClient:
         鉴权：Cookie sessionId（EasyOps 统一保存 Apollo 地址与 Token，调用方无需传 Token）
         """
         url = f"{self.api_base}/thirdApi/apollo/apps"
-        resp = self._proxy_get(url, {"apolloHostId": apollo_host_id})
+        # 应用列表数据简单应快速返回：5s 超时 + 0 重试，超时即快速失败
+        resp = self._proxy_get(url, {"apolloHostId": apollo_host_id},
+                               timeout=self.apps_timeout, max_retries=0, tag="应用列表")
         return resp.json()
 
     def fetch_proxy_apps_first_available(self) -> tuple:
@@ -421,7 +503,7 @@ class ConfigClient:
             "clusterName": cluster_name,
             "namespaceName": namespace_name,
         }
-        resp = self._proxy_get(url, params)
+        resp = self._proxy_get(url, params, timeout=self.timeout, tag="配置查询")
         return resp.json()
 
     def fetch_proxy_namespace_first_match(self, env: str, app_id: str,
@@ -670,7 +752,7 @@ class ApolloAPIClient:
         except Exception as e:
             duration = round((time.time() - start) * 1000)
             logger.error(f"[apollo-config-query] 代理接口调用失败: {type(e).__name__}, 耗时={duration}ms, error={e}")
-            return {"code": 503, "message": f"查询失败，EasyOps 代理接口不可用: {e}", "data": {}}
+            return _build_proxy_error(e, "配置查询")
         duration = round((time.time() - start) * 1000)
         logger.info(f"[apollo-config-query] 代理接口返回: 耗时={duration}ms, result={_fmt(proxy_result)}")
 
@@ -731,8 +813,9 @@ class ApolloAPIClient:
         except Exception as e:
             duration = round((time.time() - start) * 1000)
             logger.error(f"[apollo-host-list] 查询失败: {type(e).__name__}, 耗时={duration}ms, error={e}")
-            return {"code": 503, "message": f"查询 Apollo 服务实例列表失败: {e}",
-                    "data": {"default_host": self.config.openapi_base, "hosts": [], "count": 0}}
+            err = _build_proxy_error(e, "Apollo 服务实例列表查询")
+            err["data"] = {"default_host": self.config.openapi_base, "hosts": [], "count": 0}
+            return err
         return {
             "code": 200,
             "message": "success",
@@ -767,7 +850,7 @@ class ApolloAPIClient:
         except Exception as e:
             duration = round((time.time() - start) * 1000)
             logger.error(f"[apollo-app-list] 代理接口调用失败: {type(e).__name__}, 耗时={duration}ms, error={e}")
-            return {"code": 503, "message": f"查询失败，EasyOps 代理接口不可用: {e}", "data": {}}
+            return _build_proxy_error(e, "应用列表查询")
         duration = round((time.time() - start) * 1000)
         logger.info(f"[apollo-app-list] 代理接口返回: 耗时={duration}ms, result={_fmt(proxy_result)}")
 
