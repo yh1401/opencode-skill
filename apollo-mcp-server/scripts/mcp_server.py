@@ -995,8 +995,23 @@ class ApolloConfig:
         self.max_retries = 1
         self.retry_delay = 1
         self.config_client = ConfigClient()
-        self.load_config()
-        self.load_auth()
+        # 异步后台加载配置：避免 EasyOps 不可达时阻塞服务启动 17s 导致 MCP 客户端连接超时
+        # 配置仅用于展示（openapi_base/token/endpoints），查询走代理接口不依赖此配置
+        self._config_loaded = False
+        self._config_lock = threading.Lock()
+        self._bg_thread = threading.Thread(target=self._background_load, daemon=True)
+        self._bg_thread.start()
+
+    def _background_load(self):
+        """后台加载配置 + 鉴权信息（不阻塞服务启动）"""
+        try:
+            self.load_config()
+            self.load_auth()
+        except Exception as e:
+            logger.warning(f"[ApolloConfig] 后台加载配置异常（不影响查询）: {e}")
+        finally:
+            with self._config_lock:
+                self._config_loaded = True
     
     def _apply_remote_config(self, data: dict):
         """应用配置服务拉取的配置（地址、环境、endpoints、超时等）"""
