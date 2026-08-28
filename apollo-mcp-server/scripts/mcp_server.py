@@ -110,6 +110,8 @@ _SENSITIVE_KEYWORDS = (
     "token", "api_key", "apikey", "access_key", "accesskey", "session_key", "sign_key",
     # 加密类
     "aes_key", "aeskey", "encrypt", "加密", "证书", "cert", "iv",
+    # 证书完整词：子串匹配不会误伤 certification/certify/concert（第 11 位 e≠i）
+    "certificate",
 )
 
 _MASKED_VALUE = "******"
@@ -118,27 +120,40 @@ _MASKED_VALUE = "******"
 # 使 aes.key / aes_key / aes-key 都能命中 aeskey 关键词，避免点号分隔的敏感 key 漏判
 _SEP_RE = re.compile(r'[._\-]')
 _SENSITIVE_KEYWORDS_NORM = tuple(_SEP_RE.sub('', kw).lower() for kw in _SENSITIVE_KEYWORDS)
-# iv 作为子串会误伤 active/driver/private/archive/delivery 等常见词（均含 iv 子串），
-# 故 iv 不参与子串匹配，改为下方"独立段匹配"：仅当 iv 作为 key 的某一段（如 aes.iv）才视为敏感
-_IV_SEGMENT = "iv"
+# 过短易误伤的关键词，改为"独立段匹配"（key 按分隔符切分后某段恰好等于该词才命中）：
+#   - iv：子串会误伤 active/driver/private/archive/delivery（均含 iv 子串）
+#   - cert：子串会误伤 certification/certify/concert（均含 cert 子串）
+_SEGMENT_KEYWORDS = {"iv", "cert"}
+# 子串关键词的否定子串：key 归一化后含否定子串时，该关键词不命中：
+#   - token：tokenizer（分词器）含 token 子串但非敏感，遇到 tokenize 跳过；
+#     保留 token 子串匹配以覆盖 authtoken/accesstoken 等连写（漏判风险 > 误伤）
+_KEYWORD_EXCLUDE = {"token": ("tokenize",)}
 
 
 def _is_sensitive_key(key: str) -> bool:
     """配置 Key（忽略大小写、忽略分隔符 . _ -）包含任一敏感关键词 → 视为敏感字段。
 
-    除 iv 外的关键词用"归一化子串包含"匹配（aes.key/aes_key/aes-key 都命中 aeskey）；
-    iv 因过短易误伤（active/driver/private 等均含 iv 子串），改为"独立段匹配"——
-    仅当按分隔符切分后存在某段恰好等于 iv（如 aes.iv / encrypt.iv）才视为敏感。
+    匹配策略：
+    - 大部分关键词用"归一化子串包含"（aes.key/aes_key/aes-key 都命中 aeskey）；
+    - iv / cert 过短易误伤（active/driver/certification/concert 等），改为"独立段匹配"——
+      仅当按分隔符切分后存在某段恰好等于该词（如 aes.iv / ssl.cert）才视为敏感；
+    - token 保留子串匹配以覆盖连写（authtoken），但遇 tokenize 否定跳过（避免 tokenizer 误伤）；
+    - certificate 用完整词子串匹配，覆盖 server.certificate，不误伤 certification。
     """
     s = str(key)
     norm = _SEP_RE.sub('', s).lower()
     for kw in _SENSITIVE_KEYWORDS_NORM:
-        if kw == _IV_SEGMENT:
-            continue  # iv 走独立段匹配，避免子串误伤
+        if kw in _SEGMENT_KEYWORDS:
+            continue  # iv/cert 走独立段匹配，避免子串误伤
         if kw in norm:
+            # 否定检查（如 token 遇 tokenize 跳过）
+            excludes = _KEYWORD_EXCLUDE.get(kw)
+            if excludes and any(ex in norm for ex in excludes):
+                continue
             return True
-    # iv 独立段匹配：覆盖 aes.iv / encrypt.iv / secret.iv 等真正的初始化向量配置
-    return _IV_SEGMENT in _SEP_RE.split(s.lower())
+    # iv/cert 独立段匹配：覆盖 aes.iv / ssl.cert / server.cert 等
+    segments = _SEP_RE.split(s.lower())
+    return any(seg in _SEGMENT_KEYWORDS for seg in segments)
 
 
 def _mask_value(value) -> str:
