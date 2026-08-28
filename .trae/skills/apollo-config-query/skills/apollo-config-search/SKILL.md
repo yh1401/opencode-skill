@@ -110,31 +110,21 @@ author: Skill Agent Team
 
 ## 交互引导
 
-### 参数检查
+### 参数检查（按数据层级自顶向下递进）
 
-| 工具 | 必填参数 | 缺失时处理 |
+数据层级：**Apollo 实例(host) → 应用(app) → 配置内容(config)**。参数缺失时按层级自顶向下补齐，每层用上层数据：
+
+| 工具 | 必填参数 | 缺失时处理（层级递进） |
 |------|----------|-----------|
-| apollo_config_query | appId | 先调用 `apollo_app_list` 获取真实应用列表，以可选择菜单形式展示给用户，用户选择后再用选中的 appId 查询 |
-| apollo_host_list | 无 | 直接调用（实时查询 Apollo 服务实例列表） |
-| apollo_app_list | 无 | 直接调用（apolloHostId 缺省时工具自动遍历可用套，结果带 usedHostId） |
+| apollo_host_list | 无 | 直接调用（实时查询+探活，返回每套 available 标记） |
+| apollo_app_list | 无 | **先检查上层 apolloHostId 是否已知**：已指定则带 apolloHostId 调用（精准查该套应用）；未指定则工具自动遍历可用套（结果带 usedHostId）。用于层级 2 引导用户选应用 |
+| apollo_config_query | appId | **层级递进引导**：①未指定哪套(host)且用户想明确→先调 apollo_host_list 出套列表引导选择（话术0）；②未指定应用(appId)→调 apollo_app_list（带上层 apolloHostId）出应用列表引导选择（话术1）；③用户只给了 appId→直接查（工具自动遍历定位 host，结果带 usedHostId） |
+
+> 关键：缺哪层补哪层，每层带上层数据。但"能查就不问"优先——只给 appId 也能直接查（config_query 自动定位 host），不强制先走 host 层。
 
 ### 交互话术
 
-**缺少应用 ID（先出列表再选择）**：
-```
-已为您加载可用的应用列表，请选择要查询的应用：
-
-| 序号 | AppId | 应用名称 | 部门 |
-|------|-------|----------|------|
-| 1 | rule-engine | 规则引擎 | 技术中台 |
-| 2 | config-service | 配置管理服务 | 技术中台 |
-| ... | ... | ... | ... |
-
-请回复序号、AppId 或应用名称，我将查询该应用的配置。
-（列表来自 apollo_app_list；若未指定 Apollo 套，列表来自 usedHostId 标注的可用套）
-```
-
-**未指定 Apollo 服务实例**：
+**层级 1：未指定哪套 Apollo（先出套列表再选择）**：
 ```
 当前有 N 套 Apollo 服务（已探活，M 套可用）：
 
@@ -149,6 +139,22 @@ author: Skill Agent Team
 
 （提示：available=false 的套即使指定也可能超时失败；这里的"环境"指哪一套 Apollo 服务实例）
 ```
+
+**层级 2：未指定应用 appId（先出应用列表再选择，带上层 apolloHostId）**：
+```
+已为您加载可用的应用列表，请选择要查询的应用：
+
+| 序号 | AppId | 应用名称 | 部门 |
+|------|-------|----------|------|
+| 1 | rule-engine | 规则引擎 | 技术中台 |
+| 2 | config-service | 配置管理服务 | 技术中台 |
+| ... | ... | ... | ... |
+
+请回复序号、AppId 或应用名称，我将查询该应用的配置。
+（列表来自 apollo_app_list；若上层已选 Apollo 套则带 apolloHostId 查询，否则列表来自 usedHostId 标注的可用套）
+```
+
+> 层级 2 调 apollo_app_list 时若已有上层 apolloHostId（用户在层级 1 选过套），应带上使查询精准；未带则工具自动遍历可用套。
 
 ## 参数映射规则
 
@@ -337,22 +343,42 @@ author: Skill Agent Team
 ```
 （默认 Apollo；如需查看指定某套 Apollo 的应用，补传 `apolloHostId`）
 
-### 示例 5：两阶段引导（用户未提供 appId → 先出列表再选择）
+### 示例 5：自顶向下三阶段递进（用户既未指定哪套也未指定应用）
 
-**用户输入**："帮我查下配置"（未指定应用）
+**用户输入**："帮我查下配置"（既没说哪套 Apollo，也没说哪个应用）
 
-**第一步**：调用 `apollo_app_list`（不传 apolloHostId，工具自动遍历可用套）：
+> 自顶向下逐层补齐：层级1 选套 → 层级2 选应用 → 查配置。每层用上层数据。
+
+**第一步（层级1：选哪套 Apollo）**：调用 `apollo_host_list`（实时查询+探活）：
 ```json
 {
-  "tool_name": "apollo_app_list",
+  "tool_name": "apollo_host_list",
   "parameters": {}
 }
 ```
-返回：`{"code": 200, "usedHostId": 14, "hostName": "天翼云眼广州4多AZ生产Apollo", "data": {"items": [{"appId": "rule-engine", "name": "规则引擎", "orgName": "技术中台"}, ...]}}`
-
-**第二步**：把列表以可选择菜单展示给用户，等待用户选择：
+返回含 `available` 标记，把可用套以菜单展示，等待用户选套：
 ```
-已为您加载可用的应用列表（Apollo 套: 14 - 天翼云眼广州4多AZ生产Apollo）：
+当前有 3 套 Apollo 服务（已探活，2 套可用）：
+
+| 序号 | 服务名称 | 是否可用 | 备注 |
+|------|---------|---------|------|
+| 1 | 天翼云眼贵州测试Apollo-亿讯专用 | ✅ 可用 | 默认套 |
+| 2 | 天翼云眼广州4多AZ生产Apollo | ❌ 不可用 | 超时 |
+| 3 | 3.0 P2P 易联家Apollo | ✅ 可用 | |
+
+请告诉我要查询哪一套（如"贵州"、"P2P"），或直接说"默认"。
+```
+
+**第二步（层级2：选应用，带上层 apolloHostId）**：用户选"贵州"(apolloHostId=15) 后，调用 `apollo_app_list` 带上 apolloHostId：
+```json
+{
+  "tool_name": "apollo_app_list",
+  "parameters": {"apolloHostId": 15}
+}
+```
+返回该套应用列表，以菜单展示等待用户选应用：
+```
+已为您加载贵州那套的应用列表：
 
 | 序号 | AppId | 应用名称 | 部门 |
 |------|-------|----------|------|
@@ -362,18 +388,20 @@ author: Skill Agent Team
 请回复序号、AppId 或应用名称。
 ```
 
-**第三步**：用户选择后，用选中的 appId（并带上 usedHostId）调用 `apollo_config_query`：
+**第三步（查配置，带上层 apolloHostId + appId）**：用户选"rule-engine"后，调用 `apollo_config_query`：
 ```json
 {
   "tool_name": "apollo_config_query",
   "parameters": {
-    "apolloHostId": 14,
+    "apolloHostId": 15,
     "appId": "rule-engine",
     "env": "PRO"
   }
 }
 ```
-（链路：哪套Apollo(usedHostId) → 环境 → 应用 → 集群 → Namespace → 配置）
+（链路：哪套Apollo(15-贵州) → 环境(PRO) → 应用(rule-engine) → 集群 → Namespace → 配置）
+
+> 对比旧逻辑：原来示例5直接调 app_list（用默认套），跳过了 host 层；现在自顶向下先选套再选应用，查询更精准，且用户能避开不可用套。若用户只给了 appId（如"查 rule-engine 配置"），可直接跳到第三步（config_query 自动遍历定位 host），不强制走完层级1。
 
 ## 错误处理
 
