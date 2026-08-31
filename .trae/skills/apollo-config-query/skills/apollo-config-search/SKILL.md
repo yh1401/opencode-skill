@@ -484,17 +484,29 @@ author: Skill Agent Team
 
 > 对比旧方案：原来 agent 生成脚本逐个应用调 apollo_config_query（700+ 应用 × 6s = 小时级），现在 MCP 内部 ThreadPoolExecutor 并行扫描（8 workers × 10 hosts ≈ 30-60 秒），单次调用返回。
 
-### API 调用失败
+### API 调用失败（按 errorType 差异化处理）
 
+**⚠️ 严禁盲目重试！** 收到以下错误时，**绝不**用相同参数重试同一个工具，按主 SKILL.md 执行纪律处理。
+
+| code | errorType | retryable | 正确处理 | 错误处理（禁止） |
+|---|---|---|---|---|
+| 504 | `timeout` | false | 话术 7a → 建议缩小范围/换套/稍后 | ❌ 同样参数重试 |
+| 503 | `unavailable` | false | 话术 7b → 告知代理暂不可用 | ❌ 换参数重试 |
+| 200 + `data.fallback=true` | - | - | 话术 7c → 正常展示 + 标注切换 | ❌ 告知用户"套有问题" |
+| 200 + `data.partial=true` | - | - | 话术 7d → 展示已有结果 + 建议缩小范围 | ❌ 等超时后重试 |
+
+**错误返回结构**（MCP 层已自动构建）：
+```json
+{
+  "code": 504,
+  "message": "配置查询超时：Apollo 代理接口在 6 秒内未响应",
+  "errorType": "timeout",
+  "retryable": false,
+  "suggestion": "配置查询已快速失败，无需重试。...建议告知用户稍后再试"
+}
 ```
-## 查询失败
 
-**错误类型**：API 调用失败
-
-**错误原因**：Apollo 服务暂不可用
-
-**建议**：请稍后重试，如问题持续请联系管理员。
-```
+**进度提示**：调 `apollo_config_global_search` 前**必须先回复用户**"正在全局搜索，预计 30-60 秒..."。调其他工具（config_query/app_list）通常秒级返回，无需进度提示。
 
 ### 无查询结果
 
