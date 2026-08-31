@@ -409,12 +409,16 @@ class ConfigClient:
             logger.warning(f"[ConfigClient] 探活套 {host_id}({name}): 不可用(异常), {type(e).__name__}: {e}")
             return {"available": False, "app_count": 0, "error": f"{type(e).__name__}: {e}"}
 
-    def _probe_hosts_concurrent(self, host_list: list) -> dict:
+    def _probe_hosts_concurrent(self, host_list: list, timeout: float = None) -> dict:
         """并发探活所有 Apollo 套，返回 {host_id: probe_result}。
 
         利用 _host_probe_ttl 缓存：60s 内已探活过的套直接复用结果，不发请求；
         未缓存/过期的套用线程池并发探活（N 套并发≈单套耗时，而非串行 N×6s）。
         关闭探活（APOLLO_HOST_PROBE_ENABLED=false）时返回空 dict，遍历回退原全量逻辑。
+
+        timeout: 本次探活的硬预算秒数（可选）。超时后未完成的套标记为 available=False，
+                 避免 callers（如 fetch_global_search）因探活无限等待阻塞主流程。
+                 None 表示无预算限制（老调用路径，如 host_list 独立调用）。
         """
         if not self._host_probe_enabled:
             return {}
@@ -432,24 +436,46 @@ class ConfigClient:
                 to_probe.append(item)
 
         if to_probe:
-            from concurrent.futures import ThreadPoolExecutor, as_completed
+            from concurrent.futures import ThreadPoolExecutor, wait as futures_wait
             workers = min(8, len(to_probe))
             logger.info(f"[ConfigClient] 并发探活 {len(to_probe)} 套 Apollo（workers={workers}），"
-                        f"命中缓存 {len(result)} 套")
-            with ThreadPoolExecutor(max_workers=workers) as executor:
-                futures = {
-                    executor.submit(self._probe_host_available, item.get('id'), item.get('name', '')): item.get('id')
-                    for item in to_probe
-                }
-                for future in as_completed(futures):
+                        f"命中缓存 {len(result)} 套"
+                        f"{f'，预算={timeout:.1f}s' if timeout else ''}")
+            pool = ThreadPoolExecutor(max_workers=workers)
+            futures = {
+                pool.submit(self._probe_host_available, item.get('id'), item.get('name', '')): item.get('id')
+                for item in to_probe
+            }
+            try:
+                # 关键：用 concurrent.futures.wait(timeout) 而非 as_completed（无限等）
+                # 避免 DNS 挂 / EasyOps 全部不可用时探活阶段卡死主流程
+                wait_timeout = timeout if timeout is not None else None
+                done, pending = futures_wait(futures, timeout=wait_timeout)
+
+                for future in done:
                     hid = futures[future]
                     try:
-                        probe = future.result()
+                        probe = future.result(timeout=2)
                     except Exception as e:
                         probe = {"available": False, "app_count": 0, "error": f"{type(e).__name__}: {e}"}
                     probe['checked_at'] = now
-                    self._host_probe_cache[hid] = probe  # 更新缓存
+                    self._host_probe_cache[hid] = probe
                     result[hid] = probe
+
+                # 探活超时未完成的套 → 标记为 available=False（跳过后续遍历）
+                if pending:
+                    for future in pending:
+                        hid = futures[future]
+                        probe = {"available": False, "app_count": 0, "error": "probe_timeout",
+                                 "checked_at": now}
+                        self._host_probe_cache[hid] = probe
+                        result[hid] = probe
+                    logger.warning(f"[ConfigClient] 探活预算超时，{len(pending)} 套标记为不可用")
+            finally:
+                try:
+                    pool.shutdown(wait=False, cancel_futures=True)
+                except TypeError:
+                    pool.shutdown(wait=False)
         elif result:
             logger.info(f"[ConfigClient] 探活全部命中缓存（{len(result)} 套），跳过请求")
         return result
@@ -788,11 +814,17 @@ class ConfigClient:
         budget_sec = self._global_search_budget
         budget_start = start
 
+        def _budget_remaining() -> float:
+            """返回剩余预算秒数（正数表示还有时间，≤0 表示预算耗尽）"""
+            return budget_sec - (time.time() - budget_start)
+
         kw = (keyword or '').strip().lower()
         if not kw:
             raise ValueError("keyword 不能为空")
 
-        # 1. 取 host 列表 + 探活排序（加 try/except，EasyOps 抖动时不崩溃）
+        # ====== 阶段 1: 取 host 列表 ======
+        # 注意：_fetch_host_list_raw 内部用 requests.get(timeout=self.host_timeout=8) + max_retries=1
+        # 最坏 16s，但预算不会在这就耗尽（除非 EasyOps DNS 挂导致 requests timeout 不生效）
         host_list = []
         try:
             host_list = self._fetch_host_list_raw()
@@ -806,8 +838,23 @@ class ConfigClient:
                                          "matchedCount": 0, "maskedCount": 0, "elapsedMs": round((time.time()-start)*1000)},
                              "matches": [], "partial": False, "truncated": False}}
 
+        elapsed_after_hosts = time.time() - start
+        if _budget_remaining() <= 0:
+            # host_list 本身就花光了预算（EasyOps 抖动极慢）
+            logger.warning(f"[ConfigClient] 全局搜索 host_list 阶段耗尽预算 ({elapsed_after_hosts:.1f}s)，返回部分结果")
+            return {"code": 200, "message": "部分结果（host_list 耗尽预算）",
+                    "data": {"keyword": keyword, "searchField": search_field, "env": env, "namespace": namespace_name,
+                             "summary": {"hostCount": len(host_list), "appCount": 0, "scannedApps": 0,
+                                         "matchedCount": 0, "maskedCount": 0,
+                                         "elapsedMs": round(elapsed_after_hosts*1000)},
+                             "matches": [], "partial": True, "truncated": False,
+                             "unfinishedApps": ["host_list 阶段耗尽预算"]}}
+
+        # ====== 阶段 2: 并发探活 ======
+        # 探活也有预算限制！避免 DNS 挂 / EasyOps 整体不可用时 as_completed 无限等待
+        probe_budget = max(_budget_remaining() - 5, 1)  # 留至少 5s 给扫描阶段
         default_id = self._select_target_host(host_list).get('id')
-        probe_map = self._probe_hosts_concurrent(host_list)
+        probe_map = self._probe_hosts_concurrent(host_list, timeout=probe_budget)
         ordered_hosts = sorted(
             host_list,
             key=lambda item: (
