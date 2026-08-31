@@ -8,7 +8,7 @@ Apollo MCP Server 为 Apollo 配置中心提供标准化的 MCP (Model Context P
 
 - 支持**多套 Apollo 服务实例**（各产品线/地域独立部署），通过 `apolloHostId` 指定任意一套
 - 配置/应用查询统一走 **EasyOps 代理接口**（无需本地保存 Apollo Token，按 `apolloHostId` 指定任意一套）；调用不通时直接返回错误提示
-- 提供 3 个工具：`apollo_host_list` / `apollo_config_query` / `apollo_app_list`
+- 提供 4 个工具：`apollo_host_list` / `apollo_app_list` / `apollo_config_query` / `apollo_config_global_search`（跨套跨应用全局搜索）
 
 **版本**：v3.2.0
 **协议**：MCP Streamable HTTP (JSON-RPC 2.0)
@@ -105,6 +105,8 @@ python3 scripts/mcp_server.py --port 8062
 
 ## 3. 环境变量说明
 
+### 3.1 基础配置
+
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
 | `MCP_USE_MOCK` | 否 | `false` | Mock 模式（无需 Apollo 服务） |
@@ -113,9 +115,42 @@ python3 scripts/mcp_server.py --port 8062
 | `APOLLO_HOST_SESSION_ID` | 否 | 内置默认值 | 第三方鉴权 sessionId（32 位），同时是 token 解密密钥 |
 | `APOLLO_HOST_NAME` | 否 | - | 默认 Apollo 套的模糊过滤名称（多套中指定一套，不填取第一条） |
 | `CONFIG_SERVICE_REFRESH_SEC` | 否 | `60` | 第三方接口配置刷新间隔（秒） |
-| `APOLLO_HOST_PROBE_ENABLED` | 否 | `true` | 是否开启 Host 探活（关闭后 host_list 不探活，遍历回退原全量逻辑） |
-| `APOLLO_HOST_PROBE_TTL` | 否 | `60` | 探活结果缓存秒数（60s 内复用，避免每次重复探活） |
 | `LOG_LEVEL` | 否 | `INFO` | 日志级别：DEBUG/INFO/WARNING/ERROR |
+| `LOG_TO_FILE` | 否 | `false` | 文件日志开关：false 时不写日志文件，仅控制台输出（Docker json-file 自动轮转） |
+
+### 3.2 超时与重试（影响 agent 响应速度）
+
+> 正常请求毫秒级返回不受影响；以下仅在异常/超时时触发，快速失败避免 agent 卡死。
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `APOLLO_REQUEST_TIMEOUT` | `6` | 业务查询单次超时（秒）：`apollo_config_query`，6s 不重试快速失败 |
+| `APOLLO_APPS_TIMEOUT` | `6` | 应用列表查询单次超时（秒）：`apollo_app_list`，6s 不重试快速失败 |
+| `APOLLO_HOST_LIST_TIMEOUT` | `8` | Apollo Host 列表单次超时（秒）：`apollo_host_list`，8s + 1 次重试 |
+| `APOLLO_MAX_RETRIES` | `1` | 单请求失败重试次数（0=不重试） |
+| `APOLLO_RETRY_DELAY` | `1` | 重试间隔（秒） |
+| `APOLLO_TRAVERSAL_BUDGET` | `20` | 遍历可用套总预算（秒）：超过则提前终止，避免多套全超时累加 |
+
+### 3.3 Host 探活
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `APOLLO_HOST_PROBE_ENABLED` | `true` | 是否开启 Host 探活（关闭后 host_list 不探活，遍历回退原全量逻辑） |
+| `APOLLO_HOST_PROBE_TTL` | `60` | 探活结果缓存秒数（60s 内复用，避免每次 host_list 重复探活） |
+
+### 3.4 全局配置搜索（`apollo_config_global_search`）
+
+> 控制跨套跨应用全局搜索的并发度、预算、缓存。默认值：8 并发 / 60s 硬上限 / 5 个常见 namespace / apps 缓存 5min / config 缓存 2min。
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `APOLLO_GLOBAL_SEARCH_WORKERS` | `8` | 并发线程数：每个 host 一个 worker 并行扫描 |
+| `APOLLO_GLOBAL_SEARCH_BUDGET` | `60` | 全局搜索硬预算（秒）：覆盖 host_list + probe + 扫描全阶段，超时立即返回部分结果 |
+| `APOLLO_GLOBAL_SEARCH_MAX_NS` | `5` | 每个应用扫描的 namespace 上限（namespaceName=application 时自动扩展：application → datasource → redis → common → logging） |
+| `APOLLO_APPS_CACHE_TTL` | `300` | apps 列表缓存秒数（同套多 app 扫描时复用，避免重复拉取） |
+| `APOLLO_CONFIG_CACHE_TTL` | `120` | config 结果缓存秒数（同 (host, app, env, ns) 扫描时复用） |
+
+> **调优建议**：host 数 > 10 时 `WORKERS` 可提到 10-12；EasyOps 延迟高时 `BUDGET` 可提到 90s。
 
 ---
 
@@ -159,10 +194,11 @@ python3 scripts/mcp_server.py --port 8062
 
 点击 **获取工具列表**，平台会调用 `tools/list`。
 
-**成功响应**：3 个工具
+**成功响应**：4 个工具
 - `apollo_host_list` - 实时查询可用的 Apollo 服务列表（查询链路第一步，返回 `apolloHostId`）
-- `apollo_config_query` - 查询 Apollo 配置项（`apolloHostId` + env + appId + cluster + namespace + key）
 - `apollo_app_list` - 获取应用列表（`apolloHostId` 可选）
+- `apollo_config_query` - 查询 Apollo 配置项（`apolloHostId` + env + appId + cluster + namespace + key）
+- `apollo_config_global_search` - 跨套跨应用全局搜索（按 `keyword` 匹配 key/value，并行扫描所有可用套的所有应用）
 
 ### 步骤 5：绑定到 Skill
 
@@ -178,6 +214,7 @@ python3 scripts/mcp_server.py --port 8062
 - `"查一下 user-service 的配置"` → 触发 `apollo_config_query`
 - `"当前有哪些应用"` → 触发 `apollo_app_list`
 - `"查一下贵州那套 Apollo 上 user-service 的配置"` → `apollo_host_list` 取 apolloHostId → `apollo_config_query`（完整链路）
+- `"哪些应用的配置用到了 vcpinner.cn:13302"` → 触发 `apollo_config_global_search`（预计 30-60 秒）
 
 ---
 
@@ -208,6 +245,24 @@ python3 scripts/mcp_server.py --port 8062
 
 **调用路径**：EasyOps 代理接口 `/thirdApi/apollo/namespace`（仅需 Cookie `sessionId`），调用不通时返回错误提示。
 
+**Fallback 机制**：指定 `apolloHostId` 的套 EasyOps 返回 5xx/超时/`ApolloRequestError` 时，自动 fallback 到第一个探活可用的套，返回结果带 `data.fallback=true` + `fallbackTip` 标注切换信息。404（应用不存在/无此环境）和业务错误不触发 fallback（说明套是好的，只是没这个 app）。
+
+**错误返回结构**（`_build_proxy_error` 统一构建）：
+
+```json
+{
+  "code": 504,
+  "message": "配置查询超时：Apollo 代理接口在 6 秒内未响应",
+  "errorType": "timeout",
+  "retryable": false,
+  "suggestion": "配置查询已快速失败，无需重试..."
+}
+```
+
+- `errorType=timeout`：代理超时（code=504），建议缩小范围/换套/稍后
+- `errorType=unavailable`：代理不可用（code=503），告知用户稍后再试
+- `retryable=false`：agent 平台不应盲目重试
+
 ### Tool: `apollo_app_list`
 
 获取指定 Apollo 服务中的所有应用列表（AppId、应用名称、所属部门）。
@@ -219,6 +274,69 @@ python3 scripts/mcp_server.py --port 8062
 | apolloHostId | integer | 否 | 默认 Apollo | Apollo 服务 ID，指定查询哪一套 |
 
 **调用路径**：EasyOps 代理接口 `/thirdApi/apollo/apps`（仅需 Cookie `sessionId`），调用不通时返回错误提示。
+
+**Fallback 机制**：指定 `apolloHostId` 的套 EasyOps 返回 5xx/超时/连接失败时，自动 fallback 到第一个探活可用的套，返回结果带 `data.fallback=true` + `fallbackTip` 标注切换信息。
+
+### Tool: `apollo_config_global_search` （跨套跨应用全局搜索）
+
+**用途**：解决"哪些应用的配置用到了某个地址/关键词"的高频排障需求。单次调用并行扫描所有可用 Apollo 套的所有应用——无需 agent 逐个应用调 `apollo_config_query`（700+ 应用原来小时级，现在 30-60 秒）。
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| keyword | string | 是 | - | 搜索关键词，如 `vcpinner.cn:13302`、`password`、`redis.url`、`timeout` |
+| searchField | string | 否 | `both` | 匹配字段：`key`（只匹配配置项名）/ `value`（只匹配值）/ `both`（都匹配） |
+| env | string | 否 | `PRO` | 环境：PRO/DEV/SIT/FAT/UAT |
+| maxResults | integer | 否 | `100` | 最多返回多少条匹配，避免结果过长 |
+| namespaceName | string | 否 | `application` | 搜索哪个 namespace；设为 `application` 时**自动扩展扫描** `datasource`/`redis`/`common`/`logging` 5 个常见 namespace |
+
+**调用路径**：内部并行复用 EasyOps 三个代理接口（`getApolloHostInfo` + `apollo/apps` × N 套 + `apollo/namespace` × N 应用 × M namespace），通过 `ThreadPoolExecutor(max_workers=APOLLO_GLOBAL_SEARCH_WORKERS)` 并发扫描。
+
+**返回结构**：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "keyword": "vcpinner.cn:13302",
+    "searchField": "value",
+    "env": "PRO",
+    "namespace": "application",
+    "summary": {
+      "hostCount": 8,
+      "appCount": 728,
+      "scannedApps": 728,
+      "matchedCount": 12,
+      "maskedCount": 0,
+      "elapsedMs": 42350
+    },
+    "matches": [
+      {
+        "apolloHostId": 15,
+        "hostName": "天翼云眼Apollo",
+        "appId": "user-service",
+        "appName": "用户服务",
+        "namespaceName": "datasource",
+        "key": "spring.datasource.url",
+        "value": "jdbc:mysql://vcpinner.cn:13302/user_db",
+        "masked": false
+      }
+    ],
+    "partial": false,
+    "truncated": false
+  }
+}
+```
+
+**关键字段**：
+- `summary.scannedApps` — 实际扫了多少个 namespace 配置（用于判断是否扫完整）
+- `summary.maskedCount` — 有多少条敏感字段已脱敏（前2后2，如 `SuperSecretPwd` → `Su****wd`）
+- `partial=true` — **超预算提前终止**，结果可能不全（附 `unfinishedApps` 列未完成应用）
+- `truncated=true` — 匹配数超过 `maxResults`，结果被截断
+
+**预算控制**：硬上限 `APOLLO_GLOBAL_SEARCH_BUDGET=60s`，覆盖 host_list + probe + 扫描全阶段。超预算通过 `concurrent.futures.wait(timeout=剩余秒数)` 立即返回已完成结果 + pending host 标记，`pool.shutdown(wait=False)` 主流程不等待。
 
 ---
 
@@ -254,6 +372,11 @@ python3 scripts/mcp_server.py --port 8062
 | 代理接口不可达 | 第三方接口网络/权限问题 | 检查 `APOLLO_HOST_API_BASE` / `APOLLO_HOST_SESSION_ID` 及出口网络 |
 | 返回空数据 | appId 或 namespaceName 错误 | 先用 `apollo_app_list` 验证 |
 | Mock 查询失败 | Mock 数据文件格式错误 | 检查 `mock/mock_responses.json` |
+| **`code=504` / `errorType=timeout`** | EasyOps 代理单次请求超时（6s/8s 内未响应） | **不要重试**：建议缩小 apolloHostId 范围、指定 key 过滤、或稍后 1-2 分钟再试 |
+| **`code=503` / `errorType=unavailable`** | EasyOps 代理整体不可用 | **不要重试**：告知用户 Apollo 配置查询代理暂时异常 |
+| **`data.fallback=true`** | 指定套 EasyOps 返回 5xx，已自动切到可用套 | 正常展示结果 + 标注切换，无需处理（若原套必须可稍后重试） |
+| **`data.partial=true`**（全局搜索） | 60s 预算超时，提前终止扫描 | 展示已有匹配 + 建议缩小 apolloHostId/namespaceName 范围重试 |
+| **全局搜索一直慢** | host 数 > 10 或 EasyOps 延迟高 | 调高 `APOLLO_GLOBAL_SEARCH_WORKERS`（10-12）和 `APOLLO_GLOBAL_SEARCH_BUDGET`（90s） |
 
 ### 日志
 
@@ -300,6 +423,9 @@ tail -f logs/apollo-mcp.log
 - [ ] StarAgent MCP 注册完成
 - [ ] Skill 绑定 MCP 服务完成
 - [ ] 端到端调用测试通过（`apollo_host_list` → `apollo_config_query`）
+- [ ] 全局搜索测试通过（`apollo_config_global_search`，30-60 秒返回）
+- [ ] host 数 > 10 时已调高 `APOLLO_GLOBAL_SEARCH_WORKERS`（建议 10-12）
+- [ ] EasyOps 延迟高时已调高 `APOLLO_GLOBAL_SEARCH_BUDGET`（建议 90s）
 
 ---
 
@@ -325,12 +451,13 @@ tail -f logs/apollo-mcp.log
                                ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ 业务层 ApolloAPIClient                                                   │
-│  query_hosts │ query_config │ query_apps                                 │
+│  query_hosts │ query_config │ query_apps │ query_global_search           │
 └──────────────────────────────┬──────────────────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ 数据源层 ConfigClient（日志最详细的一层）                                   │
-│  fetch_host_list │ get_default_host_id │ _proxy_get                      │
+│  fetch_host_list │ get_default_host_id │ _proxy_get │ fetch_global_search │
+│  _probe_hosts_concurrent │ _cached_fetch_apps │ _cached_fetch_namespace   │
 └──────────────────────────────┬──────────────────────────────────────────┘
                                │ HTTPS + Cookie sessionId
                                ▼
@@ -356,7 +483,7 @@ tail -f logs/apollo-mcp.log
 | 平台兼容 | `GET /tools/list`、`POST /tools/call` | `platform_tools_call` | 兼容非标准 MCP 客户端 |
 | REST 兼容 | `POST /api/config`、`GET /api/apps` | `http_config_query` / `http_apps_list` | 简单 HTTP 调试 |
 
-每次 HTTP 请求进来，FastAPI 先把请求体交给 `handle_message`（/mcp）或直接 `_execute_tool`（/tools/call、/api/config），并打印 `[HTTP]` 层出入参数日志。
+每次 HTTP 请求进来，FastAPI 先把请求体交给 `handle_message`（/mcp）或直接 `_execute_tool`（/tools/call、/api/config），并打印 `[HTTP]` 层出入参数日志。4 个工具（`apollo_host_list` / `apollo_app_list` / `apollo_config_query` / `apollo_config_global_search`）均可通过任一入口调用。
 
 ### 10.3 MCP 协议层
 
@@ -366,7 +493,7 @@ tail -f logs/apollo-mcp.log
 2. 按 `method` 分发：
    - `initialize` → 返回协议版本、能力、服务端信息（握手）
    - `notifications/initialized` → 无响应（通知类）
-   - `tools/list` → 返回 `MCP_TOOLS`（3 个工具 Schema）
+   - `tools/list` → 返回 `MCP_TOOLS`（4 个工具 Schema）
    - `tools/call` → 解析 `params.name` + `params.arguments`，交给 `_execute_tool`
    - 其它 → `-32601 Method not found`
 3. 工具结果包装成 MCP 标准格式：`{"content": [{"type": "text", "text": json.dumps(result)}], "isError": false}`
@@ -379,10 +506,11 @@ tail -f logs/apollo-mcp.log
 | `apollo_host_list` | `query_hosts()` | 无 |
 | `apollo_config_query` | `query_config(appId, env, clusterName, namespaceName, key, apolloHostId)` | appId 必填 |
 | `apollo_app_list` | `query_apps(apolloHostId)` | 可选 |
+| `apollo_config_global_search` | `query_global_search(keyword, searchField, env, maxResults, namespaceName)` | keyword 必填 |
 
 `apolloHostId` 统一经 `_to_int()` 安全转换（兼容字符串形式）。
 
-### 10.5 业务层（3 个工具的具体路径）
+### 10.5 业务层（4 个工具的具体路径）
 
 **apollo_host_list → query_hosts**（实时查询不缓存，每次调用都打第三方接口，是查询链路第一步）：
 
@@ -407,8 +535,10 @@ query_config(apolloHostId?, env=PRO, appId, cluster=default, namespace=applicati
    │     └─ items 数组 → configurations 字典；key 模糊过滤 + _total_count/_filtered_count 统计
    │
    └─ 失败：
-         ├─ HTTP 异常 → 返回 {"code":503, "message":"查询失败，EasyOps 代理接口不可用: ..."}
-         └─ 业务错误 → 原样透传（如 404 未授权/无此环境）
+         ├─ 指定套 5xx/超时/ApolloRequestError → 自动 fallback 到第一个探活可用的套
+         │     └─ 返回结果带 data.fallback=true + fallbackTip
+         ├─ HTTP 异常 → _build_proxy_error() 返回 code=504 + errorType=timeout + retryable=false
+         └─ 业务错误（404 未授权/无此环境）→ 原样透传（不触发 fallback）
 ```
 
 **apollo_app_list → query_apps**：
@@ -417,9 +547,32 @@ query_config(apolloHostId?, env=PRO, appId, cluster=default, namespace=applicati
 query_apps(apolloHostId?) → fetch_proxy_apps(hostId) → _proxy_get()
 → GET {api_base}/thirdApi/apollo/apps?apolloHostId=
 → 返回该套 Apollo 全部应用（appId/name/orgName）
+└─ 指定套 5xx/超时 → 自动 fallback 到第一个探活可用的套（与 config_query 对齐）
 ```
 
-**Mock 分支**：每个工具开头都有 `if USE_MOCK:` 分支（`_get_mock_response`），Mock 模式下直接读 `mock/mock_responses.json`，不请求任何外部接口——这就是日志里"Mock 模式启用"的来源。
+**apollo_config_global_search → query_global_search**（跨套跨应用全局搜索，单次调用并行扫描）：
+
+```
+query_global_search(keyword, searchField=both, env=PRO, maxResults=100, namespaceName=application)
+   │
+   ├─ start = time.time()（预算从函数入口算起，覆盖 host_list + probe + 扫描全阶段）
+   │
+   ├─ fetch_host_list() + _probe_hosts_concurrent()
+   │     └─ 取所有 available=true 的套（跳过不可用套）
+   │
+   ├─ ThreadPoolExecutor(max_workers=APOLLO_GLOBAL_SEARCH_WORKERS=8)
+   │     └─ 每个 worker 扫 1 个 host 的所有 app × 5 个常见 namespace：
+   │           ├─ _cached_fetch_apps(host_id)  ← apps 列表缓存 5min
+   │           ├─ _cached_fetch_namespace(host, app, env, ns)  ← config 缓存 2min
+   │           └─ 匹配 keyword → 命中追加到 matches（含 host/app/ns/key/value，敏感字段自动脱敏）
+   │
+   ├─ 预算控制：wait(timeout=剩余秒数) → 预算到点立即返回已完成结果
+   │     └─ pending host 标记到 unfinishedApps，partial=true
+   │
+   └─ pool.shutdown(wait=False, cancel_futures=True) → 主流程不等待
+```
+
+**Mock 分支**：每个工具开头都有 `if USE_MOCK:` 分支（`_get_mock_response` / `_mock_global_search`），Mock 模式下直接读 `mock/mock_responses.json`，不请求任何外部接口——这就是日志里"Mock 模式启用"的来源。
 
 ### 10.6 数据源层（ConfigClient，日志最详细）
 
@@ -434,7 +587,7 @@ query_apps(apolloHostId?) → fetch_proxy_apps(hostId) → _proxy_get()
 要点：
 
 - 鉴权靠 **Cookie: sessionId**（第三方接口统一保存各套 Apollo 地址与 Token）
-- `timeout=30`，连接失败抛异常给业务层转 503
+- `timeout=APOLLO_REQUEST_TIMEOUT/APOLLO_APPS_TIMEOUT`（6s），host_list 用 `APOLLO_HOST_LIST_TIMEOUT=8s`，0 重试快速失败
 - 成功/失败都打印**响应体**（排查 503 的关键——能看到 EasyOps 返回的 `{"code":503,"message":"无法连接Apollo服务"}`）
 
 ### 10.7 一次完整请求的旅程（以 apollo_config_query 为例）
