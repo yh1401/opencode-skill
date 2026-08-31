@@ -1193,6 +1193,10 @@ class ApolloAPIClient:
 
         # ---- 通过 EasyOps 代理接口查询 ----
         start = time.time()
+        # 记录最终实际使用的 host（fallback 时会覆盖）
+        used_host_id = apolloHostId
+        host_name = ""
+        was_fallback = False
         try:
             self._request_count += 1
             if apolloHostId is None:
@@ -1201,10 +1205,25 @@ class ApolloAPIClient:
                 logger.info(f"查询配置: apolloHostId 未指定，遍历可用套定位，命中套={used_host_id}({host_name}), "
                             f"env={env}, appId={appId}, cluster={clusterName}, namespace={namespaceName}, key={key or '(全部)'}")
             else:
-                proxy_result = self.config.config_client.fetch_proxy_namespace(
-                    apolloHostId, env, appId, clusterName, namespaceName)
-                logger.info(f"查询配置: apolloHostId={apolloHostId}, env={env}, appId={appId}, "
-                            f"cluster={clusterName}, namespace={namespaceName}, key={key or '(全部)'}")
+                try:
+                    proxy_result = self.config.config_client.fetch_proxy_namespace(
+                        apolloHostId, env, appId, clusterName, namespaceName)
+                    logger.info(f"查询配置: apolloHostId={apolloHostId}, env={env}, appId={appId}, "
+                                f"cluster={clusterName}, namespace={namespaceName}, key={key or '(全部)'}")
+                except Exception as primary_err:
+                    # 用户指定的套返回异常（如 EasyOps HTTP 500/502/503/超时）时，
+                    # 自动 fallback 到其他探活可用的套——EasyOps 代理存在个别套的 namespace
+                    # 接口有 bug 但 apps 接口正常的情况（如 hostId=12），避免用户拿到空错误
+                    err_str = str(primary_err).lower()
+                    is_5xx = any(x in err_str for x in ('500', '502', '503', '504', 'timeout', 'connection', 'apollorequesterror'))
+                    if is_5xx:
+                        logger.warning(f"[apollo-config-query] 指定套 {apolloHostId} 查询失败({primary_err})，自动 fallback 到其他可用套")
+                        was_fallback = True
+                        proxy_result, used_host_id, host_name = self.config.config_client.fetch_proxy_namespace_first_match(
+                            env, appId, clusterName, namespaceName)
+                        logger.info(f"[apollo-config-query] fallback 命中套={used_host_id}({host_name})")
+                    else:
+                        raise  # 非 5xx 错误（如参数问题）继续抛出
         except Exception as e:
             duration = round((time.time() - start) * 1000)
             logger.error(f"[apollo-config-query] 代理接口调用失败: {type(e).__name__}, 耗时={duration}ms, error={e}")
@@ -1216,6 +1235,15 @@ class ApolloAPIClient:
             self._success_count += 1
             result = self._normalize_config_result(proxy_result, appId, env, clusterName, namespaceName, key)
             data = result.get('data') or {}
+            # 标注实际使用的 host（自动定位 / fallback 时 agent 需要知道）
+            if used_host_id is not None:
+                data['usedHostId'] = used_host_id
+            if host_name:
+                data['hostName'] = host_name
+            if was_fallback:
+                data['fallback'] = True
+                data['fallbackTip'] = f"指定的 Apollo 套 {apolloHostId} 查询异常，自动切换到 {used_host_id}({host_name})"
+                logger.info(f"[apollo-config-query] fallback 成功: orig={apolloHostId} → actual={used_host_id}({host_name})")
             logger.info(f"[apollo-config-query] 查询成功: appId={appId}, env={env}, namespace={namespaceName}, "
                         f"configCount={len(data.get('configurations', {}))}, result={_fmt(result)}")
             return result
