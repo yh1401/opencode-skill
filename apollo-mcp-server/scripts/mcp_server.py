@@ -1323,14 +1323,29 @@ class ApolloAPIClient:
             return self._get_mock_response('apollo-app-list')
 
         start = time.time()
+        used_host_id = apolloHostId
+        host_name = ""
+        was_fallback = False
         try:
             self._request_count += 1
             if apolloHostId is None:
                 proxy_result, used_host_id, host_name = self.config.config_client.fetch_proxy_apps_first_available()
                 logger.info(f"查询应用列表: apolloHostId 未指定，遍历可用套，命中套={used_host_id}({host_name})")
             else:
-                proxy_result = self.config.config_client.fetch_proxy_apps(apolloHostId)
-                logger.info(f"查询应用列表: apolloHostId={apolloHostId}")
+                try:
+                    proxy_result = self.config.config_client.fetch_proxy_apps(apolloHostId)
+                    logger.info(f"查询应用列表: apolloHostId={apolloHostId}")
+                except Exception as primary_err:
+                    # 指定套异常（EasyOps 5xx/超时）时自动 fallback 到第一个探活可用的套
+                    err_str = str(primary_err).lower()
+                    is_5xx = any(x in err_str for x in ('500', '502', '503', '504', 'timeout', 'connection', 'apollorequesterror'))
+                    if is_5xx:
+                        logger.warning(f"[apollo-app-list] 指定套 {apolloHostId} 查询失败({primary_err})，自动 fallback")
+                        was_fallback = True
+                        proxy_result, used_host_id, host_name = self.config.config_client.fetch_proxy_apps_first_available()
+                        logger.info(f"[apollo-app-list] fallback 命中套={used_host_id}({host_name})")
+                    else:
+                        raise
         except Exception as e:
             duration = round((time.time() - start) * 1000)
             logger.error(f"[apollo-app-list] 代理接口调用失败: {type(e).__name__}, 耗时={duration}ms, error={e}")
@@ -1342,8 +1357,15 @@ class ApolloAPIClient:
             self._success_count += 1
             data = proxy_result.get('data') or []
             apps = (data.get('items') or []) if isinstance(data, dict) else data
-            used = proxy_result.get('usedHostId') or apolloHostId
-            logger.info(f"[apollo-app-list] 查询成功: apolloHostId={used}, appCount={len(apps) if isinstance(apps, list) else '未知'}")
+            # 标注实际使用的 host + fallback 提示
+            if isinstance(proxy_result, dict) and isinstance(proxy_result.get('data'), dict):
+                proxy_result['data']['usedHostId'] = used_host_id
+                if host_name:
+                    proxy_result['data']['hostName'] = host_name
+                if was_fallback:
+                    proxy_result['data']['fallback'] = True
+                    proxy_result['data']['fallbackTip'] = f"指定 Apollo 套 {apolloHostId} 查询异常，自动切换到 {used_host_id}({host_name})"
+            logger.info(f"[apollo-app-list] 查询成功: apolloHostId={used_host_id}, appCount={len(apps) if isinstance(apps, list) else '未知'}")
             return proxy_result
 
         err_code = proxy_result.get('code') if proxy_result else '空'
