@@ -26,7 +26,7 @@ import time
 import threading
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 _root_dir = os.path.dirname(_script_dir)
@@ -784,12 +784,28 @@ class ConfigClient:
         }
         """
         start = time.time()
+        # 预算从函数入口算起（覆盖 host_list + probe + 扫描全阶段）
+        budget_sec = self._global_search_budget
+        budget_start = start
+
         kw = (keyword or '').strip().lower()
         if not kw:
             raise ValueError("keyword 不能为空")
 
-        # 1. 取 host 列表 + 探活排序
-        host_list = self._fetch_host_list_raw()
+        # 1. 取 host 列表 + 探活排序（加 try/except，EasyOps 抖动时不崩溃）
+        host_list = []
+        try:
+            host_list = self._fetch_host_list_raw()
+        except Exception as e:
+            logger.warning(f"[ConfigClient] 全局搜索 Host 列表获取失败: {e}，返回空结果")
+
+        if not host_list:
+            return {"code": 503, "message": "无法获取 Apollo Host 列表",
+                    "data": {"keyword": keyword, "error": str(e),
+                             "summary": {"hostCount": 0, "appCount": 0, "scannedApps": 0,
+                                         "matchedCount": 0, "maskedCount": 0, "elapsedMs": round((time.time()-start)*1000)},
+                             "matches": [], "partial": False, "truncated": False}}
+
         default_id = self._select_target_host(host_list).get('id')
         probe_map = self._probe_hosts_concurrent(host_list)
         ordered_hosts = sorted(
@@ -804,8 +820,6 @@ class ConfigClient:
         if not active_hosts:
             active_hosts = ordered_hosts  # 全部不可用时退化为尝试所有
 
-        budget_sec = self._global_search_budget
-        budget_start = time.time()
         matches: List[dict] = []
         unfinished_apps: List[str] = []
         app_id_set: set = set()  # 去重同一 appId
@@ -880,24 +894,51 @@ class ConfigClient:
                             })
             return local_matches, local_unfinished, local_scanned
 
-        # 3. 并发执行各 host 扫描（max_workers 线程池）
+        # 3. 并发执行各 host 扫描
+        #    关键修复：手动创建 ThreadPoolExecutor + concurrent.futures.wait，
+        #    替代 with ThreadPoolExecutor（会 shutdown(wait=True) 等待所有 future 完成）。
+        #    用 wait(timeout=剩余预算) 拿到已完成的 futures 就处理，
+        #    未完成的直接标记为 unfinished，pool.shutdown(wait=False, cancel_futures=True)
+        #    让主流程立即返回，运行中的线程在后台继续（结果被忽略）。
         actual_workers = min(self._global_search_workers, max(len(active_hosts), 1))
         logger.info(f"[ConfigClient] 开始全局搜索: keyword='{kw}', field={search_field}, env={env}, "
                     f"hosts={len(active_hosts)}, workers={actual_workers}, budget={budget_sec}s")
 
-        with ThreadPoolExecutor(max_workers=actual_workers) as pool:
-            futures = {pool.submit(_scan_host, h): h for h in active_hosts}
-            for fut in as_completed(futures):
+        pool = ThreadPoolExecutor(max_workers=actual_workers)
+        futures = {pool.submit(_scan_host, h): h for h in active_hosts}
+        pending = set()  # 安全初始化，try 内 wait 失败时也能正常引用
+
+        try:
+            # 计算剩余预算（host_list + probe 已花的时间也要算）
+            total_elapsed = time.time() - start
+            remaining = max(budget_sec - total_elapsed, 1)  # 至少 1s 避免立即 timeout
+            # wait 返回已完成的 futures；超时则返回 (已完成, 未完成)
+            done, pending = wait(futures, timeout=remaining)
+
+            for fut in done:
                 try:
-                    m, uf, sc = fut.result(timeout=budget_sec)
+                    m, uf, sc = fut.result(timeout=5)
                     matches.extend(m)
                     unfinished_apps.extend(uf)
                     scanned_count += sc
                 except Exception as e:
                     logger.debug(f"[ConfigClient] 全局搜索 host 扫描异常: {e}")
 
+            # 未完成的 host 直接标记为 unfinished（不等待它们完成）
+            for fut in pending:
+                h = futures[fut]
+                unfinished_apps.append(f"timeout/{h.get('id')}/{h.get('name', '')}")
+        finally:
+            # wait=False + cancel_futures=True: 不等待运行中的线程完成，直接关闭
+            # cancel_futures=True 只取消排队中的（尚未开始）futures，运行中的不受影响
+            try:
+                pool.shutdown(wait=False, cancel_futures=True)
+            except TypeError:
+                # 老版本 Python 不支持 cancel_futures 参数（3.9+ 才引入）
+                pool.shutdown(wait=False)
+
         elapsed_ms = round((time.time() - start) * 1000)
-        partial = (time.time() - budget_start) > budget_sec or len(unfinished_apps) > 0
+        partial = len(pending) > 0 or len(unfinished_apps) > 0 or (time.time() - start) > budget_sec
 
         # 应用脱敏（与单配置查询一致，直接调用模块顶层函数）
         masked_count = 0
@@ -919,7 +960,8 @@ class ConfigClient:
             unfinished_apps.append(f"... 另有 {len(unfinished_apps) - 20} 项未完成")
 
         logger.info(f"[ConfigClient] 全局搜索完成: keyword='{kw}', matches={len(matches)}, "
-                    f"scanned_apps={scanned_count}, elapsed={elapsed_ms}ms, partial={partial}")
+                    f"scanned_apps={scanned_count}, elapsed={elapsed_ms}ms, partial={partial}, "
+                    f"pending_hosts={len(pending)}")
 
         result_data = {
             "keyword": keyword,
