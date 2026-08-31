@@ -23,8 +23,11 @@ else
     exit 1
 fi
 
-# 2. 配置 .env (不存在则自动生成，不区分首次部署)
+# 2. 配置 .env（首次部署自动生成；已存在时做安全 merge——保留现有值，补入 .env.example 新增变量）
+#    这样 .env.example 新增的配置项（如 APOLLO_GLOBAL_SEARCH_*）会自动补到服务器 .env，
+#    但服务器上已改过的值（如 APOLLO_REQUEST_TIMEOUT=8）不会被覆盖
 if [ ! -f .env ]; then
+    echo "[2/5] 初始化 .env（首次部署）"
     if [ -f ../.env.example ]; then
         cp ../.env.example .env
     else
@@ -39,8 +42,44 @@ LOG_TO_FILE=false
 EOF
     fi
     chmod 600 .env
-    echo "ℹ️  .env 不存在，已自动生成（使用第三方接口获取 Apollo 地址/Token，默认无需填写）"
-    echo "   如需覆盖第三方接口地址或 sessionId，请编辑 .env 后重新执行本脚本"
+    echo "✅ .env 已生成"
+else
+    echo "[2/5] 检查 .env 更新（merge .env.example 新增变量）"
+    if [ -f ../.env.example ]; then
+        ENV_BAK=".env.bak.$(date +%Y%m%d%H%M%S)"
+        cp .env "$ENV_BAK"
+        # 遍历 .env.example，提取 KEY=value 格式的变量（包括注释掉的默认值 # KEY=value），
+        # 如果 .env 里没有就追加——新增变量自动补进服务器 .env，已有值保持不变
+        ADDED=0
+        while IFS= read -r line; do
+            # 只处理含 "=" 且等号左边是合法 KEY 格式的行
+            # 合法 KEY: 以字母/数字/下划线开头，只含字母/数字/下划线/点号
+            if echo "$line" | grep -qE '^[[:space:]]*#?[[:space:]]*[A-Za-z_][A-Za-z0-9_.]*='; then
+                # 提取 key（去掉 # 注释符和空格）
+                key=$(echo "$line" | sed 's/^[[:space:]]*#*[[:space:]]*//' | cut -d'=' -f1 | sed 's/[[:space:]]*$//')
+                [ -z "$key" ] && continue
+                # 检查 .env 是否已有这个 key
+                if ! grep -Eq "^[[:space:]]*${key}=" .env 2>/dev/null; then
+                    if echo "$line" | grep -qE '^[[:space:]]*#'; then
+                        echo "# [NEW] ${key} 默认值已追加（如需启用去掉注释#即可）" >> .env
+                        echo "$line" >> .env
+                    else
+                        echo "$line" >> .env
+                    fi
+                    ADDED=$((ADDED + 1))
+                    echo "  + 新增: $key"
+                fi
+            fi
+        done < ../.env.example
+
+        if [ "$ADDED" -gt 0 ]; then
+            echo "✅ merge 完成：新增 $ADDED 个变量（已备份到 $ENV_BAK）"
+            chmod 600 .env
+        else
+            echo "ℹ️  .env 已是最新，无需更新"
+            rm -f "$ENV_BAK"
+        fi
+    fi
 fi
 
 # 校验：第三方接口 sessionId 未配置时给出提示（不再阻断，代码内置默认第三方接口）
