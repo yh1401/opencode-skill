@@ -1,0 +1,42 @@
+[
+  {
+    "name": "cmdb_server_query",
+    "description": "按 IP/状态等条件查询 CMDB 服务器资产",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "server_public_ip_query",
+    "description": "查询服务器公网 IP",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "project_deployment_query",
+    "description": "查询项目部署记录",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "product_query",
+    "description": "查询产品信息",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "project_basis_query",
+    "description": "查询工程项目基础信息",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+]

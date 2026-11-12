@@ -1,0 +1,54 @@
+{
+  "status": "success",
+  "data": {
+    "groups": [
+      {
+        "name": "host.rules",
+        "file": "/etc/prometheus/rules/host.rules",
+        "interval": 15,
+        "rules": [
+          {
+            "name": "TargetDown",
+            "query": "up == 0",
+            "duration": 300,
+            "labels": {
+              "severity": "critical"
+            },
+            "health": "ok",
+            "alerts": 2
+          },
+          {
+            "name": "HostHighCPU",
+            "query": "100 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))*100 > 90",
+            "duration": 600,
+            "labels": {
+              "severity": "warning"
+            },
+            "health": "ok",
+            "alerts": 1
+          },
+          {
+            "name": "MySQLReplicationDelay",
+            "query": "mysql_slave_status_seconds_behind_master > 30",
+            "duration": 120,
+            "labels": {
+              "severity": "warning"
+            },
+            "health": "ok",
+            "alerts": 1
+          },
+          {
+            "name": "HighErrorRate",
+            "query": "sum(rate(http_requests_total{code=~\"5..\"}[5m]))/sum(rate(http_requests_total[5m]))*100 > 1",
+            "duration": 300,
+            "labels": {
+              "severity": "warning"
+            },
+            "health": "ok",
+            "alerts": 1
+          }
+        ]
+      }
+    ]
+  }
+}

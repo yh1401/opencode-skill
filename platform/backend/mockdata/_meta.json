@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-10-30 17:37:10",
+  "source": "topo/tprel/data/operation_topology.json",
+  "apps": 108,
+  "mwHosts": 330,
+  "cmdbRecords": 44,
+  "mwTypeDist": {
+    "mysql": 54,
+    "redis": 38,
+    "rocketmq": 191,
+    "kafka": 26,
+    "elasticsearch": 12,
+    "nacos": 6,
+    "zookeeper": 3
+  },
+  "c1MissingInCmdb": [
+    "public-push1.rocketmq.ehome.dlifeinner.cn",
+    "common1.redis-cluster.ehome.dlifeinner.cn"
+  ],
+  "c2ScrappedUp1": "public-push3.rocketmq.ehome.dlifeinner.cn",
+  "c2PendingClearUp0": "sdk3a4-detectmessage1.rocketmq.ehome.dlifeinner.cn",
+  "extraDown": "172.17.228.214",
+  "c3OrphansFirstPage": [
+    "10.214.100.2",
+    "10.214.101.3",
+    "10.214.102.4",
+    "10.214.103.5",
+    "10.214.104.6",
+    "10.214.105.7"
+  ],
+  "upZeroHosts": [
+    "172.17.228.214",
+    "sdk3a4-detectmessage1.rocketmq.ehome.dlifeinner.cn"
+  ]
+}

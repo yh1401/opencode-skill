@@ -1,0 +1,55 @@
+{
+  "_comment": "动态工具：按 rule/node 从 _arch.json 聚合",
+  "rule": "dep_concentration",
+  "node": "云公司->贵州4c",
+  "metrics": [
+    {
+      "host": "vcp-pro.tidb.vcpinner.cn",
+      "value": 18,
+      "threshold": 10,
+      "exceeded": true
+    },
+    {
+      "host": "ehome.mysql.ehomeinner.cn",
+      "value": 13,
+      "threshold": 10,
+      "exceeded": true
+    },
+    {
+      "host": "public-push1.rocketmq.ehome.dlifeinner.cn",
+      "value": 11,
+      "threshold": 10,
+      "exceeded": true
+    },
+    {
+      "host": "public-push2.rocketmq.ehome.dlifeinner.cn",
+      "value": 11,
+      "threshold": 10,
+      "exceeded": true
+    },
+    {
+      "host": "public-push3.rocketmq.ehome.dlifeinner.cn",
+      "value": 11,
+      "threshold": 10,
+      "exceeded": true
+    },
+    {
+      "host": "public-push4.rocketmq.ehome.dlifeinner.cn",
+      "value": 11,
+      "threshold": 10,
+      "exceeded": true
+    },
+    {
+      "host": "common1.redis-cluster.ehome.dlifeinner.cn",
+      "value": 10,
+      "threshold": 10,
+      "exceeded": false
+    },
+    {
+      "host": "common.redis-cluster.camellia.ehome.ctseelinkinner.cn",
+      "value": 9,
+      "threshold": 10,
+      "exceeded": false
+    }
+  ]
+}

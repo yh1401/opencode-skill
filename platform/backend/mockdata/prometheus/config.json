@@ -1,0 +1,6 @@
+{
+  "status": "success",
+  "data": {
+    "yaml": "global:\n  scrape_interval: 15s\n  evaluation_interval: 15s\nrule_files:\n  - /etc/prometheus/rules/*.rules\nscrape_configs:\n  - job_name: node_exporter\n    static_configs:\n      - targets: ['vcp-pro.tidb.vcpinner.cn:9100', 'ehome.mysql.ehomeinner.cn:9100']\n  - job_name: mysqld_exporter\n    static_configs:\n      - targets: ['10.214.0.10:9104']\nalerting:\n  alertmanagers:\n    - static_configs:\n        - targets: ['10.214.0.9:9093']\n"
+  }
+}

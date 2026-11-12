@@ -1,0 +1,13 @@
+{
+  "status": "success",
+  "data": {
+    "files": [
+      "configuration/configuration.md",
+      "querying/basics.md",
+      "querying/functions.md",
+      "alerting/rules.md",
+      "storage/tsdb.md",
+      "installation/installation.md"
+    ]
+  }
+}

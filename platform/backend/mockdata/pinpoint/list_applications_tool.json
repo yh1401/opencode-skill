@@ -1,0 +1,870 @@
+{
+  "serviceType": "DEFAULT",
+  "total": 108,
+  "applications": [
+    {
+      "applicationName": "IMS通话服务",
+      "applicationId": "ehome-ims",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "gaoshj",
+      "code": 0
+    },
+    {
+      "applicationName": "adapter-task-api",
+      "applicationId": "adapter-task-api",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "apollo",
+      "code": 0
+    },
+    {
+      "applicationName": "area",
+      "applicationId": "area",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "gaoshj",
+      "code": 0
+    },
+    {
+      "applicationName": "cameraInfo",
+      "applicationId": "cameraInfo",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_zengxj",
+      "code": 0
+    },
+    {
+      "applicationName": "cloud-ehome-server",
+      "applicationId": "cloud-ehome",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "maoyn",
+      "code": 0
+    },
+    {
+      "applicationName": "cloud-ehome-v3",
+      "applicationId": "cloud-ehome-v3",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "maoyn",
+      "code": 0
+    },
+    {
+      "applicationName": "cloud-submit",
+      "applicationId": "submit-cloud",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "maoyn",
+      "code": 0
+    },
+    {
+      "applicationName": "cloud-video",
+      "applicationId": "cloud-video",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "maoyn",
+      "code": 0
+    },
+    {
+      "applicationName": "cp-dispatch",
+      "applicationId": "cp-dispatch",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "wangw43",
+      "code": 0
+    },
+    {
+      "applicationName": "cp-mall",
+      "applicationId": "cp-mall",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "wangw43",
+      "code": 0
+    },
+    {
+      "applicationName": "cp-manage",
+      "applicationId": "cp-manage",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "wangw43",
+      "code": 0
+    },
+    {
+      "applicationName": "cp-manage-new",
+      "applicationId": "cp-manage-new",
+      "serviceType": "DEFAULT",
+      "dept": "部门1",
+      "owner": "apollo",
+      "code": 0
+    },
+    {
+      "applicationName": "cp-store",
+      "applicationId": "cp-store",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "wangw43",
+      "code": 0
+    },
+    {
+      "applicationName": "ddnsmgr",
+      "applicationId": "ddnsmgr",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "maoyn",
+      "code": 0
+    },
+    {
+      "applicationName": "detect-sdk",
+      "applicationId": "detect-sdk",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_chenshy",
+      "code": 0
+    },
+    {
+      "applicationName": "device-access",
+      "applicationId": "device-access",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_chenshy",
+      "code": 0
+    },
+    {
+      "applicationName": "device-status-service",
+      "applicationId": "device-status-service",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "chenbx",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome ES双写服务",
+      "applicationId": "ehome-es-dual-active",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "liangx",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-account",
+      "applicationId": "ehome-account",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_chenshy",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-auth",
+      "applicationId": "auth",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_chenshy",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-bellpush-server",
+      "applicationId": "bellpush",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "huangyy",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-cascade",
+      "applicationId": "ehome-cascade",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_chenshy",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-command",
+      "applicationId": "ehome-command",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "pengzb189",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-gallery",
+      "applicationId": "ehome-gallery",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_caixb",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-mansync",
+      "applicationId": "ehome-mansync",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "yangfw",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-order",
+      "applicationId": "ehome-order",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "gaoshj",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-ota",
+      "applicationId": "ehome-ota",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "liangyy",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-pro-device",
+      "applicationId": "ehome-pro-device",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zhanghsh",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-pro-open",
+      "applicationId": "ehome-pro-open",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "liup",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-pro-openmgr",
+      "applicationId": "ehome-pro-openmgr",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_huangt",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-pro-server",
+      "applicationId": "apollo-ehome-pro",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_huangt",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-pro-viidmg-server",
+      "applicationId": "ehome-pro-viidmgr",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_liangzhh",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-prof-device",
+      "applicationId": "ehome-prof-device",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_zengyn",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-prof-push",
+      "applicationId": "ehome-prof-push",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_zengyn",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-public",
+      "applicationId": "ehome-public",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_liangzhh",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-public-push",
+      "applicationId": "ehome-public-push",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_zengyn",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-public-transmit",
+      "applicationId": "ehome-public-transmit",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "pengzb189",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-security",
+      "applicationId": "ehome-security",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_chenshy",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-security-fs",
+      "applicationId": "ehome-security-fs",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_chenshy",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome-sigtran-worker",
+      "applicationId": "ehome-sigtran-worker",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "weigh",
+      "code": 0
+    },
+    {
+      "applicationName": "ehome线上版本",
+      "applicationId": "ehome",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "gaoshj",
+      "code": 0
+    },
+    {
+      "applicationName": "file",
+      "applicationId": "file",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "gongqf",
+      "code": 0
+    },
+    {
+      "applicationName": "gb-cascade-gateway",
+      "applicationId": "gb-cascade-gateway",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_liujh",
+      "code": 0
+    },
+    {
+      "applicationName": "mc-centric-consumer",
+      "applicationId": "mc-centric-consumer20190129",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "zhongzs189",
+      "code": 0
+    },
+    {
+      "applicationName": "mc-centric-data-init",
+      "applicationId": "mc-centric-data-init20190129",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "zhongzs189",
+      "code": 0
+    },
+    {
+      "applicationName": "mc-centric-elink-openapi",
+      "applicationId": "mc-centric-elink-openapi20190129",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "zhongzs189",
+      "code": 0
+    },
+    {
+      "applicationName": "mc-centric-management",
+      "applicationId": "mc-centric-management20190129",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "zhongzs189",
+      "code": 0
+    },
+    {
+      "applicationName": "mc-provincial-consumer",
+      "applicationId": "mc-provincial-consumer20190129",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "zhongzs189",
+      "code": 0
+    },
+    {
+      "applicationName": "mc-provincial-management",
+      "applicationId": "mc-provincial-management20190129",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "zhongzs189",
+      "code": 0
+    },
+    {
+      "applicationName": "message",
+      "applicationId": "message",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "maoyn",
+      "code": 0
+    },
+    {
+      "applicationName": "mqtt-centirc-login",
+      "applicationId": "mqtt-centirc-login20190130",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "zhongzs189",
+      "code": 0
+    },
+    {
+      "applicationName": "mqtt-provincial-connector",
+      "applicationId": "mqtt-provincial-connector0129",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "zhongzs189",
+      "code": 0
+    },
+    {
+      "applicationName": "omvs-cloud-api",
+      "applicationId": "omvs-cloud-api",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "wangw43",
+      "code": 0
+    },
+    {
+      "applicationName": "push-pro",
+      "applicationId": "push-pro",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_mengyl",
+      "code": 0
+    },
+    {
+      "applicationName": "push-producer",
+      "applicationId": "push-producer",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_kangqzh",
+      "code": 0
+    },
+    {
+      "applicationName": "push-sdk",
+      "applicationId": "push-sdk",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_chenshy",
+      "code": 0
+    },
+    {
+      "applicationName": "sl-center-auth-application",
+      "applicationId": "sl-center-auth-application",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "apollo",
+      "code": 0
+    },
+    {
+      "applicationName": "sl-center-device-access",
+      "applicationId": "sl-center-device-access",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "apollo",
+      "code": 0
+    },
+    {
+      "applicationName": "sl-center-device-auth",
+      "applicationId": "sl-center-device-auth",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "apollo",
+      "code": 0
+    },
+    {
+      "applicationName": "sl-center-device-control",
+      "applicationId": "sl-center-device-control",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "apollo",
+      "code": 0
+    },
+    {
+      "applicationName": "sl-center-device-sync",
+      "applicationId": "sl-center-device-sync",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "apollo",
+      "code": 0
+    },
+    {
+      "applicationName": "sl-center-device-tree",
+      "applicationId": "sl-center-device-tree",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "apollo",
+      "code": 0
+    },
+    {
+      "applicationName": "sl-es-dual-active",
+      "applicationId": "sl-es-dual-active",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "apollo",
+      "code": 0
+    },
+    {
+      "applicationName": "slink-amp-iot",
+      "applicationId": "slink-amp-iot",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "zhongzs189",
+      "code": 0
+    },
+    {
+      "applicationName": "submit-cloud",
+      "applicationId": "submit-cloud-v2",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "maoyn",
+      "code": 0
+    },
+    {
+      "applicationName": "tree-synvcp",
+      "applicationId": "tree-synvcp",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "liub1",
+      "code": 0
+    },
+    {
+      "applicationName": "vcp-businesshall",
+      "applicationId": "vcp-businesshall",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_wangy1",
+      "code": 0
+    },
+    {
+      "applicationName": "vcp-cascade-manage",
+      "applicationId": "vcp-cascade-manage",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "yefw189",
+      "code": 0
+    },
+    {
+      "applicationName": "vcp-gather",
+      "applicationId": "vcp-gather",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_zhangxl",
+      "code": 0
+    },
+    {
+      "applicationName": "vcp-proapp",
+      "applicationId": "vcp-proapp",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_liangzhh",
+      "code": 0
+    },
+    {
+      "applicationName": "vcp-saas-jxc",
+      "applicationId": "vcp-saas-jxc",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "apollo",
+      "code": 0
+    },
+    {
+      "applicationName": "vcp-sync-es",
+      "applicationId": "vcp-sync-es",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_lihb",
+      "code": 0
+    },
+    {
+      "applicationName": "vcp-tree-service",
+      "applicationId": "treeSevice",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_zengxj",
+      "code": 0
+    },
+    {
+      "applicationName": "vcp-viid-node",
+      "applicationId": "vcp-viid-node",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "liub1",
+      "code": 0
+    },
+    {
+      "applicationName": "vnet-cloud-broadcast",
+      "applicationId": "vnet-cloud-broadcast",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_linrh",
+      "code": 0
+    },
+    {
+      "applicationName": "vnet-vpaas-manage",
+      "applicationId": "vnet-vpaas-manage",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zst_tangww",
+      "code": 0
+    },
+    {
+      "applicationName": "xxl-job 任务调度",
+      "applicationId": "cloud-prod-xxl-job-admin",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "linzs153",
+      "code": 0
+    },
+    {
+      "applicationName": "公众版智能守护功能",
+      "applicationId": "ehome-ai-care",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "gaoshj",
+      "code": 0
+    },
+    {
+      "applicationName": "告警消息推送服务-视频云网",
+      "applicationId": "push",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "chenbx",
+      "code": 0
+    },
+    {
+      "applicationName": "商品中心套餐服务",
+      "applicationId": "sl-center-goods-packages",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "apollo",
+      "code": 0
+    },
+    {
+      "applicationName": "商品中心订单服务",
+      "applicationId": "sl-center-goods-order",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "apollo",
+      "code": 0
+    },
+    {
+      "applicationName": "天翼看家账号迁移服务",
+      "applicationId": "ehome-account-new-service",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "liangx",
+      "code": 0
+    },
+    {
+      "applicationName": "天翼视联业务平台用户模块",
+      "applicationId": "slink-biz-user",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "apollo",
+      "code": 0
+    },
+    {
+      "applicationName": "小微业务平台设备控制消费和推送服务",
+      "applicationId": "vnet-icam-push",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "pengzb189",
+      "code": 0
+    },
+    {
+      "applicationName": "平安慧眼2.0",
+      "applicationId": "vcp-proappweb-web",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "maoyn",
+      "code": 0
+    },
+    {
+      "applicationName": "水域监控",
+      "applicationId": "vcp-waters-monitor",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "maoyn",
+      "code": 0
+    },
+    {
+      "applicationName": "海拼应用-场景组件",
+      "applicationId": "vcp-saas-cmpt-scn",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "lizj26",
+      "code": 0
+    },
+    {
+      "applicationName": "海拼应用-基层治理",
+      "applicationId": "vcp-saas-grassroots-governance",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "lizj26",
+      "code": 0
+    },
+    {
+      "applicationName": "百川白牌管理管理后台",
+      "applicationId": "bc-bp-management-platform",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "pengzb189",
+      "code": 0
+    },
+    {
+      "applicationName": "百川白牌设备控制模块",
+      "applicationId": "bc-bp-device-control",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "pengzb189",
+      "code": 0
+    },
+    {
+      "applicationName": "百川解决方案管理后台",
+      "applicationId": "bc-pa-platform",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "liangx4",
+      "code": 0
+    },
+    {
+      "applicationName": "看家目录/设备同步程序",
+      "applicationId": "vcp-ehomesync",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_liangzhh",
+      "code": 0
+    },
+    {
+      "applicationName": "统一SDK业务平台ehome",
+      "applicationId": "ehome-api",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "chenbx",
+      "code": 0
+    },
+    {
+      "applicationName": "能力开发门户服务portal-api-dep",
+      "applicationId": "portal-api-dep",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "lizj26",
+      "code": 0
+    },
+    {
+      "applicationName": "视图云眼行业版",
+      "applicationId": "vcp-pro",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_suql",
+      "code": 0
+    },
+    {
+      "applicationName": "视联业务平台批处理服务",
+      "applicationId": "seelink-batch-service",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "gaoshj",
+      "code": 0
+    },
+    {
+      "applicationName": "视联百川白牌消息服务",
+      "applicationId": "bc-bp-message",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "liangx4",
+      "code": 0
+    },
+    {
+      "applicationName": "视联百川白牌用户服务",
+      "applicationId": "bc-bp-user",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "liangx4",
+      "code": 0
+    },
+    {
+      "applicationName": "视联百川白牌管理服务",
+      "applicationId": "bc-bp-manage",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "liangx4",
+      "code": 0
+    },
+    {
+      "applicationName": "视联百川白牌订单服务",
+      "applicationId": "bc-bp-order",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "liangx4",
+      "code": 0
+    },
+    {
+      "applicationName": "视联百川白牌设备管理服务",
+      "applicationId": "bc-bp-device-manage",
+      "serviceType": "DEFAULT",
+      "dept": "样例部门1",
+      "owner": "liangx4",
+      "code": 0
+    },
+    {
+      "applicationName": "视联网订单中台",
+      "applicationId": "uni-order",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "liangx",
+      "code": 0
+    },
+    {
+      "applicationName": "视频云网-能力开放",
+      "applicationId": "vcp-openapi",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "dengzhq",
+      "code": 0
+    },
+    {
+      "applicationName": "视频云网-能力开放管理后台",
+      "applicationId": "vcp-openmgr",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_liujh",
+      "code": 0
+    },
+    {
+      "applicationName": "视频云网AI管理服务",
+      "applicationId": "vcp-AIManager",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zhanghsh",
+      "code": 0
+    },
+    {
+      "applicationName": "视频云网目录树",
+      "applicationId": "vcp-tree-service",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "zn_liangzhh",
+      "code": 0
+    },
+    {
+      "applicationName": "视频云网行业应用WEB端告警服务",
+      "applicationId": "vcp-alert-web",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "maoyn",
+      "code": 0
+    },
+    {
+      "applicationName": "门铃告警消息推送服务-视频云网",
+      "applicationId": "detect",
+      "serviceType": "DEFAULT",
+      "dept": "部门2",
+      "owner": "chenbx",
+      "code": 0
+    }
+  ]
+}

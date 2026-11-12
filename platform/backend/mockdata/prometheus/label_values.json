@@ -1,0 +1,11 @@
+{
+  "_comment": "动态工具：label=instance/job 动态生成，其余返回本文件",
+  "status": "success",
+  "data": [
+    "node_exporter",
+    "mysqld_exporter",
+    "redis_exporter",
+    "rocketmq_exporter",
+    "process-exporter"
+  ]
+}

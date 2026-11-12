@@ -1,0 +1,138 @@
+[
+  {
+    "name": "list_applications_tool",
+    "description": "列出 Pinpoint 监控的全部应用列表",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "get_server_map_tool",
+    "description": "获取指定应用的上下游服务地图（调用关系拓扑）",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "drag_heatmap_tool",
+    "description": "获取指定应用在时间区间内的请求数热力图散点",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "get_transaction_trace_tool",
+    "description": "获取指定 traceId 的全链路调用栈明细",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "list_nodes_tool",
+    "description": "获取节点列表（架构优化 2.2）",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "get_module_topology_tool",
+    "description": "获取指定节点的业务模块拓扑与应用归属",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "analyze_link_topology_tool",
+    "description": "分析指定节点与项目列表的调用链路拓扑（含异常统计）",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "get_link_topology_tool",
+    "description": "获取指定节点与项目列表的调用链路拓扑原始边",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "get_host_structure_tool",
+    "description": "获取物理机与云主机关系（架构优化 2.3）",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "get_project_deploy_tool",
+    "description": "获取项目与云主机部署关系（架构优化 2.4）",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "analyze_host_concentration_tool",
+    "description": "分析节点内应用的宿主机集中度风险",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "prometheus_query_tool",
+    "description": "PromQL 代理查询（瞬时/范围）",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "arch_metric_query_tool",
+    "description": "按架构规则查询指标值",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "list_arch_rules_tool",
+    "description": "列出架构优化规则清单、当前阈值与规则版本",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "arch_rule_check_tool",
+    "description": "按规则对指定节点做架构检查",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "filter_dep_projects_tool",
+    "description": "过滤依赖项目列表（后缀筛选）",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "build_app_mapping_tool",
+    "description": "构建节点内应用 ID 与应用名映射",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+]

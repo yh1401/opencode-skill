@@ -1,0 +1,11 @@
+{
+  "ehome-pro.mysql.ehomeinner.cn": 120,
+  "order1.rocketmq.vcpinner.cn": 23,
+  "common1.redis-cluster.ehome.dlifeinner.cn": 48,
+  "vcp-common.mysql.vcpinner.cn": 3,
+  "default": 5,
+  "ehome.mysql.ehomeinner.cn": 86,
+  "sdk3a4-detectmessage1.rocketmq.ehome.dlifeinner.cn": 240,
+  "public-push3.rocketmq.ehome.dlifeinner.cn": 45,
+  "public-push1.rocketmq.ehome.dlifeinner.cn": 30
+}

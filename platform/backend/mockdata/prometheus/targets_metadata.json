@@ -1,0 +1,13 @@
+{
+  "status": "success",
+  "data": [
+    {
+      "instance": "vcp-pro.tidb.vcpinner.cn:9100",
+      "job": "node_exporter",
+      "metric": "up",
+      "type": "counter",
+      "help": "Up indicates whether the last scrape succeeded",
+      "unit": ""
+    }
+  ]
+}

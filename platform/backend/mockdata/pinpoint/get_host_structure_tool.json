@@ -1,0 +1,72 @@
+{
+  "nodeCode": "GZ4C",
+  "reverse": true,
+  "physicalHosts": [
+    {
+      "pmName": "phy-gz4c-000",
+      "pmId": "PM-GZ4C-0000",
+      "cloudHosts": [
+        {
+          "hostName": "ecs-a9614e-1200042",
+          "ip": "vcp-pro.tidb.vcpinner.cn"
+        },
+        {
+          "hostName": "ecs-3f727f-1200049",
+          "ip": "ehome.mysql.ehomeinner.cn"
+        },
+        {
+          "hostName": "ecs-37d69a-1200056",
+          "ip": "public-push2.rocketmq.ehome.dlifeinner.cn"
+        },
+        {
+          "hostName": "ecs-5f51db-1200063",
+          "ip": "public-push3.rocketmq.ehome.dlifeinner.cn"
+        }
+      ]
+    },
+    {
+      "pmName": "phy-gz4c-001",
+      "pmId": "PM-GZ4C-0001",
+      "cloudHosts": [
+        {
+          "hostName": "ecs-a9614e-1200042",
+          "ip": "vcp-pro.tidb.vcpinner.cn"
+        },
+        {
+          "hostName": "ecs-3f727f-1200049",
+          "ip": "ehome.mysql.ehomeinner.cn"
+        },
+        {
+          "hostName": "ecs-37d69a-1200056",
+          "ip": "public-push2.rocketmq.ehome.dlifeinner.cn"
+        },
+        {
+          "hostName": "ecs-5f51db-1200063",
+          "ip": "public-push3.rocketmq.ehome.dlifeinner.cn"
+        }
+      ]
+    },
+    {
+      "pmName": "phy-gz4c-002",
+      "pmId": "PM-GZ4C-0002",
+      "cloudHosts": [
+        {
+          "hostName": "ecs-a9614e-1200042",
+          "ip": "vcp-pro.tidb.vcpinner.cn"
+        },
+        {
+          "hostName": "ecs-3f727f-1200049",
+          "ip": "ehome.mysql.ehomeinner.cn"
+        },
+        {
+          "hostName": "ecs-37d69a-1200056",
+          "ip": "public-push2.rocketmq.ehome.dlifeinner.cn"
+        },
+        {
+          "hostName": "ecs-5f51db-1200063",
+          "ip": "public-push3.rocketmq.ehome.dlifeinner.cn"
+        }
+      ]
+    }
+  ]
+}

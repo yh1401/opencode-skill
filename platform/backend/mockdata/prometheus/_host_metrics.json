@@ -1,0 +1,10 @@
+{
+  "public-push3.rocketmq.ehome.dlifeinner.cn": {
+    "cpuUsage": 94.6,
+    "memUsage": 88.3,
+    "load": 14.2,
+    "tcpOverflow": 3,
+    "tcpTotal": 11200,
+    "diskUsage": 82.4
+  }
+}

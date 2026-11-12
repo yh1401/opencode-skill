@@ -1,0 +1,121 @@
+{
+  "node": "云公司->贵州4c",
+  "modules": [
+    {
+      "moduleId": "mysql-cluster-pro",
+      "moduleType": "mysql",
+      "moduleName": "MYSQL 中间件集群",
+      "hostCount": 54,
+      "projects": [
+        "IMS通话服务",
+        "area",
+        "cameraInfo",
+        "cp-dispatch",
+        "cp-mall",
+        "cp-manage",
+        "cp-manage-new",
+        "cp-store",
+        "detect-sdk",
+        "device-status-service"
+      ]
+    },
+    {
+      "moduleId": "redis-cluster-pro",
+      "moduleType": "redis",
+      "moduleName": "REDIS 中间件集群",
+      "hostCount": 38,
+      "projects": [
+        "IMS通话服务",
+        "adapter-task-api",
+        "area",
+        "cloud-ehome-server",
+        "cloud-ehome-v3",
+        "cloud-submit",
+        "cloud-video",
+        "ddnsmgr",
+        "detect-sdk",
+        "device-access"
+      ]
+    },
+    {
+      "moduleId": "rocketmq-cluster-pro",
+      "moduleType": "rocketmq",
+      "moduleName": "ROCKETMQ 中间件集群",
+      "hostCount": 191,
+      "projects": [
+        "IMS通话服务",
+        "cloud-ehome-server",
+        "cloud-ehome-v3",
+        "cloud-submit",
+        "detect-sdk",
+        "device-status-service",
+        "ehome-bellpush-server",
+        "ehome-gallery",
+        "ehome-order",
+        "ehome-ota"
+      ]
+    },
+    {
+      "moduleId": "elasticsearch-cluster-pro",
+      "moduleType": "elasticsearch",
+      "moduleName": "ELASTICSEARCH 中间件集群",
+      "hostCount": 12,
+      "projects": [
+        "cp-dispatch",
+        "cp-mall",
+        "cp-manage",
+        "cp-manage-new",
+        "cp-store",
+        "ehome ES双写服务",
+        "push-sdk",
+        "sl-center-device-sync",
+        "sl-es-dual-active",
+        "vcp-sync-es"
+      ]
+    },
+    {
+      "moduleId": "kafka-cluster-pro",
+      "moduleType": "kafka",
+      "moduleName": "KAFKA 中间件集群",
+      "hostCount": 26,
+      "projects": [
+        "ehome ES双写服务",
+        "ehome-mansync",
+        "ehome-pro-viidmg-server",
+        "ehome-public",
+        "sl-center-device-control",
+        "sl-center-device-sync",
+        "sl-es-dual-active",
+        "tree-synvcp",
+        "公众版智能守护功能",
+        "商品中心套餐服务"
+      ]
+    },
+    {
+      "moduleId": "nacos-cluster-pro",
+      "moduleType": "nacos",
+      "moduleName": "NACOS 中间件集群",
+      "hostCount": 6,
+      "projects": [
+        "detect-sdk",
+        "device-status-service",
+        "ehome-bellpush-server",
+        "ehome-ota",
+        "告警消息推送服务-视频云网",
+        "商品中心套餐服务",
+        "商品中心订单服务",
+        "门铃告警消息推送服务-视频云网"
+      ]
+    },
+    {
+      "moduleId": "zookeeper-cluster-pro",
+      "moduleType": "zookeeper",
+      "moduleName": "ZOOKEEPER 中间件集群",
+      "hostCount": 3,
+      "projects": [
+        "mc-provincial-management",
+        "mqtt-provincial-connector"
+      ]
+    }
+  ]
+}
