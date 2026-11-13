@@ -180,7 +180,9 @@ docker compose -f ai-ops/platform/docker-compose.yml restart backend mock-mcp
 
 ---
 
-## 六、演示流程（约 20 分钟，可按需裁剪 4.5–4.11）
+## 六、演示执行手册（启动 / 操作 / 预期值）
+
+> 讲解词、时间分配与页面截图统一见 [aiops-demo-script.html](aiops-demo-script/aiops-demo-script.html)（唯一演示脚本）；本节只保留可复现的启动命令、接口调用与预期值，步骤编号与演示脚本一一对应。
 
 ### 第 0 步｜启动（终端 2 个）
 
@@ -466,7 +468,7 @@ curl -s http://127.0.0.1:8080/api/quality/reports | python3 -m json.tool
 
 **T14 告警 ↔ 拓扑双向钻取**：告警中心任一告警行点「拓扑定位」，拓扑视图自动聚焦并高亮该节点；反向在拓扑节点详情点「查看告警」，回到告警中心并带上该节点过滤。
 
-**S5 日志证据**：在第 3 步请求体加 `logPath`（见第 3 步说明），或先在「日志分析」页跑一次真实文件。需要本地日志服务时启动 `log_analyzer`（默认 `http://127.0.0.1:8000`，`LOG_ANALYZER_URL` 可改）。
+**S5 日志证据**：在第 3 步请求体加 `logPath`（见第 3 步说明），或先在「日志分析」页跑一次真实文件。需要本地日志服务时启动 `log_analyzer`（前端 iframe 默认 `http://127.0.0.1:8000`，可用 `VITE_LOG_ANALYZER_URL` 覆盖；后端排障证据链读 `LOG_ANALYZER_URL`，compose 默认 `http://host.docker.internal:8020`，因本机 8000 被 prometheus-mcp-server 占用）。
 
 预期（实测）：第 10 步 `ok`，前端「日志证据」卡显示总行数 / 错误数 / 警告数、错误类型 TopN 与关键问题（真实样例 10 行 / 0 错误，约 1.4s）；服务不可用或路径不存在时该步 `skipped`，会话结论不受影响。
 

@@ -1,8 +1,8 @@
 # 视联 AI 运维平台 — 总体架构与实现方案（框架先行版）
 
-> 版本：v0.5（2026-11-10 同步第一批跨页联动断点 ①②③ 与拓扑排障/工单状态着色落地）
-> 历史：v0.4（2026-11-06 同步 M2–M5 落地：数据源验真、问题单、三路取证、证据驱动定因）；v0.3（2026-11-05 合并《排障×数据治理·两场景一体贯通方案》，新增第 13 章）
-> 范围：前端框架 / 后端框架 / 拓扑能力融入智能巡检与智能排障 / pinpoint-mcp 与 promthus-mcp 接入细节 / 开源复用映射 / 分期落地 / 两场景一体贯通
+> 版本：v0.6（2026-11-13 新增第 14 章「平台如何运转：已落地能力与菜单地图」）
+> 历史：v0.5（2026-11-10 同步第一批跨页联动断点 ①②③ 与拓扑排障/工单状态着色落地）；v0.4（2026-11-06 同步 M2–M5 落地：数据源验真、问题单、三路取证、证据驱动定因）；v0.3（2026-11-05 合并《排障×数据治理·两场景一体贯通方案》，新增第 13 章）
+> 范围：前端框架 / 后端框架 / 拓扑能力融入智能巡检与智能排障 / pinpoint-mcp 与 promthus-mcp 接入细节 / 开源复用映射 / 分期落地 / 两场景一体贯通 / 平台运转形态与菜单地图
 > 上位依据：《附件4.1 立项申报 计划任务书——网络运营与信息安全部——视联网端到端统一运维AI 自智能力研发项目》
 
 ---
@@ -11,7 +11,7 @@
 
 1. **不造轮子，先搭"骨架 + 网关 + 两个闭环"**。可复用的开源件已经覆盖 60%~70% 的通用能力（Agent 编排、告警收敛、处置执行、图数据库、向量检索、实验追踪），自研集中在三件事：**拓扑与业务语义的对齐**、**巡检/排障两条业务闭环**、**统一接入网关与审计**。
 2. **拓扑（topo）不做成独立页面，而做成"上下文服务"**。它不产出结论，只回答两个问题：「这个应用依赖谁 / 谁依赖这个中间件」。智能巡检用它做**基线 diff 与爆炸半径**，智能排障用它做**影响面收敛**。
-3. **两个上游服务不直连 Agent，统一走统一接入网关**。原因很具体：pinpoint-mcp 只有 streamable-http、无健康检查、无工具开关；promthus-mcp 有 `/metrics`、有工具白名单但会被 `--prometheus.backend` 覆盖。两者语义、错误模型、鉴权方式都不同，必须由网关抹平。
+3. **上游服务不直连 Agent，统一走统一接入网关**（初版为 pinpoint / prometheus 两个；2026-10-28 增 cmdb，2026-11-06 增 es，现为四个，接入方式一致）。原因很具体：pinpoint-mcp 只有 streamable-http、无健康检查、无工具开关；promthus-mcp 有 `/metrics`、有工具白名单但会被 `--prometheus.backend` 覆盖。两者语义、错误模型、鉴权方式都不同，必须由网关抹平。
 4. **对齐键是最大风险**。topo 的 `appKey = appId|depProject|node`（折叠/展开两种口径），Pinpoint 的 application name 是另一套命名，中间只能靠 pinpoint-mcp 自带的 `build_app_mapping_tool` / `filter_dep_projects_tool` 做桥接。这一层必须单独建表固化，不能每次实时算。
 
 ---
@@ -40,13 +40,23 @@
 | 语言/SDK | Python + FastMCP，`mcp>=1.10.0,<2.0.0`、`httpx>=0.27.0`（未显式声明 uvicorn/starlette） |
 | 传输 | **仅 streamable-http**，路径 `/mcp`，兼容 `/gateway/pinpoint(/)`，其余 404 |
 | 端口 | `MCP_HOST=0.0.0.0`、`MCP_PORT=8888` |
-| 工具数 | 17 个 |
+| 工具数 | 25 个（基础 4 + 架构分析 21） |
 | 上游 | Pinpoint Web（`/api/applications`、`/api/servermap/serverMap`、`/api/heatmap/drag`、`/api/transaction/trace`）+ EasyViews 网关 5 个内层接口 + Prometheus `/api/v1/query` |
 | 认证 | 表单登录 `/login` + Basic + Cookie + `X-Auth-Session`；302/401/403 重登一次 |
 | 部署 | 仅 systemd（`User=mcp`、`Restart=always`、`EnvironmentFile=/fortress/pinpoint-mcp/mcp.env`） |
 | 限制 | 无分页、无限流、无服务端缓存、无工具级开关、无 Dockerfile/k8s、无健康检查端点；`httpx.AsyncClient(timeout=30.0)` 硬编码；错误多为抛异常（上游 `isError`） |
 
-**17 个工具清单**：`list_applications_tool`、`get_server_map_tool`、`drag_heatmap_tool`、`get_transaction_trace_tool`、`list_nodes_tool`、`get_module_topology_tool`、`analyze_link_topology_tool`、`get_link_topology_tool`、`get_host_structure_tool`、`get_project_deploy_tool`、`analyze_host_concentration_tool`、`prometheus_query_tool`、`arch_metric_query_tool`、`list_arch_rules_tool`、`arch_rule_check_tool`、`filter_dep_projects_tool`、`build_app_mapping_tool`
+**25 个工具清单**：`list_applications_tool`、`get_server_map_tool`、`drag_heatmap_tool`、`get_transaction_trace_tool`、`list_nodes_tool`、`get_module_topology_tool`、`resolve_analysis_scope_tool`、`analyze_link_topology_tool`、`get_link_topology_tool`、`get_host_structure_tool`、`get_project_deploy_tool`、`analyze_host_concentration_tool`、`prometheus_query_tool`、`arch_metric_query_tool`、`arch_rule_check_tool`、`list_arch_rules_tool`、`arch_label_probe_tool`、`analyze_node_runtime_tool`、`analyze_nodes_runtime_tool`、`filter_dep_projects_tool`、`build_app_mapping_tool`、`analyze_pinpoint_dependencies_tool`、`summarize_architecture_findings_tool`、`arch_task_open_tool`、`arch_task_status_tool`
+
+**实现形态（2026-11-13 源码核对）**
+
+- 框架与入口：Python + FastMCP，`server.py` 用 `@mcp.tool()` 逐函数注册，函数名即工具名（统一 `*_tool` 后缀）；`_startup()` 预登录 Pinpoint，失败只告警不阻断。
+- 传输：仅 Streamable HTTP（`mcp.streamable_http_app()` + uvicorn），端点 `/mcp`，默认 `0.0.0.0:8888`；不支持 stdio。另有路径重写兼容网关前缀 `/gateway/pinpoint`。
+- 工具规模：25 个 = 基础 4（`list_applications_tool`、`get_server_map_tool`、`drag_heatmap_tool`、`get_transaction_trace_tool`）+ 架构分析 21。
+- 一个进程内挂三个上游客户端：`pinpoint_client.py`（Pinpoint Web，Cookie/Basic/账号密码 formLogin 三种认证，302·401·403 自动重登一次）、`prometheus_client.py`（`PROMETHEUS_BASE_URL`，无认证，5xx 指数退避重试 2 次）、`easyviews_client.py`（统一代理 `getTykjProvince`，凭据放请求体 `provinceDetail`）。因此它实际是「Pinpoint 调用链 + Prometheus 指标 + EasyViews 拓扑」三合一分析网关，`arch_*` 系列工具会跨这三个源取数。
+- 旁路 REST：`GET /api/arch/health`、`POST /api/arch/batch`、`GET /api/arch/task/{id}`，供无法继承 MCP 会话的子 Worker 使用，需请求头 `X-Arch-Token`；未配置 `ARCH_API_TOKEN` 时全部返回 403。
+- 时间单位：Pinpoint 类工具用**毫秒**；内部 Prometheus 取数工具 `ts/start_ts/end_ts` 用**秒**；EasyViews 链路用 `minute` 分钟。
+- 全部只读，无写操作；风险在结果体量（`return_raw_samples=true`、`include_raw=true`、`include_samples=true` 会返回超大数据）与任意 PromQL 可执行。
 
 ### 1.3 promthus-mcp
 
@@ -55,7 +65,7 @@
 | 语言/SDK | Go 1.26 + 官方 MCP go-sdk v1.6.0 |
 | 传输 | 默认 stdio；`--mcp.transport=http` 走 `/mcp` |
 | 端口 | 代码默认 `:8080`，deploy env 为 `:8090` |
-| 工具数 | Prometheus 后端 35 个（Thanos 后端 31 个） |
+| 工具数 | Prometheus 后端 35 个（Thanos 后端 31 个；并集 36，`list_stores` 仅 Thanos 注册） |
 | 配置 | 环境变量前缀 `PROMETHEUS_MCP_SERVER_`（flag → 大写，`.`/`-` → `_`） |
 | 关键 flag | `--mcp.tools=all\|core\|<allowlist>`、`--prometheus.url`、`--prometheus.timeout=1m`、`--web.max-requests=40`、`--dangerous.enable-tsdb-admin-tools=false`、`--mcp.session-timeout=10m`、`--mcp.stateless=false` |
 | 认证 | Prometheus 默认无认证；支持 `--http.config` 与请求级 `Authorization` 透传；EasyViews 用 `appId/appSecret/province` 放 POST body |
@@ -66,6 +76,16 @@
 **核心 9 个（`--mcp.tools=core`）**：`docs_list`、`docs_read`、`docs_search`、`query`、`range_query`、`metric_metadata`、`label_names`、`label_values`、`series`
 
 **业务扩展 5 个（视联定制）**：`host_metrics_realtime`、`host_metrics_trend`、`get_module_topology`、`get_chain_topology`、`get_node_list`、`get_virtual_structure`、`get_project_topology`
+
+**实现形态（2026-11-13 源码核对）**
+
+- 框架与入口：Go + 官方 client，`cmd/prometheus-mcp-server/main.go`，kingpin 参数；`pkg/mcp/{tools.go,registration.go,handlers.go,easyviews.go}` 分层。
+- 传输：`--mcp.transport=stdio`（默认）或 `http`，HTTP 模式挂 Streamable HTTP 于 `/mcp`，默认 `:8080`；另有 `/metrics`、`/docs/`。
+- 工具规模：36 个（并集口径）。`all` + prometheus 后端为 35；`list_stores` 仅 `--prometheus.backend=thanos` 时注册，同时移除 `alertmanagers/config/wal_replay_status/reload/quit`。核心集 `core` 仅 9 个。
+- 上游与认证：`--prometheus.url`（默认 `http://127.0.0.1:9090`），`--http.config` 提供 basic_auth / bearer_token / TLS；HTTP 传输时请求头 `Authorization` 可覆盖默认凭据。单实例单基址，**不支持多集群**，多集群需多实例。
+- 写操作：`delete_series`、`clean_tombstones`、`snapshot` 需 `--dangerous.enable-tsdb-admin-tools`；`reload`、`quit` 需显式开启生命周期开关。生产接入必须保持默认关闭并纳入网关黑名单。
+- 返回形态：`query`/`range_query`/`exemplar_query` 返回 `{"result":"<字符串>","warnings":[...]}`，`result` 是 `model.Value.String()` 的文本行，不是 JSON，需按文本解析。
+- EasyViews 同源：`easyviews.go` 的 5 个拓扑工具（`get_node_list`、`get_module_topology`、`get_chain_topology`、`get_virtual_structure`、`get_project_topology`）与 `pinpoint-mcp` 的 `easyviews_client.py` 封装同一个上游网关、同一信封、同一组内层 API。两侧互为镜像，必须指定唯一权威源。
 
 ---
 
@@ -84,7 +104,7 @@
 │         工具调度 · 证据收集 · 结论生成 · 人工确认卡点             │
 ├──────────────────────────────────────────────────────────────┤
 │ 工具层  统一接入网关（统一鉴权/限流/审计/探针/结果归一）           │
-│         ├─ pinpoint-mcp  17 tools  :8888/mcp                    │
+│         ├─ pinpoint-mcp  25 tools  :8888/mcp                    │
 │         ├─ promthus-mcp  35 tools  :8090/mcp                    │
 │         ├─ topo-service   7 APIs   /api/external/operationTopology│
 │         ├─ apollo-mcp-server                                    │
@@ -117,7 +137,7 @@
 ### 2.4 部署形态
 
 - 一套 K8s 命名空间 `ai-ops`，或先裸机 systemd（与现状一致）+ Nginx 反代。
-- 必须暴露给平台内的只有：`web`（443）、`api`（8080）、`mcp-gateway`（8081）。**两个上游服务不对外暴露**。
+- 必须暴露给平台内的只有：`web`（443）、`api`（8080）、`mcp-gateway`（8081）。**全部上游服务不对外暴露**。
 - pinpoint-mcp 与 promthus-mcp 作为 Sidecar 或同 Namespace Deployment，由网关内网访问。
 
 ---
@@ -330,7 +350,7 @@ CREATE TABLE app_identity (
 | 判定时（规则入参） | 依赖清单注入规则上下文 | 让 D1–D6 规则拿到"上下游是谁" |
 | 出报告（归因与排序） | 影响面数据 | 按"影响应用数 × 严重度"排序，而不是按规则码排序 |
 
-### 5.2 新增巡检场景（topo 独有，非 arch-opt 覆盖）
+### 5.2 新增巡检场景（T1–T6 为 topo 独有，T7–T11 为上游证据扩展，非 arch-opt 覆盖）
 
 | 编码 | 场景 | 判定逻辑 | 数据来源 | 四态处理 |
 | --- | --- | --- | --- | --- |
@@ -340,7 +360,14 @@ CREATE TABLE app_identity (
 | TOPO_T4 | **依赖环 / 自依赖** | 图内出现环，或应用依赖自身 | `/graph` DFS | 图不完整 → 🟨 |
 | TOPO_T5 | **孤儿应用** | 应用无任何中间件依赖（可能采集失败，非真无依赖） | `/list` | **必须标 🟨 而非 🟩**，避免误判"健康" |
 | TOPO_T6 | **跨环境错配** | 同一 `appId` 在 PRO 依赖的中间件地址出现在非 PRO 清单 | `/list` 按 env 分组 | env 不全 → ⚪ |
+| TOPO_T7 | **主机存活** | 巡检范围内中间件主机查 Prometheus `up`；`up=0` 判失联 | Prometheus `query` | 无序列 → 数据不足 |
+| TOPO_T8 | **调用链异常** | Pinpoint 服务地图上下游链路错误数 / 平均耗时超阈值 | Pinpoint `get_server_map_tool` | 无应用 / 无调用链 → 数据不足 |
+| TOPO_T9 | **CMDB 资产一致性** | 拓扑引用主机与 CMDB 对账：查无资产 / 非在线 / 缺负责人 | CMDB `cmdb_server_query` | 查无记录 → 数据不足 |
+| TOPO_T10 | **日志错误** | 按主机统计 ES 近 N 分钟 ERROR/FATAL 日志量超阈值 | ES `search` | 索引缺失 / 查询失败 → 数据不足 |
+| TOPO_T11 | **主机指标阈值** | Prometheus 主机实时指标（CPU / 内存 / 磁盘 / TCP 连接数）超阈值 | Prometheus `query` | 无指标 → 数据不足 |
 
+> T1–T6 为拓扑基础规则（2026-10）；T7–T11 于 2026-11-05 扩展，规则注册表见 `internal/inspect/rules.go`（共 11 条）。
+>
 > T5 是刻意设计的：topo 有 91 个 appId 无数据、333 个 `dep_project` 缺失，"查不到"绝不能等同于"没问题"。
 
 ### 5.3 数据结构：规则上下文
@@ -413,6 +440,37 @@ CREATE TABLE app_identity (
 
 > 前端排障工作台（`/diagnosis/:id`）在步骤流之外新增两张卡：**问题单**（实体/级别/信号/时间窗/影响面/可信度）与**数据源验真**（逐源状态/检查项/说明）。接口字段见 `internal/domain/models.go` 的 `DiagnosisTicket` / `SourceHealth`。
 
+#### 置信度计算（M5，`internal/diagnose/engine.go`）
+
+置信度是**规则式推导**，不是 LLM 打分：先按证据集算基础置信度，再乘以各根因规则的强度系数。
+
+```text
+base = min(0.9, 0.25 + 0.10 × 证据来源数 + 0.02 × min(证据条数, 10))
+候选置信度 = round2(base × 规则强度系数)
+无任何有效证据时 base = 0.2
+```
+
+证据来源共六类：`topo` / `pinpoint` / `promthus`（告警 + 指标）/ `log` / `cmdb` / `rule`，同一来源的多条证据累加为条数，条数最多计 10 条。
+
+| 根因候选规则 | 强度系数 |
+|---|---|
+| 共享中间件爆炸半径 ≥ 阈值 | 1.0 |
+| 调用链单 span 占比 ≥50% | 1.0 |
+| CMDB 已非在线且无心跳 | 1.0 |
+| 活跃告警命中 | 0.95 |
+| 日志错误激增 | 0.85 |
+| CMDB 状态过期但仍有心跳 | 0.85 |
+| 主机负载持续劣化（node_load1 上升 >30%） | 0.8 |
+| 应用仅依赖单一中间件实例 | 0.7 |
+| CMDB 查无资产（账实不符） | 0.7 |
+| 影响面收敛、更像应用侧问题 | 0.6 |
+| Pinpoint 未覆盖 | 0.45 |
+| 兜底「证据不足」 | 0.35 |
+
+三道强制降权：零有效证据 → 全部候选压到 0.2 并标记「疑似」；弱证据（拓扑为空且 Pinpoint 未匹配）→ 最高候选压到 0.5；数据源验真 `degraded` / `unavailable` → 全部候选封顶 0.5。
+
+会话级 `confidence` 取第一候选，状态机为 `sourceCount==0 → no_data`、`≥0.6 → root_caused`、其余 `investigating`；工单准入 ≥0.3，优先级 `≥0.8→P0 / ≥0.6→P1 / ≥0.4→P2 / 其余→P3`。
+
 ### 6.2 三种典型链路与调用的具体接口
 
 **A. 应用变慢（有明确 appId）**
@@ -442,7 +500,7 @@ CREATE TABLE app_identity (
 
 ## 7. 上游服务接入细节（以 pinpoint / prometheus 为例）
 
-> 2026-11-06 口径：平台已接入**四个**上游服务 —— 除本节两个外，还有 `cmdb-mcp-server`（`cmdb_server_query`）与 `elasticsearch-mcp`（`get_shards` + `search`）。四服务的工具清单、调用矩阵与字段契约见《上游服务工具返回数据与平台数据流转对照》§8 / §9.10 / §10。
+> 2026-11-06 口径：平台已接入**四个**上游服务 —— 除本节两个外，还有 `cmdb-mcp-server`（`cmdb_server_query`）与 `elasticsearch-mcp`（`get_shards` + `search`）。四服务的工具清单、调用矩阵与字段契约见《上游服务数据契约与工具对照》第二部分 §8 / §9.10（条件矩阵见第一部分 §9）。
 
 ### 7.1 对照矩阵
 
@@ -478,7 +536,7 @@ Resp:   { "ok": bool, "data": {}, "error": {"code","message","retryable"}, "meta
 3. **超时与重试**：默认 15s；只对幂等只读工具重试 1 次；`analyze_*` 类长工具不重试，改异步 job。
 4. **结果归一**：把 pinpoint 的 raw dict 与 promthus 的 TSDB matrix 都归一为 `{series|records, unit, window}`，Agent 侧不感知差异。
 5. **审计**：每次调用落 `diagnosis_evidence`（或独立 `tool_call_log`），含 tenant、session、入参摘要、耗时、是否错误。
-6. **凭据托管**：两个服务的明文凭据全部改环境变量 / K8s Secret，网关不接触上游密码，只做路由。
+6. **凭据托管**：各上游服务的明文凭据全部改环境变量 / K8s Secret，网关不接触上游密码，只做路由。
 
 ### 7.3 工具分工（按场景，不按服务）
 
@@ -502,7 +560,7 @@ Resp:   { "ok": bool, "data": {}, "error": {"code","message","retryable"}, "meta
 3. pinpoint-mcp 无 `uvicorn/starlette` 显式依赖 → `requirements.txt` 补齐并锁定版本。
 4. promthus-mcp `handlers.go` 响应体未加 `io.LimitReader` → 大范围 `range_query` 可能打爆内存，网关侧限制 `step` 与时间窗。
 5. EasyViews 内层域名硬编码生产 → 非生产环境无法联调，需参数化。
-6. 两个上游服务都**无调用方鉴权** → 必须只在集群内网暴露，禁止直接挂公网 Ingress。
+6. 上游服务都**无调用方鉴权** → 必须只在集群内网暴露，禁止直接挂公网 Ingress。
 
 ---
 
@@ -557,7 +615,7 @@ Resp:   { "ok": bool, "data": {}, "error": {"code","message","retryable"}, "meta
 | R3 | ADR/DPR 的 node 同值率 21.7% | 节点维度归因不可信 | **决策：一期不出 node 维度结论**，仅 app / 中间件两级 |
 | R4 | 折叠/展开两套口径 | 同一对象两种影响面 | 平台强制单一 `viewMode`，报告标注口径 |
 | R5 | pinpoint-mcp 无工具开关、无健康检查 | 无法做精细权限与 SLA | 网关白名单 + 应用层探针 |
-| R6 | 两个上游服务明文凭据 | 安全合规 | 全部改 Secret，作为 M0 前置项 |
+| R6 | 上游服务明文凭据 | 安全合规 | 全部改 Secret，作为 M0 前置项 |
 | R7 | `运维拓扑.md` §4.4/§4.5 写"node 取自跳②"，与代码相反 | 后续开发踩坑 | 文档更正，以代码为准（跳① ADR） |
 
 ---
@@ -592,13 +650,13 @@ ai-ops/platform/
 │   ├── internal/topo/            # 双数据源：file / http
 │   ├── internal/store/           # 文件为主 + PG 备份镜像
 │   ├── internal/mcp/             # streamable-http 客户端 + 网关
-│   ├── internal/inspect/         # TOPO_T1–T6 规则引擎
+│   ├── internal/inspect/         # TOPO_T1–T11 规则引擎
 │   ├── internal/diagnose/        # 排障会话 + 证据链
 │   ├── internal/alarm/           # 告警采集 + 指纹幂等 + 自动转排障（2026-11-03 新增）
 │   ├── internal/tickets/         # 隐患/工单引擎
 │   └── internal/api/             # 路由 + SSE
 ├── frontend/                     # React 18 + Vite + AntD 5 + G6 v5
-│   └── src/pages/                # Dashboard/Topology/Inspection/Diagnosis/AlarmCenter/Tickets/Audit/LogAnalysis/McpConsole
+│   └── src/pages/                # Dashboard/Topology/OpTopology/TopoSync/Inspection/InspectPlans/Diagnosis/AlarmCenter/BizMonitor/Quality/Degradation/Metrics/ChangePlans/Tickets/Audit/Relations/Knowledge/LogAnalysis/McpConsole
 └── docker-compose.yml            # mock 上游 + 后端 + 前端 + Postgres（real-mcp profile 接真实上游）
 ```
 
@@ -664,7 +722,7 @@ cd ai-ops/platform/frontend && npm install && npm run dev   # http://localhost:5
 | `DEGRADATION_MAX_TARGETS` | `10` | 单轮最多扫描目标数（按 host 去重后限量） |
 | `DEGRADATION_QUERY` | `node_load1{instance=~"{host}.*"}` | 劣化扫描 PromQL 模板，`{host}` 会被替换 |
 | `LOG_ANALYZER_ENABLED` | `true` | 关闭后排障跳过日志证据 |
-| `LOG_ANALYZER_URL` | `http://127.0.0.1:8000` | 外部日志分析服务地址 |
+| `LOG_ANALYZER_URL` | `http://127.0.0.1:8000` | 外部日志分析服务地址（**后端排障证据链专用**；compose 内默认 `http://host.docker.internal:8020`，因本机 8000 被 prometheus-mcp-server 占用。前端 `/log-analysis` iframe 默认 `:8000`，可用 `VITE_LOG_ANALYZER_URL` 覆盖） |
 | `LOG_PATH_TEMPLATE` | `/tmp/aiops-logs/{host}.log` | 日志路径模板，支持 `{host}` / `{app}`；请求可用 `logPath` 覆盖 |
 | `LOG_ANALYZE_TIMEOUT_SEC` | `30` | 日志分析任务最长等待 |
 | `LOG_ANALYZE_POLL_MS` | `800` | 日志分析任务轮询间隔 |
@@ -681,24 +739,34 @@ cd ai-ops/platform/frontend && npm install && npm run dev   # http://localhost:5
 | --- | --- |
 | 健康 | `GET /health`、`GET /meta` |
 | 拓扑 | `GET /topo/{dates,apps,graph,impact,diff,mwtypes,rows}` |
+| 运维关系拓扑 | `GET /topo/op/{graph,detail,list,middlewareTypes,mwTargets}`、`POST /topo/op/sync`、`GET /topo/op/sync/{status,logs}` |
 | 巡检 | `GET/POST /inspect/tasks`、`DELETE /inspect/tasks/:id`、`POST /inspect/tasks/:id/run`、`POST /inspect/run`、`GET /inspect/runs[/:id]`、`GET /inspect/runs/:id/findings`、`GET /inspect/runs/:id/report` |
 | 排障 | `POST/GET /diagnose/sessions`、`GET /diagnose/sessions/:id`、`GET /diagnose/sessions/:id/stream`（SSE）、`POST /diagnose/sessions/:id/feedback`（根因准确率人工回填）；请求支持可选 `logPath` |
+| 变更 | `GET /changes/templates`、`POST /changes/generate`、`GET /changes[/:id]` |
+| 工单 | `GET /tickets`、`GET /tickets/:id`、`PATCH /tickets/:id/status`、`POST /tickets/:id/resolve` |
+| 稽核 | `POST /audit/run`、`GET /audit/runs[/:id]`、`GET /audit/runs/:id/findings` |
 | 告警 | `GET /alarms`（state/severity/q/page/pageSize）、`GET /alarms/stats`、`GET /alarms/trend?hours=`、`GET /alarms/degradation`（劣化概况 + 最近扫描）、`GET /alarms/notifications?limit=`（出站投递记录）、`GET /alarms/:fp`、`POST /alarms/poll`、`POST /alarms/webhook`（Alertmanager v4 入站）、`POST /alarms/degradation/scan`、`POST /alarms/notifications/test`、`POST /alarms/:fp/diagnose`、`POST /alarms/:fp/silence`、`POST /alarms/:fp/unsilence` |
+| 业务接口监控 | `GET /biz-monitor/{overview,rules}`、`POST /biz-monitor/rules`、`DELETE /biz-monitor/rules/:id`、`POST /biz-monitor/scan` |
+| 质差分析 | `GET /quality/overview`、`POST /quality/scan`、`GET /quality/reports[/:id]` |
 | 考核指标 | `GET /metrics/kpi?days=7`（时延 P50/P90/达标率、自动化率、根因准确率、每日趋势） |
+| 关系修正 | `POST /relations/scan`、`GET /relations`、`GET /relations/{stats,overrides}`、`PATCH /relations/:id`、`POST /relations/:id/apply` |
+| 知识库 | `GET /knowledge`、`GET /knowledge/{stats,similar}`、`GET /knowledge/:id`、`POST /knowledge/reindex` |
+| 日志服务 | `GET /logs/health`（log_analyzer 探活，供 `/log-analysis` 决定嵌入或降级） |
+| 身份映射 | `GET /identity/{stats,apps,hosts,resolve}`、`POST /identity/rebuild` |
 | 上游接口 | `GET /mcp/probe`、`GET /mcp/tools`、`POST /mcp/call`、`GET /mcp/logs` |
 
 ### 12.6 冒烟结论（本地实测）
 
 - `TOPO_MODE=file` 直读快照：3 个日期（2026-09-29 / 09-30 / 10-08），108 个应用，rocketmq 191 实例 / mysql 62 / redis 40。
 - 全量巡检约 3s 完成：`items=12, risk=7, noData=2, notApplicable=1, notTriggered=2`；报告锁定 `sync_date` 可复现。
-- 排障（`appId=area`）：拓扑影响面 9 应用；M2–M5 后为 10 条证据链步骤 + 4 条 `sourceHealth` 验真记录，mock 下 `root_caused` / 置信度 0.74 / 问题单 `confirmed`；Prometheus 指向死端口时 `sourceHealth=unavailable`、置信度封顶 0.50、结论 `investigating`；SSE `step/session/done` 正常。
-- 前端 `npm run build` 通过，五个页面经 Vite 代理访问后端正常。
+- 排障（`appId=area`）：拓扑影响面 9 应用；M2–M5 后为 10–11 步证据链、12 个工具调用点 + `sourceHealth` 验真记录，mock 下 `root_caused` / 置信度 0.74 / 问题单 `confirmed`；Prometheus 指向死端口时 `sourceHealth=unavailable`、置信度封顶 0.50、结论 `investigating`；SSE `step/session/done` 正常。
+- 前端 `npm run build` 通过，核心页面经 Vite 代理访问后端正常。
 
 ### 12.7 与规划的偏差（有意为之）
 
 1. **topo 未内嵌**：topo 无 `go.mod`，改为 `file`/`http` 双 Provider；后续补 `go.mod` 后可替换为进程内调用。
 2. **编排层用规则引擎占位**：kagent + HolmesGPT 在 M2 接入，接口契约不变。
-3. **巡检规则版本**：骨架实现 TOPO_T1–T6；`T4` 因两级图无环恒为 `NOT_APPLICABLE`，`T5` 依赖孤儿数据恒为 `NO_DATA`，均如实出四态结论而非隐藏。
+3. **巡检规则版本**：骨架实现 TOPO_T1–T6，2026-11-05 扩至 TOPO_T1–T11（新增主机存活 / Pinpoint 调用链 / CMDB 一致性 / ES 日志 / 主机指标）；`T4` 因两级图无环恒为 `NOT_APPLICABLE`，`T5` 依赖孤儿数据恒为 `NO_DATA`，均如实出四态结论而非隐藏。
 
 ---
 
@@ -876,3 +944,150 @@ Prometheus 告警（instance=10.214.100.2:3306, alertname=MySQLDown）
 - **第一期（1 + 2 + 3 + 视觉增强）**：①稽核→排障 **✅ 2026-11-09**、②拓扑节点→排障 **✅ 2026-11-09**、③拓扑节点→稽核 **✅ 2026-11-09**；拓扑节点排障/工单状态着色 **✅ 2026-11-10**（视觉增强落地，第一档动线 + 整体感闭环）
 
 两个场景真串起来的秘密**不是造新底座，是把已经跑着的引擎和页面用几段 fetch 按钮连起来**。
+
+---
+
+## 14. 平台如何运转：已落地能力与菜单地图
+
+> 第 2–13 章回答「为什么这样设计、怎么一步步建」；本章回答三个使用视角的问题：
+> 这台平台**靠什么在转**、**哪些能力已经真的可用**、**菜单怎么组织、怎么用**。
+> 两者若有冲突，以本章为当前可用形态的口径（第 4.2 节的页面结构是早期规划稿，实际路由见 14.4）。
+
+### 14.1 运转总览：三条常驻循环 + 一个手动控制台
+
+平台不是"点一下查一下"的查询工具，后端常驻三条自动循环，另外四个场景由人在页面上操作。
+
+| 循环 | 默认周期 | 做什么 | 产出 |
+| --- | --- | --- | --- |
+| 告警采集 | 30s（`ALARM_POLL_INTERVAL_SEC`） | 拉取 / 接收 Alertmanager v4 与巡检、劣化、质差、业务接口事件，按指纹幂等入库 | 告警事件；命中规则时自动转排障并开工单 |
+| 巡检调度 | 20s tick（`INSPECT_CRON_TICK_SEC`） | 扫描巡检任务的 cron，到点执行 TOPO_T1–T11 | 巡检批次 → findings → 巡检报告 |
+| 指标劣化 | 300s（`DEGRADATION_INTERVAL_SEC`） | 按 PromQL 模板取主机序列，涨幅超阈值判为劣化 | 劣化告警 + 工单 |
+
+自动闭环有四条，最终都落到同一套存储与工单模型上，所以在不同页面看到的是同一条记录：
+
+- **告警 → 排障 → 工单 → 知识库**（核心动线，见 14.5）
+- **巡检 → findings → 工单**
+- **指标劣化 → 告警 / 工单 / 排障**
+- **资源稽核 → 关系修正建议 → 审批回写**
+
+### 14.2 一次请求怎么走
+
+```
+浏览器（React 18 + AntD 5 + AntV G6 + TanStack Query）
+   │  /api/*
+   ▼
+Nginx（aiops-frontend，5173 → 容器 80，托管 dist + 反代）
+   ▼
+Go BFF（aiops-backend :8080；全部路由集中在 internal/api/router.go）
+   ├─ alarm     告警采集 / 指纹幂等 / 自动转排障 / 通知
+   ├─ inspect   T1–T11 规则引擎 + Cron 调度
+   ├─ diagnose  排障会话、证据链、SSE、置信度
+   ├─ changes   变更方案与风险评估
+   ├─ tickets   工单引擎（状态流转 / 解决）
+   ├─ audit     资源稽核（topo ↔ CMDB + 指标佐证）
+   ├─ relations 关系修正（扫描 → 建议 → 审批 → 覆盖）
+   ├─ knowledge 历史故障归档 / 检索 / 相似案例
+   ├─ identity  拓扑 / Pinpoint / Prometheus / CMDB 身份对齐
+   ├─ mcp       统一接入网关（探针 / 白黑名单 / 结果归一 / 调用审计）
+   └─ topo      file 快照 / http 双 Provider
+   ▼
+上游与存储
+   ├─ topo 快照（file 模式直读；可切 `TOPO_MODE=http` 调 topo 服务）
+   ├─ pinpoint-mcp :8888（25 工具）· prometheus-mcp :8090（36 工具）
+   ├─ cmdb-mcp :8061（5 工具）· es-mcp :9201（5 工具）——合计 71 个 MCP 工具
+   ├─ log_analyzer :8020（外部日志服务，`LOG_ANALYZER_URL`）
+   └─ 本地 JSON 文件（主存储）+ PostgreSQL :55432（镜像备份，`platform_docs`）
+```
+
+四条运行时约定：
+
+1. **前端不直连上游。** 所有 MCP 调用经 `internal/mcp` 网关：先探针验真，再按 `MCP_DENY_TOOLS` 黑名单拦截写类工具，最后结果归一 + 审计落盘（`tool_call_log`）。
+2. **排障是固定流水线，不是自由对话。** 拓扑影响面 → 多路证据（Pinpoint 调用链、Prometheus 指标、CMDB 资产、ES / log_analyzer 日志）→ 规则打分 → 根因候选 → 置信度 → 自动开工单；过程走 SSE 增量推送，会话落盘可回放。
+3. **数据源不健康时不伪造结论。** `sourceHealth=unavailable` 时置信度封顶 0.50，结论降级为 `investigating`，对应步骤标记 `skipped` 而不是报错中断。
+4. **跨源靠身份映射对齐。** `internal/identity` 把拓扑 `appId`、Pinpoint application、Prometheus 实例、CMDB 资产串成一张表（当前 108 应用 / 330 主机），这是稽核、排障、指标能互相对上的前提。
+
+### 14.3 已落地能力与边界
+
+按业务域汇总"现在真能做什么"，以及容易误解的口径。
+
+| 域 | 已落地（可直接使用） | 边界 / 口径 |
+| --- | --- | --- |
+| 智能监控排障 | 告警中心：统计 / 趋势 / 筛选 / 详情 / 静默 / 强制排障 / 出站通知记录 / 劣化概况；排障工作台：10–11 步证据链、SSE 过程、影响面、CMDB 资产、日志取证、置信度、根因反馈、会话回放；日志分析：嵌入外部 log_analyzer，健康探测失败自动降级提示；外部业务接口监控：规则 CRUD + 扫描；隐患与工单：自动生成、状态流转、解决归档 | 排障流程为固定流水线（四步骨架），不支持自定义编排；告警采集为单实例轮询，无 HA |
+| 智能巡检 | TOPO_T1–T11 规则；巡检任务 CRUD / 启停 / 定时 / 手动触发；四态结论（发现风险 / 未触发 / 数据不足 / 不适用）；批次 findings 明细；巡检报告；巡检方案与脚本 | T4 因两级图无环恒为「不适用」、T5 依赖孤儿数据恒为「数据不足」，如实出四态而非隐藏；判定为规则口径，尚未接模型 |
+| 智能割接维护 | 变更方案：按模板 + 拓扑 diff + 历史故障生成；风险评估：影响面、爆炸半径、风险项 | 执行与验证未落地（规划），执行侧无自动化与拨测 |
+| 云网数据治理 | 运维关系拓扑：G6 三视图、节点按排障 / 工单状态着色、节点详情可跳排障或稽核；资源稽核：topo ↔ CMDB 对账 + 指标佐证，支持按 host 定向；关系修正：扫描 → 建议 → 审批 → 覆盖回写；资源拓扑与影响面；拓扑数据同步；身份映射底座 | 运维对象只覆盖业务应用与中间件（MySQL/TiDB/Redis 等）；`TOPO_MODE=file` 下同步为只读提示 |
+| 网络及服务质量优化 | 质差分析：按 `appId` 扫描并出报告，数据不足时降级为 `degraded`；指标劣化：PromQL 模板 + 定时扫描，可转告警 / 工单 | 依赖 Prometheus 序列质量；阈值为固定配置，非自适应基线 |
+| 运营指标 | 考核指标看板：时延 P50 / P90、达标率、自动化执行率、根因准确率、每日趋势（默认 7 天） | 指标来自已产生的会话与工单，无数据时为空而不是补零 |
+| 通用能力 | 数据与能力接口：4 个上游 71 个工具的清单 / 文档 / 试跑 / 黑名单拦截 / 调用审计；历史故障库与知识库：归档、关键词检索、相似案例、重建索引；平台服务：REST + SSE 能力面 | 「平台服务」为部分落地：缺鉴权、租户、OpenAPI、调用配额与正式交付物 |
+| 模型与算法 | 6 个入口均以占位页明确能力项与依赖 | 全部规划中：样本 / 特征 / 预处理 / 算法 / 训练 / 模型库均未建设 |
+
+### 14.4 菜单地图
+
+菜单共 8 个分组、29 个条目，加「总览」自成一级。状态语义：✅ 已落地、◐ 部分落地、○ 规划中（当前 15 / 6 / 8）。
+
+| 分组 | 菜单项（状态） | 用它做什么 |
+| --- | --- | --- |
+| 总览 | 总览 ✅ | 一屏汇总告警态势、巡检健康度、最近排障与考核指标，作为当班入口 |
+| 智能监控排障 | 告警中心 ✅ · 排障工作台 ✅ · 日志分析 ✅ · 外部业务接口监控 ✅ · 隐患与工单 ✅ · 排障流程管理 ○ | 故障的发现 → 定位 → 取证 → 闭环主链路；排障流程管理沉底为规划项 |
+| 智能巡检 | 巡检任务与报告 ◐ · 巡检方案与脚本 ✅ | 主动发现风险；任务侧报告能力部分落地，方案与脚本已可用 |
+| 智能割接维护（可整组隐藏） | 变更方案 ✅ · 风险评估 ✅ · 执行与验证 ○ | 变更前评估影响面与风险；执行与验证为规划项 |
+| 云网数据治理 | 运维关系拓扑 ✅ · 资源稽核 ✅ · 关系修正 ✅ · 资源拓扑与影响面 ◐ · 拓扑数据同步 ◐ · 运维对象 ◐ | 把拓扑数据变成可信资产：看关系 → 对账 → 修关系 → 同步；也可作为排障横向分析面 |
+| 网络及服务质量优化 | 质差分析 ✅ · 指标劣化 ✅ | 从业务质差与主机指标两侧发现劣化 |
+| 运营指标 | 考核指标看板 ✅ | 时延、达标率、自动化率、根因准确率的量化呈现 |
+| 通用能力 | 数据与能力接口 ◐ · 历史故障库与知识库 ✅ · 平台服务 ◐ | 工具与数据源统一入口、经验沉淀、对外能力开放 |
+| 模型与算法（可整组隐藏，默认隐藏） | 样本库管理 ○ · 特征库管理 ○ · 数据预处理与预检验 ○ · 算法管理 ○ · 模型训练 ○ · 模型库管理 ○ | 规划中的模型工程链路，当前仅保留入口与能力项 |
+
+排布原则：场景组内按处置动线排序（发现 → 定位 → 观测 → 闭环），已落地项靠上、部分 / 规划项沉到组尾；通用能力只保留当下可用的接口、知识库与平台服务；模型与算法整组外置，避免干扰日常菜单。
+
+### 14.5 四条使用动线
+
+**① 故障处置（最常用）**
+
+```
+告警中心（告警/劣化/质差事件，按指纹去重）
+  → 排障工作台（自动或手动发起：拓扑影响面 → 证据链 → 根因候选 → 置信度）
+  → 隐患与工单（root_caused 自动建单，人工处理并解决）
+  → 历史故障库与知识库（会话归档、相似案例检索）
+  → 考核指标看板（时延、自动化率、根因准确率回看）
+```
+
+**② 主动发现**
+
+```
+巡检任务与报告（定时 T1–T11）或 指标劣化扫描
+  → findings / 劣化告警
+  → 隐患与工单（或直接转排障）
+```
+
+**③ 数据治理**
+
+```
+运维关系拓扑（看应用—中间件关系）
+  → 资源稽核（与 CMDB 对账、指标佐证）
+  → 关系修正（建议 → 审批 → 覆盖回写）
+  → 拓扑数据同步 / 资源拓扑与影响面
+```
+
+横向联动（已落地）：稽核风险卡「开排障」、拓扑节点「从这里开排障」「对这个实例跑稽核」，跳转时自动预填对象与症状。
+
+**④ 割接变更**
+
+```
+变更方案（模板 + 拓扑 diff + 历史故障生成）
+  → 风险评估（影响面 + 爆炸半径 + 风险项）
+  → 执行与验证（规划中）
+```
+
+### 14.6 菜单本身的交互
+
+- **菜单显示**：侧栏底部「菜单显示」面板提供三个开关——规划中功能（默认关）、模型与算法（默认关）、智能割接维护（默认开）。默认隐藏 8 项，可见 21 项；按钮右侧角标显示当前隐藏数量，面板内「全部显示」可一键恢复。偏好写入 `localStorage` 的 `aiops-menu-prefs`，仅对当前浏览器生效；被隐藏的页面仍可通过 URL 直达。
+- **一键展开 / 合并**：侧栏底部同一区域提供「展开全部 / 合并全部」切换，作用于当前可见分组；合并后只保留一级分组，选中页仍可凭页头标题识别。
+- **状态表达**：已落地项正常显示；部分落地项默认置灰、悬停恢复为正文色；规划项常灰；选中态优先于置灰，保证当前位置有反馈。
+- 侧栏采用 `height: 100vh` + 菜单区内部滚动，底部三个动作（展开 / 菜单显示 / 设置）常驻可见。
+
+### 14.7 运行形态与已知边界
+
+- **部署**：`docker compose` 五容器——`mock-mcp`（8888 / 8090 / 8061 / 9201）、`backend`（8080）、`frontend`（5173 → 80）、`postgres`（55432）；接真实上游改 `--profile real-mcp`（与 mock 端口互斥）。也可 `run_demo.sh` 走本地文件模式。
+- **存储**：JSON 文件为主（`<STORE_DIR>/<docType>/<docID>.json`，tmp + rename 原子写），PG 镜像备份并在文件缺失时回填。文档类型覆盖 `alarm_event` / `ticket` / `diagnosis_session` / `inspection_task|run|report` / `finding` / `tool_call_log` / `change_plan` / `audit_run|finding` / `relation_proposal|override` / `knowledge_case` / `quality_report|scan` / `biz_rule|scan` / `degradation_scan` 等。
+- **已知边界**：无鉴权与租户模型、无 OpenAPI 与调用配额；后端单实例无 HA；CMDB / ES 未配置时不注册对应工具；拓扑 `file` 模式只读；模型与算法整链未建设。这些对应各菜单项的「部分 / 规划」状态，不在页面上伪装成已完成。
+
