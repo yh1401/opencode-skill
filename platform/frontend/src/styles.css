@@ -71,6 +71,9 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100vh;
+  position: sticky;
+  top: 0;
   background: var(--canvas) !important;
   border-inline-end: 1px solid var(--hairline);
 }
@@ -81,8 +84,10 @@ body {
   height: 100%;
 }
 
+/* 菜单自身滚动，底部「菜单显示 / 设置」常驻可见 */
 .app-menu {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   border-inline-end: none !important;
@@ -198,6 +203,30 @@ body {
   transition: background 0.15s ease, color 0.15s ease;
 }
 
+/* 侧栏底部动作区：菜单显示 + 设置纵向排列 */
+.sider-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 10px 12px 14px;
+}
+
+.sider-actions .sider-settings {
+  width: 100%;
+  margin: 0;
+}
+
+.sider-settings-count {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
 .sider-settings:hover {
   background: rgba(0, 0, 0, 0.04);
   color: var(--text-1);
@@ -209,6 +238,46 @@ body {
 
 .theme-panel {
   width: 220px;
+}
+
+/* 菜单显示面板：开关行 + 说明，宽度略大于主题面板容纳副标题 */
+.menu-panel {
+  width: 252px;
+}
+
+.menu-panel-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+}
+
+.menu-panel-row + .menu-panel-row {
+  border-top: 1px solid var(--hairline);
+}
+
+.menu-panel-label {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-1);
+}
+
+.menu-panel-desc {
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--text-3);
+}
+
+.menu-panel-row .ant-switch {
+  flex: none;
+  margin-top: 3px;
+}
+
+.menu-panel-reset {
+  margin-top: 2px;
+  padding: 0;
+  font-size: 12px;
 }
 
 .theme-panel-title {
@@ -321,6 +390,41 @@ body {
 .ant-table-cell .mono {
   white-space: nowrap;
   word-break: normal;
+}
+
+/* 可拖拽列宽：手柄贴在表头右侧，悬停/拖动时显示竖线 */
+.mcp-col-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+  z-index: 3;
+  display: block;
+}
+
+.mcp-col-resizer::after {
+  content: '';
+  position: absolute;
+  top: 22%;
+  right: 3px;
+  bottom: 22%;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.mcp-col-resizer:hover::after,
+body.col-resizing .mcp-col-resizer::after {
+  background: var(--primary);
+}
+
+body.col-resizing,
+body.col-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
 }
 
 /* 状态药丸（设计系统 v1.0）：底 12% + 深字 + 圆点 */

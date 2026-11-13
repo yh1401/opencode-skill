@@ -6,6 +6,7 @@ import {
   BugOutlined,
   DashboardOutlined,
   DatabaseOutlined,
+  DeploymentUnitOutlined,
   ExperimentOutlined,
   LineChartOutlined,
   RobotOutlined,
@@ -35,6 +36,9 @@ import Knowledge from './pages/Knowledge';
 
 export type NavStatus = 'done' | 'partial' | 'planned';
 
+/** 菜单显示开关：绑定分组的显隐，偏好保存在浏览器本地 */
+export type NavToggle = 'change' | 'ai';
+
 export interface NavItem {
   key: string;
   label: string;
@@ -46,6 +50,10 @@ export interface NavGroup {
   key: string;
   label: string;
   icon: ReactNode;
+  /** 绑定到「菜单显示」里的开关；不填则常驻 */
+  toggle?: NavToggle;
+  /** 整组均为规划能力：开关打开时整组显示，不受「规划中功能」过滤 */
+  plannedGroup?: boolean;
   items: NavItem[];
 }
 
@@ -58,8 +66,16 @@ export const HOME = {
 
 /**
  * 菜单结构对齐《附件4.1 计划任务书》：
- * 5 大维护场景（监控排障 / 割接维护 / 例行巡检 / 云网数据治理 / 网络及服务质量优化）
- * + 通用能力（数据接口 / 能力接口 / 样本 / 特征 / 算法 / 模型 / 预处理）。
+ * 5 大维护场景（监控排障 / 巡检 / 割接维护 / 云网数据治理 / 网络及服务质量优化）
+ * + 运营指标 + 通用能力 + 模型与算法。
+ *
+ * 排布原则（按日常使用顺序）：
+ * 1. 场景组内按处置动线排序：告警发现 → 排障定位 → 日志下钻 → 观测 → 工单闭环；
+ *    规划中入口统一沉到组尾，避免打断主流程。
+ * 2. 已落地的核心页面靠上，部分/规划页靠下；通用能力只保留当下可用的接口、
+ *    知识库与平台服务。
+ * 3. 模型与算法（样本 / 特征 / 预处理 / 算法 / 训练 / 模型）整组为规划能力，
+ *    割接维护与模型与算法两组可在「菜单显示」面板中整组隐藏，菜单保持精简。
  * 未实现项以占位页呈现，保留入口与规划口径。
  */
 export const NAV: NavGroup[] = [
@@ -68,8 +84,26 @@ export const NAV: NavGroup[] = [
     label: '智能监控排障',
     icon: <BugOutlined />,
     items: [
+      {
+        key: '/alert-center',
+        label: '告警中心',
+        status: 'done',
+        element: <AlarmCenter />,
+      },
       { key: '/diagnosis', label: '排障工作台', status: 'done', element: <Diagnosis /> },
       { key: '/log-analysis', label: '日志分析', status: 'done', element: <LogAnalysis /> },
+      {
+        key: '/biz-monitor',
+        label: '外部业务接口监控',
+        status: 'done',
+        element: <BizMonitor />,
+      },
+      {
+        key: '/tickets',
+        label: '隐患与工单',
+        status: 'done',
+        element: <Tickets />,
+      },
       {
         key: '/diag-flows',
         label: '排障流程管理',
@@ -91,24 +125,6 @@ export const NAV: NavGroup[] = [
             related={{ label: '去排障工作台', to: '/diagnosis' }}
           />
         ),
-      },
-      {
-        key: '/biz-monitor',
-        label: '外部业务接口监控',
-        status: 'done',
-        element: <BizMonitor />,
-      },
-      {
-        key: '/alert-center',
-        label: '告警中心',
-        status: 'done',
-        element: <AlarmCenter />,
-      },
-      {
-        key: '/tickets',
-        label: '隐患与工单',
-        status: 'done',
-        element: <Tickets />,
       },
     ],
   },
@@ -135,6 +151,7 @@ export const NAV: NavGroup[] = [
     key: 'change',
     label: '智能割接维护',
     icon: <SwapOutlined />,
+    toggle: 'change',
     items: [
       {
         key: '/change/plans',
@@ -181,6 +198,18 @@ export const NAV: NavGroup[] = [
         element: <OpTopology />,
       },
       {
+        key: '/audit',
+        label: '资源稽核',
+        status: 'done',
+        element: <Audit />,
+      },
+      {
+        key: '/relations',
+        label: '关系修正',
+        status: 'done',
+        element: <Relations />,
+      },
+      {
         key: '/topology',
         label: '资源拓扑与影响面',
         status: 'partial',
@@ -212,18 +241,6 @@ export const NAV: NavGroup[] = [
             related={{ label: '去看运维关系拓扑', to: '/op-topology' }}
           />
         ),
-      },
-      {
-        key: '/audit',
-        label: '资源稽核',
-        status: 'done',
-        element: <Audit />,
-      },
-      {
-        key: '/relations',
-        label: '关系修正',
-        status: 'done',
-        element: <Relations />,
       },
     ],
   },
@@ -271,6 +288,36 @@ export const NAV: NavGroup[] = [
         status: 'done',
         element: <Knowledge />,
       },
+      {
+        key: '/platform',
+        label: '平台服务',
+        status: 'partial',
+        element: (
+          <Placeholder
+            title="平台服务"
+            source="任务书 · 成果形态（平台服务 / API 能力开放）"
+            status="partial"
+            summary="已提供 REST + SSE 能力接口，但缺鉴权、租户、OpenAPI 文档与正式交付物。"
+            foundation={['REST API + SSE 事件流', '统一接入网关与调用审计', '文件 + PG 备份存储']}
+            items={[
+              '接口鉴权、租户与权限模型',
+              'OpenAPI / 能力目录与调用配额',
+              '使用手册、部署文档、测试报告',
+              '运行指标（发现/定位/恢复时长）埋点与看板',
+            ]}
+            related={{ label: '去数据源控制台', to: '/mcp' }}
+          />
+        ),
+      },
+    ],
+  },
+  {
+    key: 'ai',
+    label: '模型与算法',
+    icon: <DeploymentUnitOutlined />,
+    toggle: 'ai',
+    plannedGroup: true,
+    items: [
       {
         key: '/samples',
         label: '样本库管理',
@@ -352,27 +399,6 @@ export const NAV: NavGroup[] = [
             status="planned"
             summary="尚无模型版本、灰度与推理配置管理。"
             items={['模型版本与灰度', '推理服务配置', '模型效果监控', '模型下线与回滚']}
-          />
-        ),
-      },
-      {
-        key: '/platform',
-        label: '平台服务',
-        status: 'partial',
-        element: (
-          <Placeholder
-            title="平台服务"
-            source="任务书 · 成果形态（平台服务 / API 能力开放）"
-            status="partial"
-            summary="已提供 REST + SSE 能力接口，但缺鉴权、租户、OpenAPI 文档与正式交付物。"
-            foundation={['REST API + SSE 事件流', '统一接入网关与调用审计', '文件 + PG 备份存储']}
-            items={[
-              '接口鉴权、租户与权限模型',
-              'OpenAPI / 能力目录与调用配额',
-              '使用手册、部署文档、测试报告',
-              '运行指标（发现/定位/恢复时长）埋点与看板',
-            ]}
-            related={{ label: '去数据源控制台', to: '/mcp' }}
           />
         ),
       },
