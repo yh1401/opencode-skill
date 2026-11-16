@@ -38,7 +38,7 @@ services:
       - "8061:8061"
       - "9201:9201"
 
-  # 平台后端：拓扑读 ../../topo/tprel/data 快照，状态落 ./backend/data
+  # 平台后端：拓扑读 ../topo/tprel/data 快照，状态落 ./backend/data
   backend:
     <<: *backend
     container_name: aiops-backend
@@ -68,7 +68,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./backend/data:/app/data
-      - ../../topo/tprel/data:/data/tprel:ro
+      - ../topo/tprel/data:/data/tprel:ro
     ports:
       - "8080:8080"
     healthcheck:

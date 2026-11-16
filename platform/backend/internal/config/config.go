@@ -224,10 +224,12 @@ func (c Config) String() string {
 // locateTopoData 兼容从仓库根、backend 目录、平台目录启动三种工作目录。
 func locateTopoData() string {
 	candidates := []string{
-		filepath.Join("..", "..", "..", "topo", "tprel", "data"),
-		filepath.Join("..", "..", "..", "..", "topo", "tprel", "data"),
+		filepath.Join("..", "..", "topo", "tprel", "data"),
 		filepath.Join("..", "topo", "tprel", "data"),
 		filepath.Join("topo", "tprel", "data"),
+		// 兼容拓扑目录仍在仓库外（opencode_skill/topo）的旧布局
+		filepath.Join("..", "..", "..", "topo", "tprel", "data"),
+		filepath.Join("..", "..", "..", "..", "topo", "tprel", "data"),
 	}
 	for _, p := range candidates {
 		if _, err := os.Stat(filepath.Join(p, "operation_topology.json")); err == nil {

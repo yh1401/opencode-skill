@@ -9,7 +9,7 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 BACKEND="$ROOT/backend"
-WORKSPACE=$(cd "$ROOT/../.." && pwd)
+WORKSPACE=$(cd "$ROOT/.." && pwd)
 BIN="$ROOT/.bin"
 STORE_DIR="${STORE_DIR:-$BACKEND/data/demo}"
 

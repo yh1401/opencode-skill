@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>运维关系拓扑图 · 原型（生产级 Mock 数据）</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #333; }
+
+  .topbar {
+    background: #fff; border-bottom: 1px solid #e4e7ed; padding: 10px 20px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .topbar h1 { font-size: 17px; font-weight: 600; margin-right: 8px; }
+  .meta { color: #909399; font-size: 12px; }
+  .meta b { color: #409eff; font-weight: 600; }
+  .controls { display: flex; gap: 10px; align-items: center; margin-left: auto; flex-wrap: wrap; }
+  .controls select, .controls input, .controls button {
+    height: 30px; padding: 0 10px; font-size: 13px;
+    border: 1px solid #dcdfe6; border-radius: 4px; background: #fff; outline: none;
+  }
+  .controls input { width: 170px; }
+  .controls button { background: #409eff; color: #fff; border-color: #409eff; cursor: pointer; }
+  .controls button.secondary { background: #fff; color: #606266; }
+  .controls button:hover { opacity: .9; }
+  /* 部署点展开开关：label 包裹 checkbox，并覆盖 .controls input 的固定宽度 */
+  .controls label.toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #606266; white-space: nowrap; cursor: pointer; }
+  .controls label.toggle input { width: auto; margin: 0; cursor: pointer; }
+  /* appId 属性筛选组：四维（部署项目/工程项目/机房节点/PP应用）紧凑排布，命中即保留该应用全部依赖 */
+  .attr-group { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap;
+                padding: 5px 8px; border: 1px dashed #c8d6e5; border-radius: 6px; background: #fafcff; }
+  .attr-group .attr-tag { font-size: 11px; color: #8ea4c0; white-space: nowrap; line-height: 30px; }
+  /* 每个属性维度 = 候选搜索框(datalist 联想) + 已选 chips（多选：维度内 OR、维度间 AND） */
+  .attr-box { display: flex; flex-direction: column; align-items: stretch; gap: 3px; position: relative; }
+  .attr-box .attr-chips { display: flex; flex-wrap: wrap; gap: 3px; max-height: 40px; overflow: auto; }
+  .attr-box .attr-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; line-height: 16px;
+    color: #409eff; background: #ecf5ff; border: 1px solid #c6e2ff; border-radius: 3px; padding: 0 5px;
+    white-space: nowrap; max-width: 170px; }
+  .attr-box .attr-chip b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+  .attr-box .attr-chip .ac-x { cursor: pointer; font-weight: 700; color: #909399; }
+  .attr-box .attr-chip .ac-x:hover { color: #f56c6c; }
+  .attr-box .attr-input-row { position: relative; display: flex; align-items: center; }
+  .attr-box input { width: 168px; padding-right: 22px; }
+  .search-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); z-index: 2;
+    width: 14px; height: 14px; line-height: 13px; text-align: center; cursor: pointer;
+    color: #909399; background: #dcdfe6; border-radius: 50%; font-size: 12px; user-select: none; }
+  .search-clear:hover { color: #fff; background: #409eff; }
+  .stat { font-size: 12px; color: #606266; }
+  .stat b { color: #303133; }
+
+  .view-group { display: flex; border: 1px solid #dcdfe6; border-radius: 4px; overflow: hidden; }
+  .view-group button {
+    border: none; border-radius: 0; height: 30px; padding: 0 12px; background: #fff; color: #606266; cursor: pointer;
+  }
+  .view-group button.active { background: #409eff; color: #fff; }
+
+  .canvas-wrap { position: relative; background: #fff; margin: 16px 20px; border: 1px solid #e4e7ed; border-radius: 6px; overflow: auto; }
+  svg { display: block; }
+
+  .node rect { cursor: pointer; transition: opacity .2s; }
+  .node text { font-family: inherit; pointer-events: none; }
+  .edge { transition: opacity .2s; }
+  .edge-label { font-size: 10px; fill: #909399; }
+
+  .dim { opacity: 0.12; }
+  .hl-edge { stroke-width: 3.5 !important; }
+  .hl-node rect { filter: drop-shadow(0 0 6px rgba(64,158,255,.7)); }
+  .match rect { filter: drop-shadow(0 0 8px rgba(245,158,11,.9)); stroke-width: 2.5; }
+
+  .badge { fill: #fff; stroke: #fff; stroke-width: 1.5; font-size: 11px; font-weight: 700; text-anchor: middle; pointer-events: none; }
+
+  .legend {
+    position: absolute; right: 28px; bottom: 20px; background: rgba(255,255,255,.92);
+    border: 1px solid #e4e7ed; border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #606266;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06); display: flex; flex-direction: column; gap: 6px;
+  }
+  .legend .item { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .dot.svr { background: #2b7bdd; }
+  .dot.app { background: #27ae60; }
+  .dot.mw { background: #f39c12; }
+
+  .detail {
+    position: absolute; left: 28px; bottom: 20px; width: 300px; background: #fff;
+    border: 1px solid #e4e7ed; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    padding: 14px 16px; display: none; z-index: 10; max-height: 380px; overflow: auto;
+  }
+  .detail.show { display: block; }
+  .detail h3 { font-size: 14px; margin-bottom: 10px; color: #303133; display: flex; justify-content: space-between; align-items: center; }
+  .detail h3 .cat { font-size: 11px; padding: 2px 8px; border-radius: 10px; color: #fff; }
+  .detail h3 .cat.svr { background: #2b7bdd; }
+  .detail h3 .cat.app { background: #27ae60; }
+  .detail h3 .cat.mw { background: #f39c12; }
+  .detail .row { display: flex; font-size: 12px; margin-bottom: 6px; }
+  .detail .row .k { width: 88px; color: #909399; flex-shrink: 0; }
+  .detail .row .v { color: #303133; word-break: break-all; }
+  .detail .list-title { font-size: 12px; color: #909399; margin: 8px 0 4px; }
+  .detail ul { list-style: none; font-size: 12px; }
+  .detail ul li { padding: 3px 8px; background: #f5f7fa; border-radius: 4px; margin-bottom: 4px; color: #303133; }
+  .detail .close { position: absolute; top: 8px; right: 12px; cursor: pointer; color: #c0c4cc; font-size: 16px; }
+
+  .empty { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: #909399; font-size: 14px; background: #fff; }
+  .empty.show { display: flex; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>运维关系拓扑图</h1>
+  <span class="meta">数据来源: <b>Apollo 定时同步</b> ｜ 最近同步: <b id="syncTime">2026-08-31 01:30:15</b></span>
+  <div class="controls">
+    <select id="srcSel" title="数据源">
+      <option value="mock">数据源: Mock</option>
+      <option value="api">数据源: 后端API</option>
+    </select>
+    <div class="view-group" id="viewGroup">
+      <button data-layout="two" class="active">两层视图</button>
+      <button data-layout="three">三层视图</button>
+      <button data-layout="overview">全局总览</button>
+      <button data-layout="force">力导向总览</button>
+    </div>
+    <label class="toggle" title="应用节点粒度：勾选=按「部署项目×节点」展开（默认）；取消=按 appId 折叠，属性多值聚合"><input type="checkbox" id="expandDepNode" checked>部署点展开</label>
+    <select id="envSel">
+      <option value="PRO">环境: PRO</option>
+      <option value="SIT">环境: SIT</option>
+    </select>
+    <select id="serverSel"><option value="">服务器: 全部</option></select>
+    <input id="searchInput" type="text" placeholder="搜索 应用/appid/地址/IP">
+    <select id="typeSel"><option value="">中间件类型: 全部</option></select>
+    <!-- appId 属性筛选：属性属 appId 级，任一已选值命中即保留该应用的全部依赖关系（维度内 OR、维度间 AND） -->
+    <div class="attr-group" id="attrGroup" title="appId 属性筛选：任一已选值命中即保留该应用的全部依赖（维度内 OR、维度间 AND）">
+      <span class="attr-tag">appId 属性</span>
+      <div class="attr-box">
+        <div class="attr-chips" id="depChips"></div>
+        <div class="attr-input-row">
+          <input id="depInput" list="depList" type="text" placeholder="部署项目(可多选)" autocomplete="off"
+                 title="输入候选名后回车加入筛选；可多选（模糊匹配，任一命中即可）">
+          <span class="search-clear" id="depClear" title="清空部署项目筛选" style="display:none">×</span>
+        </div>
+      </div>
+      <div class="attr-box">
+        <div class="attr-chips" id="engChips"></div>
+        <div class="attr-input-row">
+          <input id="engInput" list="engList" type="text" placeholder="工程项目(可多选)" autocomplete="off"
+                 title="输入候选名后回车加入筛选；可多选（精确匹配，任一命中即可）">
+          <span class="search-clear" id="engClear" title="清空工程项目筛选" style="display:none">×</span>
+        </div>
+      </div>
+      <div class="attr-box">
+        <div class="attr-chips" id="nodeChips"></div>
+        <div class="attr-input-row">
+          <input id="nodeInput" list="nodeList" type="text" placeholder="机房节点(可多选)" autocomplete="off"
+                 title="输入候选名后回车加入筛选；可多选（精确匹配，任一命中即可）">
+          <span class="search-clear" id="nodeClear" title="清空机房节点筛选" style="display:none">×</span>
+        </div>
+      </div>
+      <div class="attr-box">
+        <div class="attr-chips" id="ppChips"></div>
+        <div class="attr-input-row">
+          <input id="ppInput" list="ppList" type="text" placeholder="PP应用(可多选)" autocomplete="off"
+                 title="输入候选名后回车加入筛选；可多选（精确匹配，任一命中即可）">
+          <span class="search-clear" id="ppClear" title="清空PP应用筛选" style="display:none">×</span>
+        </div>
+      </div>
+      <button id="attrClear" class="secondary" type="button" title="清空 appId 属性筛选">清空</button>
+    </div>
+    <datalist id="depList"></datalist>
+    <datalist id="engList"></datalist>
+    <datalist id="nodeList"></datalist>
+    <datalist id="ppList"></datalist>
+    <button id="resetBtn" class="secondary">重置视图</button>
+    <button id="exportBtn" class="secondary">导出(演示)</button>
+  </div>
+  <span class="stat" id="stat"></span>
+</div>
+
+<div class="canvas-wrap" id="canvasWrap">
+  <svg id="topoSvg" width="1400" height="560"></svg>
+  <div class="legend">
+    <div class="item" id="legendSvr"><span class="dot svr"></span>服务器节点 <span style="color:#c0c4cc">(三层视图)</span></div>
+    <div class="item"><span class="dot app"></span>应用节点</div>
+    <div class="item"><span class="dot mw"></span>中间件节点</div>
+    <div class="item" style="font-size:11px;color:#909399;">实线箭头=依赖 ｜ 虚线箭头=部署</div>
+  </div>
+  <div class="detail" id="detail">
+    <span class="close" id="detailClose">×</span>
+    <h3><span id="dTitle"></span><span class="cat" id="dCat"></span></h3>
+    <div id="dBody"></div>
+  </div>
+  <div class="empty" id="empty">当前筛选条件下无数据</div>
+</div>
+
+<script>
+/* =========================================================
+ * Mock 数据（生产级规模）
+ * 服务器 → 应用 = 部署关系（deploy）；应用 → 中间件 = 依赖关系（depend）
+ * 20 应用 / 9 服务器 / 14 中间件 / 约 70 条依赖关系
+ * ========================================================= */
+const MW_TYPES = ["mysql", "redis", "kafka", "es", "mongodb", "rocketmq", "rabbitmq", "nacos", "zookeeper", "memcached"];
+
+const CONFIGS = {
+  PRO: {
+    servers: [
+      { ip: "192.168.1.11", name: "svr-11", node: "su-zh", hostname: "su-zh-app-11", apps: ["xxx-web", "gateway", "order-api"] },
+      { ip: "192.168.1.12", name: "svr-12", node: "su-zh", hostname: "su-zh-app-12", apps: ["user-svc", "video-api", "pay-api"] },
+      { ip: "192.168.1.13", name: "svr-13", node: "su-zh", hostname: "su-zh-app-13", apps: ["order-job", "pay-channel"] },
+      { ip: "192.168.1.21", name: "svr-21", node: "sh-gd", hostname: "sh-gd-app-21", apps: ["report-job", "etl-job"] },
+      { ip: "192.168.1.22", name: "svr-22", node: "sh-gd", hostname: "sh-gd-app-22", apps: ["analysis-api", "dws-task"] },
+      { ip: "192.168.1.31", name: "svr-31", node: "gz-dx", hostname: "gz-dx-app-31", apps: ["live-stream", "play-svc"] },
+      { ip: "192.168.1.41", name: "svr-41", node: "bj-yd", hostname: "bj-yd-app-41", apps: ["bi-report", "settlement-svc", "config-center"] },
+      { ip: "192.168.1.42", name: "svr-42", node: "bj-yd", hostname: "bj-yd-app-42", apps: ["model-train"] },
+      { ip: "192.168.1.51", name: "svr-51", node: "hz-ct", hostname: "hz-ct-app-51", apps: ["ai-infer", "ocr-svc"] }
+    ],
+    apps: [
+      { name: "xxx-web",        eng: "video-service", pp: "xxx-web",      appid: "web-001", node: "su-zh",
+        deps: ["mysql:db-master:3306", "redis:cache:6379", "kafka:broker-1:9092", "nacos:nacos-1:8848"] },
+      { name: "user-svc",       eng: "video-service", pp: "user-svc",     appid: "usr-002", node: "su-zh",
+        deps: ["mysql:db-master:3306", "redis:cache:6379", "kafka:broker-1:9092"] },
+      { name: "gateway",        eng: "video-service", pp: "gateway",      appid: "gtw-004", node: "su-zh",
+        deps: ["redis:cache:6379", "kafka:broker-1:9092", "nacos:nacos-1:8848", "zookeeper:zk-1:2181"] },
+      { name: "video-api",      eng: "video-service", pp: "video-api",    appid: "vid-005", node: "su-zh",
+        deps: ["mysql:db-master:3306", "redis:cache:6379", "kafka:broker-1:9092", "rocketmq:mq-1:9876"] },
+      { name: "live-stream",    eng: "video-service", pp: "live-stream",  appid: "liv-006", node: "gz-dx",
+        deps: ["redis:cache:6379", "kafka:broker-1:9092", "memcached:memc-1:11211"] },
+      { name: "play-svc",       eng: "video-service", pp: "play-svc",     appid: "ply-007", node: "gz-dx",
+        deps: ["mysql:db-master:3306", "redis:cache:6379", "mongodb:mongo-1:27017"] },
+      { name: "report-job",     eng: "data-service",  pp: "",             appid: "rpt-003", node: "sh-gd",
+        deps: ["mysql:db-master:3306", "kafka:broker-1:9092", "es:es-1:9200"] },
+      { name: "analysis-api",   eng: "data-service",  pp: "analysis",     appid: "ana-008", node: "sh-gd",
+        deps: ["mysql:db-master:3306", "es:es-1:9200", "mongodb:mongo-1:27017"] },
+      { name: "etl-job",        eng: "data-service",  pp: "etl",          appid: "etl-009", node: "sh-gd",
+        deps: ["mysql:db-dw:3306", "kafka:broker-1:9092", "es:es-1:9200"] },
+      { name: "dws-task",       eng: "data-service",  pp: "dws",          appid: "dws-010", node: "sh-gd",
+        deps: ["mysql:db-dw:3306", "kafka:broker-1:9092", "es:es-1:9200", "rocketmq:mq-1:9876"] },
+      { name: "bi-report",      eng: "data-service",  pp: "bi",           appid: "bir-011", node: "bj-yd",
+        deps: ["mysql:db-dw:3306", "es:es-1:9200", "mongodb:mongo-1:27017"] },
+      { name: "order-api",      eng: "order-service", pp: "order-api",    appid: "ord-012", node: "su-zh",
+        deps: ["mysql:db-order:3306", "redis:cache-order:6379", "rabbitmq:rabbit-1:5672", "nacos:nacos-1:8848"] },
+      { name: "order-job",      eng: "order-service", pp: "order-job",    appid: "ord-013", node: "su-zh",
+        deps: ["mysql:db-order:3306", "rabbitmq:rabbit-1:5672", "kafka:broker-1:9092"] },
+      { name: "settlement-svc", eng: "order-service", pp: "settlement",   appid: "set-014", node: "bj-yd",
+        deps: ["mysql:db-order:3306", "redis:cache-order:6379", "rocketmq:mq-1:9876"] },
+      { name: "pay-api",        eng: "pay-service",   pp: "pay-api",      appid: "pay-015", node: "su-zh",
+        deps: ["mysql:db-master:3306", "redis:cache-order:6379", "rabbitmq:rabbit-1:5672"] },
+      { name: "pay-channel",    eng: "pay-service",   pp: "pay-channel",  appid: "pay-016", node: "su-zh",
+        deps: ["mysql:db-order:3306", "kafka:broker-1:9092", "zookeeper:zk-1:2181"] },
+      { name: "ai-infer",       eng: "ai-service",    pp: "ai-infer",     appid: "aii-017", node: "hz-ct",
+        deps: ["redis:cache-ai:6379", "kafka:broker-1:9092", "mongodb:mongo-1:27017"] },
+      { name: "model-train",    eng: "ai-service",    pp: "model-train",  appid: "ait-018", node: "bj-yd",
+        deps: ["mysql:db-dw:3306", "redis:cache-ai:6379", "kafka:broker-1:9092"] },
+      { name: "ocr-svc",        eng: "ai-service",    pp: "ocr-svc",      appid: "aoc-019", node: "hz-ct",
+        deps: ["mysql:db-dw:3306", "redis:cache-ai:6379", "es:es-1:9200"] },
+      { name: "config-center",  eng: "base-service",  pp: "config",       appid: "cfg-020", node: "bj-yd",
+        deps: ["mysql:db-master:3306", "nacos:nacos-1:8848", "zookeeper:zk-1:2181"] }
+    ],
+    mws: [
+      { type: "mysql",     addr: "db-master:3306",    proj: "video-mysql" },
+      { type: "mysql",     addr: "db-order:3306",     proj: "order-mysql" },
+      { type: "mysql",     addr: "db-dw:3306",        proj: "dw-mysql" },
+      { type: "redis",     addr: "cache:6379",        proj: "video-redis" },
+      { type: "redis",     addr: "cache-order:6379",  proj: "order-redis" },
+      { type: "redis",     addr: "cache-ai:6379",     proj: "ai-redis" },
+      { type: "kafka",     addr: "broker-1:9092",     proj: "video-kafka" },
+      { type: "es",        addr: "es-1:9200",         proj: "data-es" },
+      { type: "mongodb",   addr: "mongo-1:27017",     proj: "data-mongo" },
+      { type: "rocketmq",  addr: "mq-1:9876",         proj: "video-mq" },
+      { type: "rabbitmq",  addr: "rabbit-1:5672",     proj: "order-mq" },
+      { type: "nacos",     addr: "nacos-1:8848",      proj: "video-nacos" },
+      { type: "zookeeper", addr: "zk-1:2181",         proj: "video-zk" },
+      { type: "memcached", addr: "memc-1:11211",      proj: "video-mem" }
+    ]
+  },
+  SIT: {
+    servers: [
+      { ip: "192.168.2.10", name: "svr-10", node: "su-zh", hostname: "sit-app-10", apps: ["xxx-web", "gateway", "order-api"] },
+      { ip: "192.168.2.20", name: "svr-20", node: "sh-gd", hostname: "sit-app-20", apps: ["report-job", "user-svc"] }
+    ],
+    apps: [
+      { name: "xxx-web",   eng: "video-service", pp: "xxx-web", appid: "web-001", node: "su-zh",
+        deps: ["mysql:sit-db:3306", "redis:sit-cache:6379", "kafka:sit-kafka:9092"] },
+      { name: "gateway",   eng: "video-service", pp: "gateway", appid: "gtw-004", node: "su-zh",
+        deps: ["redis:sit-cache:6379", "kafka:sit-kafka:9092"] },
+      { name: "user-svc",  eng: "video-service", pp: "user-svc", appid: "usr-002", node: "sh-gd",
+        deps: ["mysql:sit-db:3306", "redis:sit-cache:6379"] },
+      { name: "order-api", eng: "order-service", pp: "order-api", appid: "ord-012", node: "su-zh",
+        deps: ["mysql:sit-db:3306", "rabbitmq:sit-rabbit:5672"] },
+      { name: "report-job",eng: "data-service",  pp: "", appid: "rpt-003", node: "sh-gd",
+        deps: ["mysql:sit-db:3306", "es:sit-es:9200"] }
+    ],
+    mws: [
+      { type: "mysql",    addr: "sit-db:3306",     proj: "sit-mysql" },
+      { type: "redis",    addr: "sit-cache:6379",  proj: "sit-redis" },
+      { type: "kafka",    addr: "sit-kafka:9092",  proj: "sit-kafka" },
+      { type: "es",       addr: "sit-es:9200",     proj: "sit-es" },
+      { type: "rabbitmq", addr: "sit-rabbit:5672", proj: "sit-rabbit" }
+    ]
+  }
+};
+
+/* 根据配置生成 nodes / edges / deploys（模拟 graph 接口返回） */
+function buildGraph(env) {
+  const cfg = CONFIGS[env];
+  const nodes = [];
+  cfg.servers.forEach(s => nodes.push({ id: `svr:${s.ip}`, name: s.name, category: "server", ip: s.ip, node: s.node, hostname: s.hostname }));
+  cfg.apps.forEach(a => nodes.push({ id: `app:${a.name}`, name: a.name, category: "application", engProject: a.eng, depProject: a.name, ppApplication: a.pp || "", apolloAppId: a.appid, node: a.node }));
+  cfg.mws.forEach(m => nodes.push({ id: `mw:${m.type}:${m.addr}`, name: m.proj, category: "middleware", middlewareType: m.type, connectAddr: m.addr, middlewareProject: m.proj }));
+
+  const deploys = [];
+  cfg.servers.forEach(s => s.apps.forEach(appName => deploys.push({ source: `svr:${s.ip}`, target: `app:${appName}` })));
+
+  const edges = [];
+  cfg.apps.forEach(a => (a.deps || []).forEach(mwKey => {
+    const m = cfg.mws.find(x => `${x.type}:${x.addr}` === mwKey);
+    if (m) edges.push({ source: `app:${a.name}`, target: `mw:${m.type}:${m.addr}` });
+  }));
+
+  return { nodes, edges, deploys };
+}
+
+const COLORS = {
+  server:      { fill: "#2b7bdd", stroke: "#1f5fae" },
+  application: { fill: "#27ae60", stroke: "#1e8449" },
+  middleware:  { fill: "#f39c12", stroke: "#c87f0a" }
+};
+const CAT_LABEL = { server: "服务器", application: "应用", middleware: "中间件" };
+
+const svg = document.getElementById("topoSvg");
+const NS = "http://www.w3.org/2000/svg";
+// dep/eng/node/pp = appId 属性筛选，值为「逗号分隔」的已选值（多选：维度内 OR、维度间 AND）
+let state = { env: "PRO", layout: "two", server: "", dep: "", eng: "", node: "", pp: "", type: "", search: "", active: null, hover: null, expandDepNode: true };
+let positions = {};      // nodeId -> {x, y, w, h}
+let overviewZones = [];  // 全局总览视图的分区信息（按机房）
+let cache = {};          // env -> graph 数据缓存
+
+/* =========================================================
+ * 数据源：Mock（内置） / API（后端 /api/external/operationTopology）
+ * ========================================================= */
+const API_BASE = (location.protocol === "file:" || location.hostname === "127.0.0.1" || location.hostname === "localhost")
+  ? "http://127.0.0.1:8098" : "";  // 同源部署时留空
+let dataSource = "api"; // "mock" | "api"（默认 API，本地测试用后端真实数据）
+
+// 后端 graph 响应 → 前端渲染结构（字段适配）
+// 接口无服务器粒度，顶层用 node（机房）聚合生成"机房层"，使三层/全局总览视图可用
+function convertApiGraph(g) {
+  const apps = [];
+  const mws = [];
+  (g.nodes || []).forEach(n => {
+    if (n.category === "application") {
+      apps.push({
+        id: n.id, name: n.name, category: "application",
+        engProject: n.engProject || "", depProject: n.depProject || n.name, ppApplication: n.ppApp || "",
+        apolloAppId: n.apolloAppId, node: n.node || "",
+        // appId 属性多值列表（后端 appId 级属性：多值时列表返回，前端按列表匹配筛选）
+        depProjects: n.depProjects || [], engProjects: n.engProjects || [],
+        ppApplications: n.ppApps || [], nodes: n.nodes || []
+      });
+    } else if (n.category === "middleware") {
+      mws.push({
+        id: n.id, name: n.name, category: "middleware",
+        middlewareType: n.mwType, connectAddr: n.addr, middlewareProject: n.mwProject
+      });
+    }
+  });
+
+  // 机房层：按应用 node 聚合（id 用 zone: 前缀，与 mock 的 svr: 区分）
+  const zoneIds = {};
+  apps.forEach(a => {
+    if (!a.node) return;
+    const zid = `zone:${a.node}`;
+    zoneIds[a.node] = zid;
+  });
+  const zones = Object.keys(zoneIds).map(node => {
+    const cnt = apps.filter(a => a.node === node).length;
+    return {
+      id: zoneIds[node], name: node, category: "server",
+      ip: `机房 · ${cnt} 应用`, node: node, hostname: ""
+    };
+  });
+
+  // 部署边：机房 → 应用
+  const deploys = [];
+  apps.forEach(a => {
+    if (a.node && zoneIds[a.node]) deploys.push({ source: zoneIds[a.node], target: a.id });
+  });
+
+  const edges = (g.edges || []).map(e => ({ source: e.source, target: e.target, kind: e.kind || "depend" }));
+  return { nodes: [...zones, ...apps, ...mws], edges, deploys, syncDate: g.syncDate, env: g.env };
+}
+
+// 从后端加载环境数据（接口无服务器粒度，顶层由 node 机房聚合生成机房层）
+async function loadApiGraph(env) {
+  // 部署点展开必须显式传 0/1：后端对不传（nil）按默认「展开」处理，折叠态漏传会拿回展开数据
+  const q = new URLSearchParams({ env: env, expandDepNode: state.expandDepNode ? "1" : "0" });
+  const url = `${API_BASE}/api/external/operationTopology/graph?${q.toString()}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error("HTTP " + resp.status);
+  const json = await resp.json();
+  if (json.code !== 0) throw new Error(json.msg || "接口返回异常");
+  return convertApiGraph(json.data);
+}
+
+function currentData() {
+  if (!cache[state.env]) {
+    cache[state.env] = (dataSource === "api") ? { nodes: [], edges: [], deploys: [] } : buildGraph(state.env);
+  }
+  return cache[state.env];
+}
+
+// 异步刷新当前环境数据（API 模式用），完成后重新渲染
+async function refreshData() {
+  if (dataSource === "api") {
+    cache[state.env] = await loadApiGraph(state.env);
+  } else {
+    cache[state.env] = buildGraph(state.env);
+  }
+}
+
+/* 应用 → 所在服务器（通过部署关系映射） */
+function appServerOf(appId) {
+  const d = currentData().deploys.find(x => x.target === appId);
+  return d ? d.source : null;
+}
+
+/* =========================================================
+ * 节点渲染样式辅助
+ * ========================================================= */
+function nodeColor(n) { return COLORS[n.category] || COLORS.middleware; }
+function shortText(s, max) { return s && s.length > max ? s.slice(0, max - 1) + "…" : s; }
+function nodeTitle(n) {
+  if (n.category === "server") return shortText(n.name, 14);
+  if (n.category === "application") return shortText(n.name, 14);
+  return n.middlewareType;
+}
+function nodeSub(n) {
+  if (n.category === "server") return n.ip;
+  if (n.category === "application") {
+    // 展开态节点粒度为「部署项目×节点」，同 appId 会有多个节点，副标题改显部署点以区分
+    if (state.expandDepNode) return shortText([n.depProject, n.node].filter(Boolean).join(" / ") || n.apolloAppId || "", 18);
+    return n.apolloAppId;
+  }
+  return shortText(n.connectAddr, 18);
+}
+
+/* =========================================================
+ * 布局（宽度自适应，节点多时画布自动加宽 + 横向滚动）
+ * ========================================================= */
+function computeLayout() {
+  const data = currentData();
+  positions = {};
+
+  if (state.layout === "force") { initForce(); return; }
+  if (state.layout === "overview") { computeOverviewLayout(); return; }
+
+  const apps = data.nodes.filter(n => n.category === "application");
+  const mws  = data.nodes.filter(n => n.category === "middleware");
+  mws.sort((a, b) => mwDepCount(b) - mwDepCount(a));
+
+  if (state.layout === "two") {
+    const svgW = Math.max(1400, mws.length * 228 + 250);
+    svg.setAttribute("width", svgW);
+    svg.setAttribute("height", 560);
+    apps.forEach((n, i) => positions[n.id] = { x: 90 + i * 210, y: 150, w: 150, h: 54 });
+    mws.forEach((n, i) => positions[n.id] = { x: 70 + i * 228, y: 420, w: 168, h: 54 });
+  } else { // three
+    const svrs = data.nodes.filter(n => n.category === "server");
+    const svgW = Math.max(1400, mws.length * 228 + 250);
+    svg.setAttribute("width", svgW);
+    svg.setAttribute("height", 640);
+    apps.forEach((n, i) => positions[n.id] = { x: 90 + i * 210, y: 270, w: 150, h: 54 });
+    mws.forEach((n, i) => positions[n.id] = { x: 70 + i * 228, y: 500, w: 168, h: 54 });
+    // 服务器居中于其部署应用的 x
+    svrs.forEach(s => {
+      const deps = data.deploys.filter(d => d.source === s.id).map(d => d.target);
+      const xs = deps.map(a => positions[a]).filter(Boolean);
+      const cx = xs.length ? xs.reduce((s, p) => s + p.x + p.w / 2, 0) / xs.length : 0;
+      positions[s.id] = { x: cx - 80, y: 70, w: 160, h: 54 };
+    });
+  }
+}
+
+function mwDepCount(mwId) {
+  return currentData().edges.filter(e => e.target === mwId).length;
+}
+
+/* =========================================================
+ * 全局总览视图：按机房分区，全量展示 服务器+应用+中间件
+ * 中间件归入"被依赖最多的机房"分区，跨分区依赖边直连
+ * ========================================================= */
+function computeOverviewLayout() {
+  const data = currentData();
+  const svrs = data.nodes.filter(n => n.category === "server");
+  const apps = data.nodes.filter(n => n.category === "application");
+  const mws  = data.nodes.filter(n => n.category === "middleware");
+
+  // 中间件归属机房：被哪个机房的应用依赖最多
+  const mwOwner = {};
+  mws.forEach(m => {
+    const cnt = {};
+    data.edges.forEach(e => {
+      if (e.target === m.id) {
+        const a = data.nodes.find(x => x.id === e.source);
+        if (a) cnt[a.node] = (cnt[a.node] || 0) + 1;
+      }
+    });
+    let best = null, bestCnt = -1;
+    for (const k in cnt) if (cnt[k] > bestCnt) { bestCnt = cnt[k]; best = k; }
+    mwOwner[m.id] = best || "其他";
+  });
+
+  const nodeList = [...new Set(svrs.map(s => s.node))];
+  const colW = 170, pad = 60, gap = 30;
+  let xCursor = 40;
+  overviewZones = nodeList.map(node => {
+    const zSvrs = svrs.filter(s => s.node === node);
+    const zApps = apps.filter(a => a.node === node);
+    const zMws  = mws.filter(m => mwOwner[m.id] === node);
+    const cols = Math.max(zSvrs.length, zApps.length, zMws.length, 1);
+    const w = cols * colW + gap + pad;
+    const zone = { node, x: xCursor, w, svrs: zSvrs, apps: zApps, mws: zMws };
+    xCursor += w;
+    zSvrs.forEach((s, i) => positions[s.id] = { x: zone.x + pad / 2 + i * colW + 10, y: 70,  w: 140, h: 54 });
+    zApps.forEach((a, i) => positions[a.id] = { x: zone.x + pad / 2 + i * colW + 10, y: 205, w: 140, h: 54 });
+    zMws.forEach((m, i) => positions[m.id]  = { x: zone.x + pad / 2 + i * colW + 10, y: 350, w: 140, h: 54 });
+    return zone;
+  });
+  svg.setAttribute("width", Math.max(1400, xCursor + 40));
+  svg.setAttribute("height", 480);
+}
+
+/* =========================================================
+ * 力导向布局（简易物理模拟：斥力 + 弹簧力）
+ * ========================================================= */
+function initForce() {
+  const data = currentData();
+  const W = Math.max(1400, data.nodes.length * 180), H = 640;
+  svg.setAttribute("width", W);
+  svg.setAttribute("height", H);
+  const ids = data.nodes.map(n => n.id);
+  if (!positions.__forceInit) {
+    positions.__forceInit = {};
+    data.nodes.forEach(n => {
+      positions.__forceInit[n.id] = {
+        x: 150 + Math.random() * (W - 300),
+        y: 100 + Math.random() * (H - 200),
+        vx: 0, vy: 0
+      };
+    });
+  }
+  const sim = positions.__forceInit;
+  const edges = allEdges(data);
+  const CENTER = { x: W / 2, y: H / 2 };
+
+  function tick() {
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = sim[ids[i]], b = sim[ids[j]];
+        let dx = a.x - b.x, dy = a.y - b.y;
+        let d2 = dx * dx + dy * dy;
+        if (d2 < 1) d2 = 1;
+        const f = 9000 / d2;
+        const d = Math.sqrt(d2);
+        const fx = f * dx / d, fy = f * dy / d;
+        a.vx += fx; a.vy += fy;
+        b.vx -= fx; b.vy -= fy;
+      }
+      const a = sim[ids[i]];
+      a.vx += (CENTER.x - a.x) * 0.002;
+      a.vy += (CENTER.y - a.y) * 0.002;
+    }
+    edges.forEach(e => {
+      const a = sim[e.source], b = sim[e.target];
+      if (!a || !b) return;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const f = (d - 200) * 0.012;
+      const fx = f * dx / d, fy = f * dy / d;
+      a.vx += fx; a.vy += fy;
+      b.vx -= fx; b.vy -= fy;
+    });
+    data.nodes.forEach(n => {
+      const p = sim[n.id];
+      p.vx *= 0.85; p.vy *= 0.85;
+      p.x = Math.max(60, Math.min(W - 60, p.x + p.vx));
+      p.y = Math.max(40, Math.min(H - 40, p.y + p.vy));
+      positions[n.id] = { x: p.x - 75, y: p.y - 27, w: 150, h: 54 };
+    });
+  }
+
+  for (let k = 0; k < 80; k++) tick();
+}
+
+function allEdges(data) {
+  const deploys = (data.deploys || []).map(d => ({ source: d.source, target: d.target, kind: "deploy" }));
+  return data.edges.concat(deploys);
+}
+
+/* =========================================================
+ * 渲染
+ * ========================================================= */
+function el(name, attrs) {
+  const e = document.createElementNS(NS, name);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+function render() {
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  const data = currentData();
+  computeLayout();
+  const edges = allEdges(data);
+
+  const defs = el("defs", {});
+  const marker = el("marker", { id: "arrow", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" });
+  marker.appendChild(el("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "#c0c4cc" }));
+  defs.appendChild(marker);
+  const markerDep = el("marker", { id: "arrowDep", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" });
+  markerDep.appendChild(el("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "#909399" }));
+  defs.appendChild(markerDep);
+  svg.appendChild(defs);
+
+  // 全局总览视图：画机房分区背景（标题 + 虚线框）
+  if (state.layout === "overview") {
+    overviewZones.forEach(z => {
+      const zoneRect = el("rect", { x: z.x, y: 30, width: z.w - 10, height: 430, rx: 10, fill: "#f5f8fc", stroke: "#d8e2ef", "stroke-dasharray": "5 4" });
+      svg.appendChild(zoneRect);
+      const zoneTxt = el("text", { x: z.x + 14, y: 54, "font-size": "13", "font-weight": "700", fill: "#4a6f9e" });
+      zoneTxt.textContent = `${z.node}（服务器${z.svrs.length} / 应用${z.apps.length} / 中间件${z.mws.length}）`;
+      svg.appendChild(zoneTxt);
+    });
+  }
+
+  edges.forEach((e, idx) => {
+    const src = positions[e.source], tgt = positions[e.target];
+    if (!src || !tgt) return;
+    const dep = e.kind === "deploy";
+    const x1 = src.x + src.w / 2, y1 = src.y + src.h;
+    const x2 = tgt.x + tgt.w / 2, y2 = tgt.y;
+    const path = el("path", {
+      d: `M ${x1} ${y1} L ${x2} ${y2}`,
+      fill: "none",
+      stroke: dep ? "#909399" : "#c0c4cc",
+      "stroke-width": dep ? "1.4" : "1.6",
+      "stroke-dasharray": dep ? "6 4" : "",
+      "marker-end": dep ? "url(#arrowDep)" : "url(#arrow)"
+    });
+    path.dataset.source = e.source;
+    path.dataset.target = e.target;
+    path.dataset.kind = e.kind || "depend";
+    path.classList.add("edge");
+    svg.appendChild(path);
+
+    if (dep || state.layout === "force") {
+      const lbl = el("text", {
+        x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 4,
+        "text-anchor": "middle", class: "edge-label"
+      });
+      lbl.textContent = dep ? "部署" : "依赖";
+      lbl.dataset.edgeLabel = idx;
+      svg.appendChild(lbl);
+    }
+  });
+
+  data.nodes.forEach(n => {
+    const p = positions[n.id];
+    if (!p) return;
+    const c = nodeColor(n);
+    const g = el("g", { transform: `translate(${p.x},${p.y})` });
+    g.dataset.id = n.id;
+    g.classList.add("node");
+
+    const rect = el("rect", { width: p.w, height: p.h, rx: 8, fill: c.fill, stroke: c.stroke, "stroke-width": "1.5" });
+    rect.dataset.nodeId = n.id;
+    // 鼠标事件：mouseover 在 rect 上设 hover（进入节点区域）
+    // mouseleave 在 <g> 上清 hover（离开节点区域，包含 rect+text 整体）
+    rect.addEventListener("mouseover", () => { state.hover = n.id; applyHighlight(); });
+    g.addEventListener("mouseleave", () => { state.hover = null; applyHighlight(); });
+    rect.addEventListener("click", e => { e.stopPropagation(); state.active = n.id; showDetail(n); applyHighlight(); });
+    g.appendChild(rect);
+
+    const title = el("text", { x: p.w / 2, y: p.h / 2 - 2, "text-anchor": "middle", fill: "#fff", "font-size": "13", "font-weight": "600" });
+    title.textContent = nodeTitle(n);
+    g.appendChild(title);
+
+    const sub = el("text", { x: p.w / 2, y: p.h / 2 + 16, "text-anchor": "middle", fill: "rgba(255,255,255,.85)", "font-size": "10" });
+    sub.textContent = nodeSub(n);
+    g.appendChild(sub);
+
+    if (n.category === "middleware") {
+      const cnt = data.edges.filter(e => e.target === n.id).length;
+      const badge = el("text", { x: p.w - 14, y: 6, class: "badge", "dominant-baseline": "hanging" });
+      badge.textContent = cnt;
+      g.appendChild(badge);
+    }
+    svg.appendChild(g);
+  });
+
+  applyHighlight();
+  updateStat();
+  fillSelects();
+
+  // 点击 SVG 空白区域取消选中
+  svg.addEventListener("click", e => {
+    if (e.target === svg) {
+      state.active = null;
+      document.getElementById("detail").classList.remove("show");
+      applyHighlight();
+    }
+  });
+}
+
+/* =========================================================
+ * 高亮 / 过滤（链式：hover 服务器可看到整个子树）
+ * ========================================================= */
+function relatedSet(id) {
+  const data = currentData();
+  const set = new Set([id]);
+  let expand = true, guard = 0;
+  while (expand && guard++ < 4) {
+    expand = false;
+    allEdges(data).forEach(e => {
+      if (set.has(e.source) && !set.has(e.target)) { set.add(e.target); expand = true; }
+      if (set.has(e.target) && !set.has(e.source)) { set.add(e.source); expand = true; }
+    });
+  }
+  return set;
+}
+
+/* 直接关联（一跳邻居），用于搜索高亮，避免链路扩散到全图 */
+function directNeighbors(id) {
+  const set = new Set([id]);
+  allEdges(currentData()).forEach(e => {
+    if (e.source === id) set.add(e.target);
+    if (e.target === id) set.add(e.source);
+  });
+  return set;
+}
+
+/* =========================================================
+ * appId 属性筛选（部署项目·模糊 / 工程项目·精确 / 机房节点·精确 / PP应用·精确，均可多选）
+ * 属性属 appId 级：数据集粒度恒为 appId × 中间件，任一已选值命中即保留该应用的全部关系，
+ * 与后端 /graph 的属性筛选口径一致（维度内 OR、维度间 AND）
+ * ========================================================= */
+const ATTR_KEYS = ["dep", "eng", "node", "pp"];
+const ATTR_LABELS = { dep: "部署项目", eng: "工程项目", node: "机房节点", pp: "PP应用" };
+// 已选值数组（逗号串拆分、去空）
+function attrSel(key) {
+  const s = (state[key] || "").trim();
+  return s ? s.split(",").map(x => x.trim()).filter(Boolean) : [];
+}
+// 写入某维度已选值数组（去重 → 逗号串）
+function attrSelSet(key, arr) {
+  const seen = {};
+  state[key] = arr.filter(Boolean).filter(v => (seen[v] ? false : (seen[v] = true))).join(",");
+}
+function attrFilterActive() {
+  return ATTR_KEYS.some(k => attrSel(k).length);
+}
+// 取应用的某维度属性列表：优先多值列表（后端 appId 级属性），回退单值字段
+function attrValues(list, single) {
+  return (list && list.length) ? list : (single ? [single] : []);
+}
+// 某维度命中判定：一个已选值命中即满足该维度（维度内 OR；dep 模糊、其余精确）
+function attrDimHit(a, key) {
+  const sel = attrSel(key);
+  if (!sel.length) return true;
+  let vals = [];
+  // 部署点展开：行粒度为部署点，属性为单值（后端已清空多值列表）；折叠态按 appId 多值列表匹配。
+  // PP 应用在两种口径下均为多值（一个部署点下可有多个 PP 应用），故始终按列表匹配。
+  if (key === "dep") vals = state.expandDepNode ? (a.depProject ? [a.depProject] : []) : attrValues(a.depProjects, a.depProject);
+  else if (key === "eng") vals = state.expandDepNode ? (a.engProject ? [a.engProject] : []) : attrValues(a.engProjects, a.engProject);
+  else if (key === "node") vals = state.expandDepNode ? (a.node ? [a.node] : []) : attrValues(a.nodes, a.node);
+  else if (key === "pp") vals = attrValues(a.ppApplications, a.ppApplication);
+  const lower = sel.map(v => v.toLowerCase());
+  return vals.some(v => {
+    const s = String(v || "");
+    const low = s.toLowerCase();
+    return sel.some((w, i) => (key === "dep" ? low.includes(lower[i]) : s === w));
+  });
+}
+// 应用节点是否命中全部属性维度（各维度须同时成立）
+function appAttrHit(a) {
+  if (!a) return false;
+  return ATTR_KEYS.every(k => attrDimHit(a, k));
+}
+// 渲染已选 chips（某维度已选值数组 → chip 列表，× 移除单项）
+function renderAttrChips() {
+  ATTR_KEYS.forEach(key => {
+    const box = document.getElementById(key + "Chips");
+    if (!box) return;
+    box.innerHTML = "";
+    attrSel(key).forEach(v => {
+      const chip = document.createElement("span");
+      chip.className = "attr-chip";
+      const b = document.createElement("b"); b.textContent = v;
+      const x = document.createElement("span"); x.className = "ac-x"; x.textContent = "×"; x.title = "移除 " + v;
+      x.addEventListener("click", e => { e.stopPropagation(); removeAttrChip(key, v); });
+      chip.appendChild(b); chip.appendChild(x);
+      box.appendChild(chip);
+    });
+  });
+}
+// × 清空按钮随已选值显隐
+function refreshAttrClears() {
+  ATTR_KEYS.forEach(key => {
+    const cl = document.getElementById(key + "Clear");
+    if (cl) cl.style.display = attrSel(key).length ? "" : "none";
+  });
+}
+// 属性筛选变化后统一下落：取消选中/详情、刷新 × 与 chips、重算可见性（该页过滤不重排布局）
+function refreshAfterAttr() {
+  state.active = null; state.hover = null;
+  document.getElementById("detail").classList.remove("show");
+  refreshAttrClears();
+  renderAttrChips();
+  applyHighlight();
+  updateStat();
+}
+// 维度内加入一个已选值（去除重复；加入后重算）
+function addAttrChip(key, value) {
+  value = (value || "").trim();
+  if (!value) return;
+  const arr = attrSel(key);
+  if (arr.includes(value)) return;
+  attrSelSet(key, arr.concat([value]));
+  refreshAfterAttr();
+}
+// 移除某个已选值（重算）
+function removeAttrChip(key, value) {
+  attrSelSet(key, attrSel(key).filter(v => v !== value));
+  refreshAfterAttr();
+}
+// 清空某个维度（状态 + 输入框 + chips）
+function clearAttrDim(key) {
+  attrSelSet(key, []);
+  const input = document.getElementById(key + "Input");
+  if (input) input.value = "";
+  refreshAfterAttr();
+}
+// 提交当前输入框中的值作为该维度一个已选项（Enter / 点选候选触发），随后清空输入便于继续搜索
+function commitAttrInput(key) {
+  const input = document.getElementById(key + "Input");
+  if (!input) return;
+  addAttrChip(key, input.value);
+  input.value = "";
+}
+// 清空 appId 属性筛选（状态 + 输入框）：数据源切换 / 重置视图统一调用
+function clearAttrFilters() {
+  ATTR_KEYS.forEach(key => attrSelSet(key, []));
+  ATTR_KEYS.forEach(key => {
+    const el = document.getElementById(key + "Input");
+    if (el) el.value = "";
+  });
+  renderAttrChips();
+  refreshAttrClears();
+}
+
+function applyHighlight() {
+  const data = currentData();
+  const focusId = state.hover || state.active;
+  const search = state.search.trim().toLowerCase();
+
+  // 搜索命中节点集合 + 关联集合（命中节点的上下游链路）
+  const matched = new Set();
+  if (search) {
+    data.nodes.forEach(n => {
+      const hay = [n.name, n.ip, n.hostname, n.apolloAppId, n.connectAddr, n.middlewareType].join(" ").toLowerCase();
+      if (hay.includes(search)) matched.add(n.id);
+    });
+  }
+  const searchRelated = new Set();
+  matched.forEach(id => directNeighbors(id).forEach(x => searchRelated.add(x)));
+  const hasSearch = searchRelated.size > 0;
+
+  // 关键：点击用一跳邻居（directNeighbors），hover 用链式 BFS（relatedSet）
+  // 因为整个拓扑图是连通的，relatedSet 从任何节点出发都能 reach 全图 → 点击时无法隐藏任何节点
+  let focusRelated = new Set();
+  if (focusId) {
+    if (state.active && !state.hover) {
+      // 点击：一跳邻居 + 自己，精确隐藏无关节点
+      focusRelated = directNeighbors(focusId);
+    } else {
+      // hover：链式 BFS，淡化上下文（全图淡化也能接受，因为 hover 不隐藏）
+      focusRelated = relatedSet(focusId);
+    }
+  }
+
+  document.querySelectorAll(".node").forEach(g => {
+    const n = data.nodes.find(x => x.id === g.dataset.id);
+    if (!n) { g.style.display = "none"; return; }
+    let visible = true, dim = false, match = false, hl = false;
+
+    if (state.type) {
+      if (n.category === "middleware" && n.middlewareType !== state.type) visible = false;
+      if (n.category === "application") {
+        const linked = data.edges.some(e => e.source === n.id && data.nodes.find(m => m.id === e.target && m.middlewareType === state.type));
+        if (!linked) visible = false;
+      }
+      if (n.category === "server") {
+        const deps = data.deploys.filter(d => d.source === n.id).map(d => d.target);
+        const anyAppVisible = deps.some(a => data.edges.some(e => e.source === a && data.nodes.find(m => m.id === e.target && m.middlewareType === state.type)));
+        if (!anyAppVisible) visible = false;
+      }
+    }
+
+    // appId 属性筛选：应用按属性命中；服务器/中间件按其关联应用是否命中判定
+    // （属性属 appId 级，命中即保留该应用全部关系；维度内多选 OR、维度间 AND）
+    if (attrFilterActive()) {
+      if (n.category === "application") {
+        if (!appAttrHit(n)) visible = false;
+      } else if (n.category === "server") {
+        const onSvr = data.deploys.filter(d => d.source === n.id).map(d => d.target);
+        if (!onSvr.some(id => appAttrHit(data.nodes.find(a => a.id === id)))) visible = false;
+      } else if (n.category === "middleware") {
+        const linked = data.edges.some(e => e.target === n.id && appAttrHit(data.nodes.find(a => a.id === e.source)));
+        if (!linked) visible = false;
+      }
+    }
+
+    // 服务器过滤：只保留指定服务器上的应用及其相连中间件
+    if (state.server) {
+      if (n.category === "server" && n.id !== state.server) visible = false;
+      if (n.category === "application" && appServerOf(n.id) !== state.server) visible = false;
+      if (n.category === "middleware") {
+        const linked = data.edges.some(e => e.target === n.id && data.nodes.find(a => a.id === e.source && appServerOf(a.id) === state.server));
+        if (!linked) visible = false;
+      }
+    }
+
+    // 搜索：命中及关联节点保留并高亮，其余淡化（不隐藏，保留上下文）
+    if (search) {
+      if (matched.has(n.id)) { match = true; hl = true; }
+      else if (searchRelated.has(n.id)) { hl = true; }
+    }
+
+    // hover/active 聚焦：点击时隐藏无关节点，悬停时淡化
+    if (focusId) {
+      if (focusRelated.has(n.id)) hl = true;
+      else if (!(search && searchRelated.has(n.id))) {
+        if (state.active && !state.hover) visible = false;   // 点击 → 隐藏无关节点
+        else dim = true;                                      // 悬停 → 淡化无关节点
+      }
+    } else if (search && !match && !searchRelated.has(n.id)) {
+      dim = true;
+    }
+
+    g.style.display = visible ? "" : "none";
+    g.classList.toggle("dim", dim);
+    g.classList.toggle("match", match);
+    g.classList.toggle("hl-node", hl && !dim);
+  });
+
+  document.querySelectorAll(".edge").forEach(path => {
+    const srcEl = document.querySelector(`.node[data-id="${CSS.escape(path.dataset.source)}"]`);
+    const tgtEl = document.querySelector(`.node[data-id="${CSS.escape(path.dataset.target)}"]`);
+    const sOk = srcEl && srcEl.style.display !== "none";
+    const tOk = tgtEl && tgtEl.style.display !== "none";
+    path.style.display = sOk && tOk ? "" : "none";
+    if (path.style.display === "none") return;
+
+    // 高亮集合 = 聚焦节点关联 ∪ 搜索关联；边两端都在其中才高亮，否则淡化
+    const hlSet = new Set();
+    if (focusId) focusRelated.forEach(id => hlSet.add(id));
+    if (hasSearch) searchRelated.forEach(id => hlSet.add(id));
+
+    const edgeHl = hlSet.has(path.dataset.source) && hlSet.has(path.dataset.target);
+    path.classList.toggle("hl-edge", edgeHl);
+    path.classList.toggle("dim", hlSet.size > 0 && !edgeHl);
+  });
+
+  document.querySelectorAll(".edge-label").forEach(l => { l.style.display = "none"; });
+  document.querySelectorAll(".edge").forEach((p, i) => {
+    if (p.style.display !== "none" && (p.dataset.kind === "deploy" || state.layout === "force")) {
+      const lbl = document.querySelector(`[data-edge-label="${i}"]`);
+      if (lbl) lbl.style.display = "";
+    }
+  });
+
+  const empty = document.getElementById("empty");
+  const anyNode = Array.from(document.querySelectorAll(".node")).some(g => g.style.display !== "none");
+  empty.classList.toggle("show", !anyNode);
+}
+
+/* =========================================================
+ * 详情弹窗
+ * ========================================================= */
+function showDetail(n) {
+  const data = currentData();
+  const detail = document.getElementById("detail");
+  document.getElementById("dTitle").textContent = n.name;
+  const cat = document.getElementById("dCat");
+  cat.textContent = CAT_LABEL[n.category];
+  cat.className = "cat " + n.category;
+
+  const body = document.getElementById("dBody");
+  body.innerHTML = "";
+  function row(k, v) {
+    const r = document.createElement("div"); r.className = "row";
+    r.innerHTML = `<span class="k">${k}</span><span class="v">${v}</span>`;
+    body.appendChild(r);
+  }
+  function list(title, items) {
+    const t = document.createElement("div"); t.className = "list-title"; t.textContent = title;
+    body.appendChild(t);
+    const ul = document.createElement("ul");
+    items.forEach(txt => {
+      const li = document.createElement("li"); li.textContent = txt; ul.appendChild(li);
+    });
+    body.appendChild(ul);
+  }
+
+  if (n.category === "server") {
+    row("节点", n.node);
+    row("主机名", n.hostname);
+    row("IP", n.ip);
+    row("环境", state.env);
+    const apps = data.deploys.filter(d => d.source === n.id).map(d => data.nodes.find(a => a.id === d.target));
+    list(`部署的 ${apps.length} 个应用`, apps.map(a => `${a.name}  (${a.apolloAppId})`));
+  } else if (n.category === "application") {
+    row("节点", n.node);
+    row("工程名", n.engProject);
+    row("部署项目", n.depProject);
+    row("PP应用", n.ppApplication || "-");
+    row("Apollo appid", n.apolloAppId);
+    row("环境", state.env);
+    const deps = data.edges.filter(e => e.source === n.id).map(e => data.nodes.find(m => m.id === e.target));
+    list("依赖的中间件", deps.map(m => `${m.middlewareType}  ${m.connectAddr}`));
+  } else {
+    row("类型", n.middlewareType);
+    row("连接地址", n.connectAddr);
+    row("中间件项目", n.middlewareProject);
+    row("环境", state.env);
+    const users = data.edges.filter(e => e.target === n.id).map(e => data.nodes.find(a => a.id === e.source));
+    list(`被 ${users.length} 个应用依赖`, users.map(a => `${a.name}  (${a.apolloAppId})`));
+  }
+  detail.classList.add("show");
+}
+document.getElementById("detailClose").addEventListener("click", () => {
+  document.getElementById("detail").classList.remove("show");
+  state.active = null;
+  applyHighlight();
+});
+
+/* =========================================================
+ * 控件绑定
+ * ========================================================= */
+function fillSelects() {
+  const data = currentData();
+  const serverSel = document.getElementById("serverSel");
+  const typeSel = document.getElementById("typeSel");
+
+  // 保留当前选中值（环境切换时）
+  const curServer = serverSel.value;
+
+  serverSel.innerHTML = '<option value="">服务器: 全部</option>';
+  data.nodes.filter(n => n.category === "server").forEach(s => {
+    const o = document.createElement("option"); o.value = s.id; o.textContent = `${s.name} (${s.node})`;
+    serverSel.appendChild(o);
+  });
+  if (curServer) serverSel.value = curServer;
+  // 下拉实际值与 state 保持一致（环境切换后旧值可能不存在）
+  state.server = serverSel.value;
+
+  if (!typeSel.dataset.filled) {
+    // 中间件类型：API 模式从数据动态取，Mock 用静态列表
+    const types = dataSource === "api"
+      ? [...new Set(data.nodes.filter(n => n.category === "middleware").map(m => m.middlewareType))].sort()
+      : MW_TYPES;
+    types.forEach(t => {
+      const opt = document.createElement("option"); opt.value = t; opt.textContent = t;
+      typeSel.appendChild(opt);
+    });
+    typeSel.dataset.filled = "1";
+  }
+
+  fillAttrSelects(); // appId 属性筛选项（部署项目/工程项目/机房节点/PP应用）
+}
+
+// appId 属性筛选候选：从应用节点属性（多值列表优先，回退单值）汇总去重升序，填充 datalist
+function fillAttrSelects() {
+  const apps = currentData().nodes.filter(n => n.category === "application");
+  const dims = [
+    { input: "depInput", list: "depList", vals: apps.flatMap(a => attrValues(a.depProjects, a.depProject)) },
+    { input: "engInput", list: "engList", vals: apps.flatMap(a => attrValues(a.engProjects, a.engProject)) },
+    { input: "nodeInput", list: "nodeList", vals: apps.flatMap(a => attrValues(a.nodes, a.node)) },
+    { input: "ppInput", list: "ppList", vals: apps.flatMap(a => attrValues(a.ppApplications, a.ppApplication)) },
+  ];
+  dims.forEach(d => {
+    const list = document.getElementById(d.list);
+    if (list) {
+      list.innerHTML = "";
+      [...new Set(d.vals.filter(Boolean))].sort().forEach(v => {
+        const o = document.createElement("option"); o.value = v; list.appendChild(o);
+      });
+    }
+    // 多选：输入框只留空（保留「继续搜索下一个候选」语义），已选值以 chips 呈现
+    const input = document.getElementById(d.input);
+    if (input) input.value = "";
+  });
+  renderAttrChips();
+  refreshAttrClears();
+}
+
+document.getElementById("viewGroup").addEventListener("click", e => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  state.layout = btn.dataset.layout;
+  document.querySelectorAll("#viewGroup button").forEach(b => b.classList.toggle("active", b === btn));
+  positions.__forceInit = null;
+  document.getElementById("legendSvr").style.display = (state.layout === "three" || state.layout === "overview") ? "" : "none";
+  render();
+});
+
+document.getElementById("envSel").addEventListener("change", async e => {
+  state.env = e.target.value;
+  document.getElementById("syncTime").textContent = state.env === "PRO" ? "2026-08-31 01:30:15" : "2026-08-30 02:10:03";
+  positions.__forceInit = null;
+  if (dataSource === "api") {
+    // 后端只同步了 PRO（mock apollo 单环境），SIT 返回空则提示
+    try {
+      await refreshData();
+    } catch (err) {
+      document.getElementById("syncTime").textContent = "加载失败: " + err.message;
+    }
+  }
+  render();
+});
+document.getElementById("srcSel").addEventListener("change", async e => {
+  dataSource = e.target.value;
+  cache = {};                     // 清空缓存强制重载
+  state.server = ""; state.type = ""; state.active = null; state.hover = null;
+  clearAttrFilters();
+  document.getElementById("serverSel").innerHTML = '<option value="">服务器: 全部</option>';
+  document.getElementById("typeSel").innerHTML = '<option value="">中间件类型: 全部</option>';
+  document.getElementById("typeSel").dataset.filled = "";
+  document.getElementById("searchInput").value = "";
+  if (dataSource === "api") {
+    try {
+      await refreshData();
+      const g = cache[state.env];
+      document.getElementById("syncTime").textContent = g.syncDate ? g.syncDate + " (API)" : "暂无快照";
+    } catch (err) {
+      document.getElementById("syncTime").textContent = "加载失败: " + err.message;
+    }
+  } else {
+    document.getElementById("syncTime").textContent = state.env === "PRO" ? "2026-08-31 01:30:15" : "2026-08-30 02:10:03";
+  }
+  render();
+});
+document.getElementById("typeSel").addEventListener("change", e => { state.type = e.target.value; applyHighlight(); });
+// 部署点展开（默认勾选）：应用节点粒度 appId ⇄ 部署点（appId+部署项目+节点），两种口径后端返回不同，
+// 故清空缓存重取；已选属性筛选保留（后端按当前粒度复核）
+document.getElementById("expandDepNode").addEventListener("change", async e => {
+  state.expandDepNode = e.target.checked;
+  state.active = null; state.hover = null;
+  cache = {};
+  if (dataSource === "api") {
+    try { await refreshData(); }
+    catch (err) { document.getElementById("syncTime").textContent = "加载失败: " + err.message; }
+  }
+  render();
+});
+// appId 属性筛选（可多选）：输入框仅用于检索候选，回车/点选候选才「加入 chips」（维度内 OR、维度间 AND）；× 清空该维度
+[["depInput", "dep"], ["engInput", "eng"], ["nodeInput", "node"], ["ppInput", "pp"]].forEach(([id, key]) => {
+  const el = document.getElementById(id);
+  el.addEventListener("change", () => commitAttrInput(key));
+  el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); commitAttrInput(key); } });
+  document.getElementById(id.replace("Input", "Clear")).addEventListener("click", () => clearAttrDim(key));
+});
+document.getElementById("attrClear").addEventListener("click", () => { clearAttrFilters(); refreshAfterAttr(); });
+document.getElementById("serverSel").addEventListener("change", e => { state.server = e.target.value; applyHighlight(); });
+document.getElementById("searchInput").addEventListener("input", e => { state.search = e.target.value; applyHighlight(); });
+document.getElementById("resetBtn").addEventListener("click", () => {
+  state.type = ""; state.server = ""; state.search = ""; state.active = null; state.hover = null;
+  document.getElementById("typeSel").value = "";
+  document.getElementById("serverSel").value = "";
+  document.getElementById("searchInput").value = "";
+  clearAttrFilters();
+  render();
+});
+document.getElementById("exportBtn").addEventListener("click", () => alert("原型演示：导出 PNG / CSV 为扩展功能（附录 C.1 [扩展]）"));
+
+// 初始化：API 模式异步加载后端数据，Mock 模式同步渲染
+(async () => {
+  if (dataSource === "api") {
+    try {
+      await refreshData();
+      const g = cache[state.env];
+      document.getElementById("syncTime").textContent = g.syncDate ? g.syncDate + " (API)" : "暂无快照";
+    } catch (err) {
+      document.getElementById("syncTime").textContent = "加载失败: " + err.message;
+    }
+  } else {
+    document.getElementById("syncTime").textContent = state.env === "PRO" ? "2026-08-31 01:30:15" : "2026-08-30 02:10:03";
+  }
+  render();
+})();
+
+function updateStat() {
+  const data = currentData();
+  const cnt = c => data.nodes.filter(n => n.category === c).length;
+  const svrs = cnt("server"), apps = cnt("application"), mws = cnt("middleware");
+  let s = `节点 <b>${data.nodes.length}</b>（服务器${svrs} / 应用${apps} / 中间件${mws}）｜ 关系 <b>${allEdges(data).length}</b> ｜ 快照 <b>${state.env}</b>`;
+  // appId 属性筛选反馈：命中应用数与条件（属性属 appId 级，命中即保留该应用全部关系）
+  if (attrFilterActive()) {
+    const cond = [];
+    ATTR_KEYS.forEach(k => {
+      const sel = attrSel(k);
+      if (sel.length) cond.push(`${ATTR_LABELS[k]}∈{${sel.map(x => `“${x}”`).join("、")}}`);
+    });
+    const hit = data.nodes.filter(n => n.category === "application" && appAttrHit(n)).length;
+    s += hit
+      ? ` ｜ <span style="color:#5b8ff9">属性(${cond.join(" 且 ")}) → ${hit} 应用</span>`
+      : ` ｜ <span style="color:#e6a23c">属性(${cond.join(" 且 ")}) 无匹配应用</span>`;
+  }
+  document.getElementById("stat").innerHTML = s;
+}
+</script>
+</body>
+</html>
