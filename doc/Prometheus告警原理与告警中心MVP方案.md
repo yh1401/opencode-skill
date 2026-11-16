@@ -271,7 +271,7 @@ GET  /api/alarms/stats              按 severity / state 聚合，供 Dashboard
 GET  /api/alarms/:fp                单条详情（含关联会话 / 工单）
 POST /api/alarms/poll               手动拉一轮（演示与排障都靠它）
 POST /api/alarms/:fp/diagnose       人工强制开排障（忽略冷却）
-POST /api/alarms/webhook            预留给未来 Alertmanager 推送（路由占位，不实现）
+POST /api/alarms/webhook            已实现：兼容 Alertmanager v4 载荷，firing 幂等入库并触发自动排障
 ```
 
 ### 4.8 配置（`config.go` 追加，走环境变量）
@@ -315,10 +315,10 @@ ALARM_MISS_TOLERANCE   2          // 恢复防抖：连续几次没在 firing �
 
 | 期 | 内容 | 验收标准 | 状态 |
 |---|---|---|---|
-| **P0** | `internal/alarm` 包：解析器 + 指纹 + 采集循环 + `GET /api/alarms` + `POST /poll` + `CallSilent` | 手动 poll 后 6 条 mock 告警入库；重复 poll 不产生新行，`fireCount` 正确累加 | ✅ 2026-11-03 已验证（`upserted=6` 两轮不变） |
+| **P0** | `internal/alarm` 包：解析器 + 指纹 + 采集循环 + `GET /api/alarms` + `POST /poll` + `CallSilent` | 手动 poll 后 6 条 mock 告警入库；重复 poll 不产生新行，`fireCount` 正确累加 | ✅ 2026-11-03 已验证（`upserted=6` 两轮不变）；当前 `mockdata/prometheus/list_alerts.json` 为 4 条，复测时 `upserted=4` |
 | **P1** | 自动开排障 + 冷却 / 去重 / 限流 + 回写 `diagSessionID` + `GET /api/alarms/:fp` | 一轮里只自动开 ≤5 个会话；同 host 10 分钟内不重复；工单自动出现在 Tickets 页 | ✅ 已验证（`autoDiag>0`、`diagSessionId`/`ticketId` 回填、同 fp 二次 ForceDiagnose 幂等） |
 | **P2.1** | 恢复检测 + 工单追加恢复备注 | mock 切到"恢复"后连续 2 轮 poll 内 `state=resolved`；工单收到恢复备注 | ✅ 已验证（`missCount≥2 → resolved`，Findings 追加"告警已恢复（时间），建议人工确认处置"） |
-| **P2.2** | 告警中心页 | 列表 + 筛选 + `ForceDiagnose` 按钮 + 详情抽屉 | ✅ 已验证（浏览器 6 项全 PASS：4 统计卡 / 6 行表格 / 分级药丸 / 时间列 / 零 console 错误） |
+| **P2.2** | 告警中心页 | 列表 + 筛选 + `ForceDiagnose` 按钮 + 详情抽屉 | ✅ 已验证（浏览器 6 项全 PASS：4 统计卡 / 6 行表格〔当时 mock 6 条，现为 4 行〕 / 分级药丸 / 时间列 / 零 console 错误） |
 | **P2.3** | Dashboard 两张卡 + 拓扑节点着色 | 当前 firing 数（分级分色）、近 24h 自动开单数；拓扑节点按告警/排障/工单状态描边 | ✅ 已验证（Dashboard「当前告警」「24h 自动建单」两卡上线；拓扑五级着色，firing 经自动排障后落为「排障中」红色虚线描边，见总体架构方案 §13.4） |
 | **P3** | webhook 入站 / 静默 / Alertmanager 对接 | 外部告警可推入、静默期内不自动开排障 | ✅ webhook（`POST /api/alarms/webhook`）、手动静默（30m/2h/24h/永久）、`GET /api/v2/alerts` 双通道采集与 `mergeAlerts` 抑制/分组补全均已落地（`ALERTMANAGER_ENABLED` 默认 true，`ALERTMANAGER_URL` 默认 `http://127.0.0.1:9093`，不可达时静默降级） |
 
@@ -364,7 +364,7 @@ Prometheus firing ──→ alarm 采集循环 ──→ 自动排障 ──→ 
 | `platform/backend/internal/mcp/gateway.go` | 已有 `Call` | 追加 `CallSilent` |
 | `platform/backend/internal/config/config.go` | 已有 Config | 追加 6 个 `ALARM_*` 字段 |
 | `platform/backend/cmd/server/main.go` | 启动 goroutine 只有 ListenAndServe | 追加 alarm 循环的 goroutine |
-| `platform/backend/internal/api/router.go` | 已有 `/api/mcp/*` | 追加 `/api/alarms/*` 7 个路由 |
+| `platform/backend/internal/api/router.go` | 已有 `/api/mcp/*` | 追加 `/api/alarms/*` 13 个路由 |
 | `platform/backend/cmd/mockmcp/main.go` | `list_alerts` 无动态处理器 | 追加生命周期模拟（启动时间分桶） |
 | `platform/frontend/src/pages/Dashboard.tsx` | 已有 Dashboard | 追加两个告警统计卡 |
 | `platform/frontend/src/nav.tsx` | 顶部菜单 | 追加「告警中心」 |
@@ -380,7 +380,7 @@ Prometheus firing ──→ alarm 采集循环 ──→ 自动排障 ──→ 
 | `internal/alarm/parser.go` | 新增 | 两层解码（上游 `content[0].text` → Prometheus JSON → `[]alertView`）；`fingerprint()` = `alertname|instance|severity` 全小写 |
 | `internal/alarm/loop.go` | 新增 | `Engine`：`Start` 采集循环、`PollOnce`、`List/Get/Stats`、`ForceDiagnose`、`SyncTickets`；`runAutoDiagnose` 四条准入（severity∈{critical,warning} / 同指纹冷却 / 同 host 无活跃会话 / 无 diagSessionID）；`buildDiagnoseRequest` 三层映射（`labels.appId` → topo 匹配 → `labels.type`） |
 | `internal/api/alarm_handler.go` | 新增 | 5 个 handler：list（内嵌完整 `AlarmEvent` + 二次关联）、stats、get、poll、diagnose |
-| `internal/api/router.go` | 改动 | `/api/alarms` 路由组（5 条）；`fail()` 改为 nil-safe（空 error 按状态码给默认文案） |
+| `internal/api/router.go` | 改动 | `/api/alarms` 路由组（13 条）；`fail()` 改为 nil-safe（空 error 按状态码给默认文案） |
 | `internal/mcp/gateway.go` | 改动 | 抽出 `callInner`，新增 `CallSilent`（不写审计，供高频轮询） |
 | `internal/config/config.go` | 改动 | 6 个 `ALARM_*`：`ENABLED` / `POLL_INTERVAL_SEC`(30) / `COOLDOWN_MIN`(10) / `MAX_AUTO_DIAG`(5) / `AUTO_DIAG`(true) / `MISS_TOLERANCE`(2) |
 | `cmd/server/main.go` | 改动 | 构建 `alarm.Engine`；`AlarmEnabled` 时 `go al.Start(ctx)`；`context.WithCancel` 优雅退出 |
@@ -413,13 +413,15 @@ Prometheus firing ──→ alarm 采集循环 ──→ 自动排障 ──→ 
 
 ### 7.4 与方案的偏差（需知悉）
 
-- **mock 数据未读文件**：`promListAlerts` 内置 6 条告警模板，而非读 `mockdata/prometheus/list_alerts.json`。好处是生命周期可按启动时间分桶，坏处是改 mock 数据要改代码。
+- **mock 数据未读文件**（已修正，2026-11-13）：落地当时 `promListAlerts` 内置 6 条告警模板；现实现为**优先读 `mockdata/prometheus/list_alerts.json`（4 条 firing）**，文件缺失才回退 6 条按启动时间分桶的模板。
 - **未做 SSE 增量推送**：前端用 15s 轮询替代。MVP 够用，告警量大时再换 SSE。
-- **未接 Alertmanager**：仍走 prometheus `list_alerts`，拿不到 `silenced`/`inhibited` 状态。
+- **未接 Alertmanager**（已修正，2026-11-13）：现已实现兼容 Alertmanager v4 的 webhook 入站（firing 幂等入库并触发自动排障），并联动 `silenced`/`inhibited` 抑制状态；轮询 `list_alerts` 仍保留作为兜底采集。
 
 ---
 
 ## 八、下一阶段规划（阶段二：告警联动深化）
+
+> 状态（2026-11-13）：本章 T4–T12 已全部落地——告警中心页面、拓扑告警着色、告警→自动排障（含日志证据）、指标劣化入同一闭环、考核指标埋点、巡检 Cron 均已在 `platform/` 实现；下述内容保留为当时的设计与验收口径。
 
 ### 8.1 目标
 
@@ -436,9 +438,9 @@ Prometheus firing ──→ alarm 采集循环 ──→ 自动排障 ──→ 
 | **P0** | ✅ T1 告警可视化收尾（P2.3） | Dashboard 加 2 张卡（firing 分级数 / 24h 自动开单数）；拓扑节点 firing 时红色虚线描边 + tooltip 带告警名；排障工作台顶部告警横幅 | 有 firing 告警时 Dashboard 数字非 0；拓扑对应节点描边可见 | 告警 API 已有 | 1–2 天 |
 | **P0** | ✅ T2 告警中心增强 | 服务端筛选+分页（`?state=&severity=&q=&page=`）；近 24h 告警趋势柱图（按小时聚合）；告警 timeline（firing→diagnose→ticket→resolved 四节点）；手动静默（30m/2h/永久，`AlarmEvent.SilencedUntil`） | 100 条告警下分页正常；静默期内不自动排障 | 与 T1 无依赖，可并行 | 2–3 天 |
 | **P1** | ✅ T3 日志证据并入排障（现第 10 步，断点④） | diagnose 新增日志证据步：优先用告警 `host` 调 ES `search`（计数 + 样本），ES 不可用时回退 log_analyzer（firing 前 10min 窗口），产出"错误日志 TopN + 异常模式"；均不可用时步骤标 `skipped` 不阻断 | 排障 SSE 出现日志证据步；日志命中数与证据卡可见；服务宕机时排障仍完成 | log_analyzer 已跑通（iframe 版）+ 2026-11-06 已接入 ES | 3–4 天 |
-| **P1** | T4 指标劣化 → 隐患告警 | 独立 sweep（每 15min）算 1h 斜率，超阈值写 `AlarmEvent{Source:"degradation", Severity:"warning"}`，复用同表/同套自动排障 | `/api/alarms` 出现 `source=degradation`；可一键开排障 | T2 的筛选字段 | 3–4 天 |
-| **P2** | T5 考核指标埋点看板（#29/#30） | 汇总 `firstSeenAt → sessionCreatedAt → rootCausedAt` 三段时长，输出 P50/P90 与达标率；`/metrics` 从占位转真实页 | 有数据时看板出数；空数据不报错 | T1–T4 产生的数据 | 2–3 天 |
-| **P2** | T6 巡检 Cron 调度 | 复用 `InspectionTask.Cron`，内嵌轻量调度器（每分钟扫到期任务），触发 `/inspect/run` | 配置 `*/30 * * * *` 后自动产生批次 | 独立小项 | 1–2 天 |
+| **P1** | ✅ T4 指标劣化 → 隐患告警 | 独立 sweep（每 15min）算 1h 斜率，超阈值写 `AlarmEvent{Source:"degradation", Severity:"warning"}`，复用同表/同套自动排障 | `/api/alarms` 出现 `source=degradation`；可一键开排障 | T2 的筛选字段 | 3–4 天 |
+| **P2** | ✅ T5 考核指标埋点看板（#29/#30） | 汇总 `firstSeenAt → sessionCreatedAt → rootCausedAt` 三段时长，输出 P50/P90 与达标率；`/metrics` 从占位转真实页 | 有数据时看板出数；空数据不报错 | T1–T4 产生的数据 | 2–3 天 |
+| **P2** | ✅ T6 巡检 Cron 调度 | 复用 `InspectionTask.Cron`，内嵌轻量调度器（每分钟扫到期任务），触发 `/inspect/run` | 配置 `*/30 * * * *` 后自动产生批次 | 独立小项 | 1–2 天 |
 | **P3** | ✅ T7 Alertmanager 接入（webhook 已落地） | `POST /api/alarms/webhook` + `GET /api/v2/alerts` 双模式；`silenced`/`inhibited` 不入库；分组标签落 `labels.group` | 静默告警不入库 | T2 | 2 天 |
 
 > 落地记录（2026-11-03）：T1/T2 已完成。后端新增 `GET /api/alarms/trend?hours=`、`POST /api/alarms/:fp/silence`、`POST /api/alarms/:fp/unsilence`，`GET /api/alarms` 支持 `state/severity/q/page/pageSize` 服务端筛选分页并回填 `diagStatus/ticketStatus` 等关联字段；静默在 `runAutoDiagnose` 准入 1.5 生效。前端 Dashboard 新增「当前告警 / 近 24h 自动建单」两卡；告警中心重写为统计卡 + 24h 趋势柱图 + 筛选分页表格 + 详情 timeline 抽屉 + 行内静默；排障页顶部新增活跃告警横幅；运维关系拓扑在 `topology_dagre.html` 内叠加告警描边与悬停提示（30s 轮询，兼容该页 `{code,data}` 信封）。
@@ -668,10 +670,10 @@ M2–M5 复测（2026-11-06，mock 四服务）：
 
 | 项 | 实现 |
 |---|---|
-| T12 规则模型 | 新增 kind `biz_rule`：`{id,name,appId,metric(error_rate/tp99/request_total),comparator(gt/lt),threshold,severity,windowMin,enabled}`；`GET /api/alarms/biz/rules` 首次访问自动初始化 3 条演示规则（应用 `apollo-ehome-pro`） |
+| T12 规则模型 | 新增 kind `biz_rule`：`{id,name,appId,metric(error_rate/tp99/request_total),comparator(gt/lt),threshold,severity,windowMin,enabled}`；`GET /api/biz-monitor/rules` 首次访问自动初始化 3 条演示规则（应用 `apollo-ehome-pro`） |
 | T12 采集与判定 | `ScanBiz` 通过上游接口 `query` 拉取瞬时指标（`http_requests_total` / `histogram_quantile` 推导 TP99），按规则的比较符与阈值判定越界；采集走 `Gateway.CallSilent`，不污染 `tool_call_log` |
 | T12 告警写入 | 统一通道 `alarm.IngestExternalEvents`：`source=biz`，`fingerprint=biz\|{ruleId}\|{appId}`；越界即 upsert firing，本轮未再越界的旧事件置 `resolved`（`PollOnce` 跳过 `source=biz`，生命周期由扫描维护） |
-| T12 扫描留痕 | 新增 kind `biz_scan`（key `latest`）：`{at,rules,breaches,created,items[]}`，`GET /api/alarms/biz` 返回规则/统计/明细/当前告警；`POST /api/alarms/biz/scan` 手动触发，后台按 `BIZ_MON_INTERVAL_SEC`（默认 60s）周期扫描 |
+| T12 扫描留痕 | 新增 kind `biz_scan`（key `latest`）：`{at,rules,breaches,created,items[]}`，`GET /api/biz-monitor/overview` 返回规则/统计/明细/当前告警；`POST /api/biz-monitor/scan` 手动触发，后台按 `BIZ_MON_INTERVAL_SEC`（默认 60s）周期扫描 |
 | T12 前端 | `/biz-monitor` 从占位转真实页：4 张统计卡、规则表（新建/删除）、扫描明细（越界标红）、当前告警表，30s 自动刷新 |
 | T13 质差分析 | `AnalyzeQuality(appId,windowMin)`：Prometheus `range_query` 取错误率 / TP99 / 请求量，按前 2/3 为基线、后 1/3 为近期做比对，评分权重 `0.35/0.35/0.2/0.1`，`≥0.7` 判 `degraded`、`≥0.4` 判 `suspected` |
 | T13 根因归因 | 结合拓扑 `middlewares` 与指标劣化方向给出根因候选（database / cache / mq / gateway / application）+ 目标实例，输出 `metrics[] / rootCause / evidence[]` |
@@ -683,12 +685,14 @@ M2–M5 复测（2026-11-06，mock 四服务）：
 
 #### 验证结果（阶段五）
 
-- T12：`POST /api/alarms/biz/scan` → `rules=3, breaches=3, created=3`；连续第二次扫描 `created=0`（指纹幂等）；`GET /api/alarms?state=firing` 可见 `source=biz`
+- T12：`POST /api/biz-monitor/scan` → `rules=3, breaches=3, created=3`；连续第二次扫描 `created=0`（指纹幂等）；`GET /api/alarms?state=firing` 可见 `source=biz`
 - T13：`POST /api/quality/scan {appId:"apollo-ehome-pro",windowMin:60}` → `level=degraded, score≈1.0`，`rootCause={type:"database", target:"ehome-pro.mysql.ehomeinner.cn:13303"}`，错误率 +800% / TP99 +750% / 请求量 -40%；`/api/alarms` 出现 `source=quality`
 - T14：接口与路由参数校验通过（`/alert-center?host=...` ↔ `/op-topology?host=&fp=`）；浏览器复测因本地浏览器插件连接失败未执行，页面由 `tsc --noEmit` + `vite build` 保证可编译
 - 前端 `tsc --noEmit`、`npm run build`，后端 `go build ./...` 均通过
 
 #### S5 日志证据落地记录（2026-11-04）
+
+> 步号说明：本节"第 5/6 步"是当时 7 步链路的编号；现行链路（M2–M5）里日志证据为**第 11 步**（`ES search` 优先、失败回退本地 `log_analyzer`），根因排序在其后。
 
 | 项 | 实现 |
 |---|---|

@@ -16,7 +16,7 @@
 
 | 类别 | 位置 | 内容 |
 |---|---|---|
-| 数据文件 | [backend/mockdata/](file:///Users/a666/Documents/trae_projects/opencode_skill/ai-ops/platform/backend/mockdata) | 68 个 JSON，按 server 分 4 个目录 |
+| 数据文件 | [backend/mockdata/](file:///Users/a666/Documents/trae_projects/opencode_skill/ai-ops/platform/backend/mockdata) | 71 个 JSON：pinpoint 20 / prometheus 39 / cmdb 7 / es 3，另有 `_meta.json`、`_scenarios.json`；按 server 分 4 个目录 |
 | Mock 服务 | [cmd/mockmcp/main.go](file:///Users/a666/Documents/trae_projects/opencode_skill/ai-ops/platform/backend/cmd/mockmcp/main.go) | 单进程 4 端口，JSON-RPC 2.0（MCP streamable-http） |
 | 数据生成脚本 | `/tmp/gen_mockdata.py` | 从拓扑快照一次性生成，可重跑 |
 
@@ -26,9 +26,9 @@
 |---|---|---|---|---|
 | pinpoint | 8888 | 17 | 20 | 含 `_apps.json`（108 应用 + 调用关系）、`_arch.json`（架构规则） |
 | prometheus | 8090 | 36 | 38 | 含 `_up_table.json`（330 台主机存活表） |
-| cmdb | 8061 | 5 | 7 | 含 `_db_servers.json`（45 条资产记录） |
+| cmdb | 8061 | 5 | 7 | 含 `_db_servers.json`（45 条资产记录；`_meta.json` 去重后记 44） |
 | es | 9201 | 5 | 3 | `_indices.json`（索引清单）、`_log_counts.json`（按主机/级别的日志计数） |
-| **合计** | — | **63** | **68** | 与平台 `config.go` 默认地址完全一致；另在 `mockdata/` 根目录有 1 个 `_meta.json` 生成清单（108 应用 / 330 主机 / 45 条 CMDB 记录），不计入工具响应文件 |
+| **合计** | — | **63** | **68** | 与平台 `config.go` 默认地址完全一致；另在 `mockdata/` 根目录有 1 个 `_meta.json` 生成清单（108 应用 / 330 主机 / 44 条 CMDB 记录；资产文件 `_db_servers.json` 为 45 条），不计入工具响应文件 |
 
 > 其中 prometheus 的 `delete_series`、`clean_tombstones`、`snapshot`、`reload`、`quit` 5 个管理类工具数据也已备好，但仍被平台网关默认拉黑（`MCP_DENY_TOOLS`），演示时不会误触。
 
@@ -53,7 +53,7 @@
 
 - **108 个应用**（含 Apollo 归属、部门、负责人、中间件依赖清单、上下游调用关系）
 - **330 台中间件主机**：mysql 54、redis 38、rocketmq 191、kafka 26、elasticsearch 12、nacos 6、zookeeper 3
-- **45 条 CMDB 资产**：33 条对应拓扑真实主机（含 `usingBy` 反查应用名）+ 12 条刻意的「孤儿资产」
+- **45 条 CMDB 资产**（`_meta.json` 去重口径 44）：33 条对应拓扑真实主机（含 `usingBy` 反查应用名）+ 12 条刻意的「孤儿资产」
 
 因此演示时：拓扑页点某个应用 → 诊断页能看到同一应用的 Pinpoint 服务地图 → 稽核页能对该主机的 CMDB 对账出结论，**三页数据自洽**。
 
@@ -68,7 +68,7 @@
 | C4 指标佐证 | CMDB 说下线，Prometheus 还有没有心跳 | 报废机 `public-push3…`（up=1）<br>待清退机 `sdk3a4…`（up=0） | **双向各 1 条**：一条「CMDB 状态疑似过期」，一条「与 CMDB 一致」 |
 | C3 反向孤儿 | CMDB 在线，但拓扑没引用 | `10.214.100.2` ~ `10.214.105.7` 等 12 台 | **P3 ×6**（state=0 抽样 20 条中命中 6 条） |
 
-**告警侧**另有 6 条 firing 告警（TargetDown ×2、HostHighCPU、HighErrorRate、MySQL 主从延迟、RocketMQ 消费积压），其中 `TargetDown` 指向的正是 C2 的两台主机——**稽核与告警能互相印证**，这是演示的关键说服点。
+**告警侧**另有 4 条 firing 告警（`HighErrorRate` critical、`TargetDown` critical、`MySQLReplicationDelay` warning、`HostHighCPU` warning），其中 `TargetDown` 指向的正是 C2 的主机——**稽核与告警能互相印证**，这是演示的关键说服点。
 
 ---
 
@@ -275,7 +275,7 @@ curl -s -X POST http://127.0.0.1:8080/api/diagnose/sessions \
 >
 > 需要日志证据时，在请求体加 `"logPath":"/Users/a666/aiops-logs/172.17.228.214.log"`（或在部署环境配置 `LOG_PATH_TEMPLATE`，默认 `/tmp/aiops-logs/{host}.log`），并保证 `LOG_ANALYZER_URL` 指向的日志分析服务可用；第 10 步成功时前端会渲染「日志证据」卡（命中文件/总行数/错误数/警告数 + 错误类型 TopN + 关键问题）。
 
-**讲解词**：「第 2 步的 matched 是真实字符串匹配，不是写死的 true——说明 Pinpoint 应用清单里确实有 `apollo-ehome-pro`；第 2 步的 3 个命中来自那 6 条告警。」
+**讲解词**：「第 2 步的 matched 是真实字符串匹配，不是写死的 true——说明 Pinpoint 应用清单里确实有 `apollo-ehome-pro`；第 2 步的 3 个命中来自那 4 条告警。」
 
 ### 第 4 步｜告警中心闭环（2 分钟）
 
@@ -287,17 +287,11 @@ curl -s http://127.0.0.1:8080/api/alarms/stats            # 分级统计
 curl -s http://127.0.0.1:8080/api/alarms                  # 列表（含排障/工单关联字段）
 ```
 
-预期：6 条 mock 告警入库（2 critical TargetDown + 4 warning），已过准入的自动开出排障会话并回填 `diagSessionId` / `ticketId`；页面顶部 4 张统计卡、表格 6 行、分级药丸红/橙。
+预期：4 条 mock 告警入库（2 critical：`HighErrorRate` / `TargetDown`；2 warning：`MySQLReplicationDelay` / `HostHighCPU`），已过准入的自动开出排障会话并回填 `diagSessionId` / `ticketId`；页面顶部 4 张统计卡、表格 4 行、分级药丸红/橙。
 
-**mock 生命周期（按 mockmcp 进程启动时间分桶）**：
+**mock 生命周期**：`promListAlerts` 优先读取 `mockdata/prometheus/list_alerts.json`（当前为 4 条静态告警），文件存在时原样返回；仅当该文件缺失或为空时，才回退到按 `mockmcp` 进程启动时间分桶的动态模拟（0–90s 全 6 条 → 90–150s 去掉 2 条 TargetDown → 150s+ 恢复 6 条，用于演示"告警恢复→死灰复燃"）。因此当前演示态下连续 `poll` 结果为 4 条稳定 firing。
 
-| 窗口 | `list_alerts` 返回 | 演示效果 |
-|---|---|---|
-| 0–90s | 全 6 条 firing | 首次 `poll` → `upserted=6`，触发自动排障 |
-| 90–150s | 4 条（去掉 2 条 TargetDown） | 连续 2 轮 poll（`ALARM_MISS_TOLERANCE=2`）后 TargetDown → `resolved`，工单追加"告警已恢复" |
-| 150s+ | 恢复全 6 条 | 再次 firing（`fireCount` 累加，代表"死灰复燃"） |
-
-**讲解词**：「这不是静态列表——它按进程运行时间模拟了'告警消失又复发'，所以恢复检测和工单回写是真跑出来的。」
+**讲解词**：「当前演示态读的是 `list_alerts.json` 的 4 条静态告警，稳定可复现；如果把该文件移走，mockmcp 会按进程运行时间模拟'告警消失又复发'，那时恢复检测和工单回写才是动态跑出来的。」
 
 ### 第 4.5 步｜指标劣化 → 隐患告警（S1，1 分钟）
 
@@ -544,7 +538,7 @@ backend/mockdata/
   - `label_values`：按 `label` 返回 instance 全集或 job 名
   - `host_metrics_realtime` / `host_metrics_trend`：按主机名哈希生成 12 项指标（同一主机多次调用值稳定）
   - `get_server_map_tool` / `drag_heatmap_tool` / `get_transaction_trace_tool`：按应用名 / traceId 生成
-  - `list_alerts`：**不读 `prometheus/list_alerts.json`**，由 `promListAlerts(startTime)` 按进程运行时间分桶返回 6 条模板（0–90s 全量 / 90–150s 去掉 TargetDown / 150s+ 恢复），用于演示 alert 生命周期
+  - `list_alerts`：优先读 `prometheus/list_alerts.json`（当前 4 条静态告警，原样返回）；文件缺失/为空时才由 `promListAlerts(startTime)` 按进程运行时间分桶返回 6 条模板（0–90s 全量 / 90–150s 去掉 TargetDown / 150s+ 恢复），用于演示 alert 生命周期
 
 ---
 

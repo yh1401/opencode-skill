@@ -280,7 +280,7 @@
     ]
   });
 
-  /* 3. 接口编排情况：15 / 68 */
+  /* 3. 接口编排情况：15 / 71 */
   mount('chart-tools', {
     animationDuration: 700,
     tooltip: {
@@ -308,7 +308,7 @@
         emphasis: { scaleSize: 4 },
         data: [
           { value: 15, name: '已编排', itemStyle: { color: C.accent } },
-          { value: 53, name: '能力已具备、暂未编排', itemStyle: { color: '#E3E9F2' } }
+          { value: 56, name: '能力已具备、暂未编排', itemStyle: { color: '#E3E9F2' } }
         ]
       }
     ],
@@ -318,7 +318,7 @@
         left: 'center',
         top: '35%',
         style: {
-          text: '15 / 68',
+          text: '15 / 71',
           fill: C.ink,
           fontSize: 28,
           fontWeight: 700,

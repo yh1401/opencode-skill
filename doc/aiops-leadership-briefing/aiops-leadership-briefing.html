@@ -513,7 +513,7 @@
       <div class="grid-3">
         <div class="card">
           <div class="kicker">统一接入</div>
-          <h3>4 类上游服务，68 个接口</h3>
+          <h3>4 类上游服务，71 个接口</h3>
           <p>Pinpoint、Prometheus、CMDB、Elasticsearch 统一走网关：白名单、超时、审计、结果归一，业务代码不直连数据源。</p>
         </div>
         <div class="card">
@@ -787,7 +787,7 @@ flowchart TB
         <div class="card">
           <div class="kicker">缺口原因 B</div>
           <h3>先保证闭环，再补广度</h3>
-          <p>排障链路优先把 12 个调用点串成一条可复核的证据链，而不是把 40 个接口全铺开。图计算、双源交叉验证、批量范围编排会显著增加编排复杂度，放在链路稳定后按步补。</p>
+          <p>排障链路优先把 13 个调用点串成一条可复核的证据链，而不是把 40 个接口全铺开。图计算、双源交叉验证、批量范围编排会显著增加编排复杂度，放在链路稳定后按步补。</p>
         </div>
         <div class="card">
           <div class="kicker">缺口原因 C</div>
@@ -817,7 +817,7 @@ flowchart TB
 
       <div class="grid-4">
         <div class="card">
-          <div class="kicker">PINPOINT · 22 个接口</div>
+          <div class="kicker">PINPOINT · 25 个接口</div>
           <h3>调用链与服务地图</h3>
           <p>回答“断在哪条链、哪个节点”。背后是 Pinpoint Web API 与 EasyViews 架构平台。</p>
           <ul>
@@ -1766,7 +1766,7 @@ flowchart LR
           <div class="label">上游数据源</div>
         </div>
         <div class="metric">
-          <div class="value">68 <small>个</small></div>
+          <div class="value">71 <small>个</small></div>
           <div class="label">上游接口总量</div>
         </div>
         <div class="metric">
@@ -1797,7 +1797,7 @@ flowchart LR
 
       <div class="grid-2" style="margin-top:24px">
         <figure class="chart-figure">
-          <figcaption>68 个上游接口中，已编排 15 个；排障链路实际使用约 13 个</figcaption>
+          <figcaption>71 个上游接口中，已编排 15 个；排障链路实际使用 13 个</figcaption>
           <div id="chart-tools" class="chart-box" style="min-height:340px"></div>
         </figure>
         <div class="card">
