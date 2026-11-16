@@ -81,6 +81,7 @@ func NewService(cfg config.Config, st store.Store) *Service {
 		if err := s.ensureInitialAdmin(cfg.AuthInitAdminUser, cfg.AuthInitAdminPassword); err != nil {
 			log.Printf("[auth] 初始化管理员失败: %v", err)
 		}
+		s.seedDemoUsers(cfg.AuthDemoUsers)
 	}
 	return s
 }
@@ -126,6 +127,38 @@ func (s *Service) ensureInitialAdmin(username, password string) error {
 	}
 	log.Printf("[auth] 已创建初始管理员 username=%s", username)
 	return nil
+}
+
+// seedDemoUsers 按 AUTH_DEMO_USERS 创建演示账号（username:password:role），
+// 已存在的账号保持不变，避免覆盖线上改过的密码。
+func (s *Service) seedDemoUsers(entries []string) {
+	for _, raw := range entries {
+		parts := strings.Split(strings.TrimSpace(raw), ":")
+		if len(parts) != 3 {
+			log.Printf("[auth] 演示账号格式无效（应为 username:password:role）: %s", raw)
+			continue
+		}
+		username := strings.TrimSpace(parts[0])
+		password := strings.TrimSpace(parts[1])
+		role := domain.Role(strings.TrimSpace(parts[2]))
+		if username == "" || len(password) < 8 || !role.Valid() {
+			log.Printf("[auth] 演示账号配置无效: %s", raw)
+			continue
+		}
+		if findUserByUsername(s.store, username) != nil {
+			continue
+		}
+		if _, err := s.CreateUser(CreateUserInput{
+			Username:    username,
+			DisplayName: username,
+			Password:    password,
+			Role:        role,
+		}); err != nil {
+			log.Printf("[auth] 创建演示账号 %s 失败: %v", username, err)
+			continue
+		}
+		log.Printf("[auth] 已创建演示账号 username=%s role=%s", username, role)
+	}
 }
 
 // Login 校验凭据并签发令牌。

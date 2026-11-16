@@ -124,6 +124,8 @@ type Config struct {
 	// AuthInitAdminUser / AuthInitAdminPassword 首次启动创建的管理员账号
 	AuthInitAdminUser     string
 	AuthInitAdminPassword string
+	// AuthDemoUsers 演示账号，格式 username:password:role，逗号分隔；已存在的账号不会被覆盖
+	AuthDemoUsers []string
 	// AuthAllowedOrigins CORS 白名单，逗号分隔；为空表示不跨域放行
 	AuthAllowedOrigins []string
 	// OIDC 占位配置：接入公司统一认证时启用
@@ -227,6 +229,7 @@ func Load() Config {
 		AuthTokenTTL:          time.Duration(getint("AUTH_TOKEN_TTL_HOURS", 8)) * time.Hour,
 		AuthInitAdminUser:     getenv("AUTH_INIT_ADMIN_USER", "admin"),
 		AuthInitAdminPassword: getenv("AUTH_INIT_ADMIN_PASSWORD", ""),
+		AuthDemoUsers:         split(getenv("AUTH_DEMO_USERS", "")),
 		AuthAllowedOrigins:    split(getenv("AUTH_ALLOWED_ORIGINS", "")),
 		OIDCIssuer:            getenv("OIDC_ISSUER", ""),
 		OIDCClientID:          getenv("OIDC_CLIENT_ID", ""),

@@ -70,6 +70,8 @@ services:
       AUTH_TOKEN_TTL_HOURS: "8"
       AUTH_INIT_ADMIN_USER: ${AUTH_INIT_ADMIN_USER:-admin}
       AUTH_INIT_ADMIN_PASSWORD: ${AUTH_INIT_ADMIN_PASSWORD:-admin12345}
+      # 演示账号 username:password:role，逗号分隔；已存在的账号不会被覆盖。正式环境置空。
+      AUTH_DEMO_USERS: ${AUTH_DEMO_USERS:-ops1:ops12345678:ops,viewer1:view12345678:viewer}
       AUTH_ALLOWED_ORIGINS: ${AUTH_ALLOWED_ORIGINS:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
