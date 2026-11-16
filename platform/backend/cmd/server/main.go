@@ -13,6 +13,7 @@ import (
 	"aiops-platform/backend/internal/alarm"
 	"aiops-platform/backend/internal/api"
 	"aiops-platform/backend/internal/audit"
+	"aiops-platform/backend/internal/auth"
 	"aiops-platform/backend/internal/changes"
 	"aiops-platform/backend/internal/config"
 	"aiops-platform/backend/internal/diagnose"
@@ -50,7 +51,14 @@ func main() {
 	al := alarm.New(cfg, gw, st, tp, de, te, reg)
 	rel := relations.New(tp, st)
 	kb := knowledge.New(de, st, knowledge.NewRanker(cfg.LLMAPIKey, cfg.LLMBaseURL, cfg.LLMModel, cfg.LLMTimeout))
+	asvc := auth.NewService(cfg, st)
 	api.EnsureDefaultTask(st, cfg)
+
+	if !cfg.AuthEnabled {
+		log.Printf("[auth] 警告：AUTH_ENABLED=false，所有请求按内置管理员放行，仅可用于本地演示")
+	} else {
+		log.Printf("[auth] enabled ttl=%s init_admin=%s", cfg.AuthTokenTTL, cfg.AuthInitAdminUser)
+	}
 
 	// 身份映射：启动时异步重建（拓扑 + Pinpoint + CMDB），失败不阻断服务启动。
 	if reg.Enabled() && cfg.IdentityRebuildOnBoot {
@@ -78,7 +86,7 @@ func main() {
 		log.Printf("[alarm-notify] disabled (ALARM_NOTIFY_URL empty)")
 	}
 
-	server := api.New(cfg, st, tp, gw, ie, de, ce, te, ae, al, rel, kb, reg)
+	server := api.New(cfg, st, tp, gw, ie, de, ce, te, ae, al, rel, kb, reg, asvc)
 	httpSrv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           server.Router(),

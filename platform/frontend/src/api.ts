@@ -50,17 +50,31 @@ import type {
   RuleOverride,
   Step,
   Ticket,
-  TicketStatus,
   TopoDiff,
+  User,
   ViewMode,
 } from './types';
 
 const BASE = '/api';
 
+const TOKEN_KEY = 'aiops-auth-token';
+
+/** 登录令牌本地存储：请求头注入与 401 清理共用。 */
+export const authToken = {
+  get: () => localStorage.getItem(TOKEN_KEY) ?? '',
+  set: (token: string) => localStorage.setItem(TOKEN_KEY, token),
+  clear: () => localStorage.removeItem(TOKEN_KEY),
+};
+
+function authHeaders(): Record<string, string> {
+  const token = authToken.get();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...init,
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(init?.headers ?? {}) },
   });
   if (!res.ok) {
     let message = `${res.status} ${res.statusText}`;
@@ -70,6 +84,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       /* keep default */
     }
+    if (res.status === 401 && !path.startsWith('/auth/login')) {
+      authToken.clear();
+      window.dispatchEvent(new Event('aiops:unauthorized'));
+    }
     throw new Error(message);
   }
   return (await res.json()) as T;
@@ -78,6 +96,36 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<Health>('/health'),
   meta: () => request<Meta>('/meta'),
+
+  // 登录鉴权
+  authLogin: (username: string, password: string) =>
+    request<{ token: string; user: User }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
+  authMe: () => request<User>('/auth/me'),
+  authLogout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
+  authChangePassword: (oldPassword: string, newPassword: string) =>
+    request<{ token: string; user: User }>('/auth/password', {
+      method: 'POST',
+      body: JSON.stringify({ oldPassword, newPassword }),
+    }),
+
+  // 用户管理
+  userList: (role?: string) =>
+    request<{ total: number; users: User[] }>(`/users${role ? `?role=${encodeURIComponent(role)}` : ''}`),
+  userCreate: (body: {
+    username: string;
+    displayName?: string;
+    password?: string;
+    role?: string;
+    enabled?: boolean;
+  }) => request<User>('/users', { method: 'POST', body: JSON.stringify(body) }),
+  userUpdate: (
+    id: string,
+    body: Partial<{ displayName: string; role: string; enabled: boolean; password: string }>,
+  ) => request<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  userDelete: (id: string) => request<{ ok: boolean }>(`/users/${id}`, { method: 'DELETE' }),
 
   topoDates: () => request<{ source: string; dates: string[] }>('/topo/dates'),
   topoApps: (date?: string, env?: string) =>
@@ -133,7 +181,7 @@ export const api = {
   findings: (runId: string) =>
     request<{ total: number; findings: Finding[] }>(`/inspect/runs/${runId}/findings`),
   report: async (runId: string) => {
-    const res = await fetch(`${BASE}/inspect/runs/${runId}/report`);
+    const res = await fetch(`${BASE}/inspect/runs/${runId}/report`, { headers: authHeaders() });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     return res.text();
   },
@@ -194,16 +242,39 @@ export const api = {
   changeList: (limit = 50) => request<{ total: number; plans: ChangePlan[] }>(`/changes?limit=${limit}`),
   changeGet: (id: string) => request<ChangePlan>(`/changes/${id}`),
 
-  // 工单
+  // 工单：动作式接口，version 用于并发冲突校验
   ticketList: (limit = 100) => request<{ total: number; tickets: Ticket[] }>(`/tickets?limit=${limit}`),
   ticketGet: (id: string) => request<Ticket>(`/tickets/${id}`),
-  ticketUpdateStatus: (id: string, status: TicketStatus, assignee?: string) =>
-    request<Ticket>(`/tickets/${id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status, assignee }),
+  ticketClaim: (id: string, version?: number) =>
+    request<Ticket>(`/tickets/${id}/claim`, {
+      method: 'POST',
+      body: JSON.stringify({ version }),
     }),
-  ticketResolve: (id: string) =>
-    request<Ticket>(`/tickets/${id}/resolve`, { method: 'POST' }),
+  ticketAssign: (id: string, assigneeId: string, version?: number, note?: string) =>
+    request<Ticket>(`/tickets/${id}/assign`, {
+      method: 'POST',
+      body: JSON.stringify({ assigneeId, version, note }),
+    }),
+  ticketStart: (id: string, version?: number) =>
+    request<Ticket>(`/tickets/${id}/start`, {
+      method: 'POST',
+      body: JSON.stringify({ version }),
+    }),
+  ticketResolve: (id: string, note?: string, version?: number) =>
+    request<Ticket>(`/tickets/${id}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ note, version }),
+    }),
+  ticketClose: (id: string, note?: string, version?: number) =>
+    request<Ticket>(`/tickets/${id}/close`, {
+      method: 'POST',
+      body: JSON.stringify({ note, version }),
+    }),
+  ticketReopen: (id: string, note?: string, version?: number) =>
+    request<Ticket>(`/tickets/${id}/reopen`, {
+      method: 'POST',
+      body: JSON.stringify({ note, version }),
+    }),
 
   // 资源稽核（CMDB 对账 + Prometheus 佐证）
   auditRun: (params: { date?: string; env?: string; maxHosts?: number }) => {
@@ -322,7 +393,11 @@ export interface StreamHandlers {
 
 /** 订阅排障会话的证据链增量（SSE）。返回取消函数。 */
 export function streamDiagnosis(id: string, handlers: StreamHandlers): () => void {
-  const es = new EventSource(`${BASE}/diagnose/sessions/${id}/stream`);
+  // EventSource 不能自定义请求头，登录令牌通过查询参数传递
+  const token = authToken.get();
+  const es = new EventSource(
+    `${BASE}/diagnose/sessions/${id}/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`,
+  );
   let closed = false;
 
   es.addEventListener('step', (e) => {

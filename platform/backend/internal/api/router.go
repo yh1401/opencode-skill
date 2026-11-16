@@ -12,6 +12,7 @@ import (
 
 	"aiops-platform/backend/internal/alarm"
 	"aiops-platform/backend/internal/audit"
+	"aiops-platform/backend/internal/auth"
 	"aiops-platform/backend/internal/changes"
 	"aiops-platform/backend/internal/config"
 	"aiops-platform/backend/internal/diagnose"
@@ -41,195 +42,245 @@ type Server struct {
 	rel      *relations.Engine
 	kb       *knowledge.Engine
 	identity *identity.Registry
+	auth     *auth.Service
 	started  time.Time
 }
 
-func New(cfg config.Config, st store.Store, tp topo.Provider, gw *mcp.Gateway, ie *inspect.Engine, de *diagnose.Engine, ce *changes.Engine, te *tickets.Engine, ae *audit.Engine, al *alarm.Engine, rel *relations.Engine, kb *knowledge.Engine, reg *identity.Registry) *Server {
-	return &Server{cfg: cfg, store: st, topo: tp, mcp: gw, inspect: ie, diag: de, changes: ce, tickets: te, audit: ae, alarm: al, rel: rel, kb: kb, identity: reg, started: time.Now()}
+func New(cfg config.Config, st store.Store, tp topo.Provider, gw *mcp.Gateway, ie *inspect.Engine, de *diagnose.Engine, ce *changes.Engine, te *tickets.Engine, ae *audit.Engine, al *alarm.Engine, rel *relations.Engine, kb *knowledge.Engine, reg *identity.Registry, asvc *auth.Service) *Server {
+	return &Server{cfg: cfg, store: st, topo: tp, mcp: gw, inspect: ie, diag: de, changes: ce, tickets: te, audit: ae, alarm: al, rel: rel, kb: kb, identity: reg, auth: asvc, started: time.Now()}
 }
 
 // Router 注册全部路由，前端通过 /api 前缀调用。
 func (s *Server) Router() *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	r.Use(gin.Recovery(), cors())
+	r.Use(gin.Recovery(), cors(s.cfg.AuthAllowedOrigins))
 
 	api := r.Group("/api")
 	{
+		// 公开接口：健康检查与登录；SSO 授权入口预留
 		api.GET("/health", s.health)
-		api.GET("/meta", s.meta)
+		api.POST("/auth/login", s.authLogin)
+		api.GET("/auth/sso/authorize", s.authSSOAuthorize)
 
-		t := api.Group("/topo")
+		// 登录态接口（不做写方法限制，viewer 也可改自己的密码）
+		pa := api.Group("", s.auth.RequireAuth())
 		{
-			t.GET("/dates", s.topoDates)
-			t.GET("/apps", s.topoApps)
-			t.GET("/graph", s.topoGraph)
-			t.GET("/impact", s.topoImpact)
-			t.GET("/diff", s.topoDiff)
-			t.GET("/mwtypes", s.topoMwTypes)
-			t.GET("/rows", s.topoRows)
+			pa.GET("/auth/me", s.authMe)
+			pa.POST("/auth/logout", s.authLogout)
+			pa.POST("/auth/password", s.authChangePassword)
 		}
 
-		// 运维关系拓扑（tprel 能力面）：file 本地计算 / http 透传 topo 服务
-		o := api.Group("/topo/op")
+		// 业务接口：登录 + 角色写权限（viewer 只读）
+		w := api.Group("", s.auth.RequireAuth(), auth.RequireWrite())
 		{
-			o.GET("/graph", s.opGraph)
-			o.GET("/detail", s.opDetail)
-			o.GET("/list", s.opList)
-			o.GET("/middlewareTypes", s.opMwTypes)
-			o.GET("/mwTargets", s.opMwTargets)
-			o.POST("/sync", s.opSync)
-			o.GET("/sync/status", s.opSyncStatus)
-			o.GET("/sync/logs", s.opSyncLogs)
-		}
+			w.GET("/meta", s.meta)
 
-		// 变更方案 / 风险评估（复用 topo impact + diff + diagnose 历史故障）
-		c := api.Group("/changes")
-		{
-			c.GET("/templates", s.changeTemplates)
-			c.POST("/generate", s.changeGenerate)
-			c.GET("", s.changeList)
-			c.GET("/:id", s.changeGet)
-		}
+			// 用户管理：ops 可读（工单指派需要选人），写操作仅 admin
+			u := w.Group("/users")
+			{
+				u.GET("", auth.RequireRole(domain.RoleAdmin, domain.RoleOps), s.userList)
+				u.POST("", auth.RequireRole(domain.RoleAdmin), s.userCreate)
+				u.PATCH("/:id", auth.RequireRole(domain.RoleAdmin), s.userUpdate)
+				u.DELETE("/:id", auth.RequireRole(domain.RoleAdmin), s.userDelete)
+			}
 
-		// 隐患与工单（自动从排障会话 root_caused 生成）
-		tk := api.Group("/tickets")
-		{
-			tk.GET("", s.ticketList)
-			tk.GET("/:id", s.ticketGet)
-			tk.PATCH("/:id/status", s.ticketUpdateStatus)
-			tk.POST("/:id/resolve", s.ticketResolve)
-		}
+			t := w.Group("/topo")
+			{
+				t.GET("/dates", s.topoDates)
+				t.GET("/apps", s.topoApps)
+				t.GET("/graph", s.topoGraph)
+				t.GET("/impact", s.topoImpact)
+				t.GET("/diff", s.topoDiff)
+				t.GET("/mwtypes", s.topoMwTypes)
+				t.GET("/rows", s.topoRows)
+			}
 
-		// 资源稽核：topo 关系 ↔ CMDB 资产对账 + Prometheus 指标佐证
-		au := api.Group("/audit")
-		{
-			au.POST("/run", s.auditRun)
-			au.GET("/runs", s.auditRuns)
-			au.GET("/runs/:id", s.auditRunGet)
-			au.GET("/runs/:id/findings", s.auditFindings)
-		}
+			// 运维关系拓扑（tprel 能力面）：file 本地计算 / http 透传 topo 服务
+			o := w.Group("/topo/op")
+			{
+				o.GET("/graph", s.opGraph)
+				o.GET("/detail", s.opDetail)
+				o.GET("/list", s.opList)
+				o.GET("/middlewareTypes", s.opMwTypes)
+				o.GET("/mwTargets", s.opMwTargets)
+				o.POST("/sync", s.opSync)
+				o.GET("/sync/status", s.opSyncStatus)
+				o.GET("/sync/logs", s.opSyncLogs)
+			}
 
-		i := api.Group("/inspect")
-		{
-			i.GET("/rules", s.inspectRules)
-			i.GET("/tasks", s.listTasks)
-			i.POST("/tasks", s.createTask)
-			i.PUT("/tasks/:id", s.inspectUpdateTask)
-			i.DELETE("/tasks/:id", s.deleteTask)
-			i.POST("/tasks/:id/run", s.runTask)
-			i.POST("/run", s.runAdhoc)
-			i.GET("/runs", s.listRuns)
-			i.GET("/runs/:id", s.getRun)
-			i.GET("/runs/:id/findings", s.listFindings)
-			i.GET("/runs/:id/report", s.getReport)
-		}
+			// 变更方案 / 风险评估（复用 topo impact + diff + diagnose 历史故障）
+			c := w.Group("/changes")
+			{
+				c.GET("/templates", s.changeTemplates)
+				c.POST("/generate", s.changeGenerate)
+				c.GET("", s.changeList)
+				c.GET("/:id", s.changeGet)
+			}
 
-		d := api.Group("/diagnose")
-		{
-			d.POST("/sessions", s.createDiagnosis)
-			d.GET("/sessions", s.listDiagnosis)
-			d.GET("/sessions/:id", s.getDiagnosis)
-			d.POST("/sessions/:id/feedback", s.diagnosisFeedback)
-			d.GET("/sessions/:id/stream", s.streamDiagnosis)
-		}
+			// 隐患与工单（自动从排障会话 root_caused 生成）
+			tk := w.Group("/tickets")
+			{
+				tk.GET("", s.ticketList)
+				tk.GET("/:id", s.ticketGet)
+				tk.POST("/:id/claim", s.ticketClaim)
+				tk.POST("/:id/assign", s.ticketAssign)
+				tk.POST("/:id/start", s.ticketStart)
+				tk.POST("/:id/resolve", s.ticketResolve)
+				tk.POST("/:id/close", s.ticketClose)
+				tk.POST("/:id/reopen", s.ticketReopen)
+			}
 
-		m := api.Group("/mcp")
-		{
-			m.GET("/probe", s.mcpProbe)
-			m.GET("/tools", s.mcpTools)
-			m.POST("/call", s.mcpCall)
-			m.GET("/logs", s.mcpLogs)
-		}
+			// 资源稽核：topo 关系 ↔ CMDB 资产对账 + Prometheus 指标佐证
+			au := w.Group("/audit")
+			{
+				au.POST("/run", s.auditRun)
+				au.GET("/runs", s.auditRuns)
+				au.GET("/runs/:id", s.auditRunGet)
+				au.GET("/runs/:id/findings", s.auditFindings)
+			}
 
-		// 告警中心（断点⑤）：采集 / 幂等入库 / 自动排障
-		al := api.Group("/alarms")
-		{
-			al.GET("", s.alarmList)
-			al.GET("/stats", s.alarmStats)
-			al.GET("/trend", s.alarmTrend)
-			al.GET("/degradation", s.alarmDegradationOverview)
-			al.GET("/notifications", s.alarmNotifications)
-			al.GET("/:fp", s.alarmGet)
-			al.POST("/poll", s.alarmPoll)
-			al.POST("/webhook", s.alarmWebhook)
-			al.POST("/degradation/scan", s.alarmDegradationScan)
-			al.POST("/notifications/test", s.alarmNotifyTest)
-			al.POST("/:fp/diagnose", s.alarmDiagnose)
-			al.POST("/:fp/silence", s.alarmSilence)
-			al.POST("/:fp/unsilence", s.alarmUnsilence)
-		}
+			i := w.Group("/inspect")
+			{
+				i.GET("/rules", s.inspectRules)
+				i.GET("/tasks", s.listTasks)
+				i.POST("/tasks", s.createTask)
+				i.PUT("/tasks/:id", s.inspectUpdateTask)
+				i.DELETE("/tasks/:id", s.deleteTask)
+				i.POST("/tasks/:id/run", s.runTask)
+				i.POST("/run", s.runAdhoc)
+				i.GET("/runs", s.listRuns)
+				i.GET("/runs/:id", s.getRun)
+				i.GET("/runs/:id/findings", s.listFindings)
+				i.GET("/runs/:id/report", s.getReport)
+			}
 
-		// 外部业务接口监控（T12）
-		bm := api.Group("/biz-monitor")
-		{
-			bm.GET("/overview", s.bizOverview)
-			bm.GET("/rules", s.bizRules)
-			bm.POST("/rules", s.bizRuleCreate)
-			bm.DELETE("/rules/:id", s.bizRuleDelete)
-			bm.POST("/scan", s.bizScan)
-		}
+			d := w.Group("/diagnose")
+			{
+				d.POST("/sessions", s.createDiagnosis)
+				d.GET("/sessions", s.listDiagnosis)
+				d.GET("/sessions/:id", s.getDiagnosis)
+				d.POST("/sessions/:id/feedback", s.diagnosisFeedback)
+				d.GET("/sessions/:id/stream", s.streamDiagnosis)
+			}
 
-		// 质差分析（T13）
-		q := api.Group("/quality")
-		{
-			q.GET("/overview", s.qualityOverview)
-			q.POST("/scan", s.qualityScan)
-			q.GET("/reports", s.qualityReports)
-			q.GET("/reports/:id", s.qualityReportGet)
-		}
+			m := w.Group("/mcp")
+			{
+				m.GET("/probe", s.mcpProbe)
+				m.GET("/tools", s.mcpTools)
+				m.POST("/call", auth.RequireRole(domain.RoleAdmin), s.mcpCall)
+				m.GET("/logs", s.mcpLogs)
+			}
 
-		// 考核指标（S3）：时延 P50/P90、达标率、自动化执行率
-		mt := api.Group("/metrics")
-		{
-			mt.GET("/kpi", s.metricsKPI)
-		}
+			// 告警中心（断点⑤）：采集 / 幂等入库 / 自动排障
+			al := w.Group("/alarms")
+			{
+				al.GET("", s.alarmList)
+				al.GET("/stats", s.alarmStats)
+				al.GET("/trend", s.alarmTrend)
+				al.GET("/degradation", s.alarmDegradationOverview)
+				al.GET("/notifications", s.alarmNotifications)
+				al.GET("/:fp", s.alarmGet)
+				al.POST("/poll", s.alarmPoll)
+				al.POST("/webhook", s.alarmWebhook)
+				al.POST("/degradation/scan", s.alarmDegradationScan)
+				al.POST("/notifications/test", s.alarmNotifyTest)
+				al.POST("/:fp/diagnose", s.alarmDiagnose)
+				al.POST("/:fp/silence", auth.RequireRole(domain.RoleAdmin), s.alarmSilence)
+				al.POST("/:fp/unsilence", auth.RequireRole(domain.RoleAdmin), s.alarmUnsilence)
+			}
 
-		// 关系修正（T16）：拓扑 Diff + 稽核孤儿 → 建议 → 审批 → 执行留痕
-		rl := api.Group("/relations")
-		{
-			rl.POST("/scan", s.relationScan)
-			rl.GET("", s.relationList)
-			rl.GET("/stats", s.relationStats)
-			rl.GET("/overrides", s.relationOverrides)
-			rl.PATCH("/:id", s.relationUpdate)
-			rl.POST("/:id/apply", s.relationApply)
-		}
+			// 外部业务接口监控（T12）
+			bm := w.Group("/biz-monitor")
+			{
+				bm.GET("/overview", s.bizOverview)
+				bm.GET("/rules", s.bizRules)
+				bm.POST("/rules", s.bizRuleCreate)
+				bm.DELETE("/rules/:id", s.bizRuleDelete)
+				bm.POST("/scan", s.bizScan)
+			}
 
-		// 历史故障知识库（T17）：会话归档 + 关键词检索 + 相似案例
-		kb := api.Group("/knowledge")
-		{
-			kb.GET("", s.knowledgeList)
-			kb.GET("/stats", s.knowledgeStats)
-			kb.GET("/similar", s.knowledgeSimilar)
-			kb.GET("/:id", s.knowledgeGet)
-			kb.POST("/reindex", s.knowledgeReindex)
-		}
+			// 质差分析（T13）
+			q := w.Group("/quality")
+			{
+				q.GET("/overview", s.qualityOverview)
+				q.POST("/scan", s.qualityScan)
+				q.GET("/reports", s.qualityReports)
+				q.GET("/reports/:id", s.qualityReportGet)
+			}
 
-		// 外部日志分析服务（log_analyzer）健康探测：供 /log-analysis 页决定嵌入还是降级提示
-		lg := api.Group("/logs")
-		{
-			lg.GET("/health", s.logsHealth)
-		}
+			// 考核指标（S3）：时延 P50/P90、达标率、自动化执行率
+			mt := w.Group("/metrics")
+			{
+				mt.GET("/kpi", s.metricsKPI)
+			}
 
-		// 身份映射：拓扑 / Pinpoint / Prometheus / CMDB 字段贯通后的统一应用与主机视图
-		id := api.Group("/identity")
-		{
-			id.GET("/stats", s.identityStats)
-			id.GET("/apps", s.identityApps)
-			id.GET("/hosts", s.identityHosts)
-			id.POST("/rebuild", s.identityRebuild)
-			id.GET("/resolve", s.identityResolve)
+			// 关系修正（T16）：拓扑 Diff + 稽核孤儿 → 建议 → 审批 → 执行留痕
+			rl := w.Group("/relations")
+			{
+				rl.POST("/scan", s.relationScan)
+				rl.GET("", s.relationList)
+				rl.GET("/stats", s.relationStats)
+				rl.GET("/overrides", s.relationOverrides)
+				rl.PATCH("/:id", s.relationUpdate)
+				rl.POST("/:id/apply", s.relationApply)
+			}
+
+			// 历史故障知识库（T17）：会话归档 + 关键词检索 + 相似案例
+			kb := w.Group("/knowledge")
+			{
+				kb.GET("", s.knowledgeList)
+				kb.GET("/stats", s.knowledgeStats)
+				kb.GET("/similar", s.knowledgeSimilar)
+				kb.GET("/:id", s.knowledgeGet)
+				kb.POST("/reindex", s.knowledgeReindex)
+			}
+
+			// 外部日志分析服务（log_analyzer）健康探测：供 /log-analysis 页决定嵌入还是降级提示
+			lg := w.Group("/logs")
+			{
+				lg.GET("/health", s.logsHealth)
+			}
+
+			// 身份映射：拓扑 / Pinpoint / Prometheus / CMDB 字段贯通后的统一应用与主机视图
+			id := w.Group("/identity")
+			{
+				id.GET("/stats", s.identityStats)
+				id.GET("/apps", s.identityApps)
+				id.GET("/hosts", s.identityHosts)
+				id.POST("/rebuild", s.identityRebuild)
+				id.GET("/resolve", s.identityResolve)
+			}
 		}
 	}
 	return r
 }
 
-func cors() gin.HandlerFunc {
+// cors 按白名单放行跨域；AUTH_ALLOWED_ORIGINS 为空时不返回跨域头（同域部署走 nginx）。
+func cors(allowed []string) gin.HandlerFunc {
+	allowAll := false
+	whitelist := make(map[string]bool, len(allowed))
+	for _, o := range allowed {
+		o = strings.TrimRight(strings.TrimSpace(o), "/")
+		if o == "" {
+			continue
+		}
+		if o == "*" {
+			allowAll = true
+			continue
+		}
+		whitelist[o] = true
+	}
 	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
+		origin := strings.TrimRight(c.GetHeader("Origin"), "/")
+		if origin != "" && (allowAll || whitelist[origin]) {
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Vary", "Origin")
+			c.Header("Access-Control-Allow-Credentials", "true")
+		}
 		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Content-Type,Authorization")
+		c.Header("Access-Control-Max-Age", "86400")
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)
 			return

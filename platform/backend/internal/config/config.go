@@ -115,6 +115,23 @@ type Config struct {
 	// 排障默认观测时间窗（分钟）
 	DiagWindowMin int
 
+	// 登录鉴权：本地账号 + JWT，预留公司统一用户服务（OIDC/SSO）
+	AuthEnabled bool
+	// AuthSecret JWT HS256 密钥；为空时启动自动生成（重启后令牌失效）
+	AuthSecret string
+	// AuthTokenTTL 令牌有效期
+	AuthTokenTTL time.Duration
+	// AuthInitAdminUser / AuthInitAdminPassword 首次启动创建的管理员账号
+	AuthInitAdminUser     string
+	AuthInitAdminPassword string
+	// AuthAllowedOrigins CORS 白名单，逗号分隔；为空表示不跨域放行
+	AuthAllowedOrigins []string
+	// OIDC 占位配置：接入公司统一认证时启用
+	OIDCIssuer       string
+	OIDCClientID     string
+	OIDCClientSecret string
+	OIDCRedirectURL  string
+
 	// 知识库语义重排（公网大模型，OpenAI 兼容 /v1/chat/completions）
 	// API Key 为空表示关闭，检索完全沿用字面打分。
 	LLMBaseURL string
@@ -204,6 +221,17 @@ func Load() Config {
 		IdentityCMDBPageSize:  getint("IDENTITY_CMDB_PAGE_SIZE", 200),
 		IdentityDNSResolve:    getbool("IDENTITY_DNS_RESOLVE", false),
 		DiagWindowMin:         getint("DIAG_WINDOW_MIN", 5),
+
+		AuthEnabled:           getbool("AUTH_ENABLED", true),
+		AuthSecret:            getenv("AUTH_SECRET", ""),
+		AuthTokenTTL:          time.Duration(getint("AUTH_TOKEN_TTL_HOURS", 8)) * time.Hour,
+		AuthInitAdminUser:     getenv("AUTH_INIT_ADMIN_USER", "admin"),
+		AuthInitAdminPassword: getenv("AUTH_INIT_ADMIN_PASSWORD", ""),
+		AuthAllowedOrigins:    split(getenv("AUTH_ALLOWED_ORIGINS", "")),
+		OIDCIssuer:            getenv("OIDC_ISSUER", ""),
+		OIDCClientID:          getenv("OIDC_CLIENT_ID", ""),
+		OIDCClientSecret:      getenv("OIDC_CLIENT_SECRET", ""),
+		OIDCRedirectURL:       getenv("OIDC_REDIRECT_URL", ""),
 
 		LLMBaseURL: strings.TrimRight(getenv("LLM_BASE_URL", "https://api.deepseek.com"), "/"),
 		LLMAPIKey:  getenv("LLM_API_KEY", ""),

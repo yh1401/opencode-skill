@@ -585,6 +585,17 @@ export interface ChangePlan {
 export type TicketPriority = 'P0' | 'P1' | 'P2' | 'P3';
 export type TicketStatus = 'open' | 'assigned' | 'in_progress' | 'resolved' | 'closed';
 
+/** 工单操作留痕：谁、何时、做了什么、状态如何变化 */
+export interface TicketEvent {
+  at: string;
+  actorId: string;
+  actorName: string;
+  action: string;
+  from?: TicketStatus;
+  to?: TicketStatus;
+  note?: string;
+}
+
 export interface Ticket {
   id: string;
   sourceType: string;
@@ -600,16 +611,43 @@ export interface Ticket {
   rootCause: string;
   suggestion?: string;
   assignee?: string;
+  assigneeId?: string;
   findings: string[];
   evidenceRef: string;
   /** 发现时间：来源排障会话创建时间 */
   detectedAt?: string;
+  /** 认领 / 指派时间，用于 MTTA */
+  assignedAt?: string;
+  /** 开始处置时间 */
+  startedAt?: string;
   createdAt: string;
   updatedAt: string;
   /** 处置完成时间：标记「已处置」时写入 */
   resolvedAt?: string;
   closedAt?: string;
+  reopenCount?: number;
+  version?: number;
+  history?: TicketEvent[];
+  mttaSeconds?: number;
+  mttrSeconds?: number;
 }
+
+// —— 登录鉴权与用户 ——
+
+export type Role = 'admin' | 'ops' | 'viewer';
+
+export interface User {
+  id: string;
+  username: string;
+  displayName: string;
+  role: Role;
+  source: 'local' | 'corp';
+  externalId?: string;
+  enabled: boolean;
+  createdAt: string;
+  lastLoginAt?: string;
+}
+
 
 // —— 巡检规则配置化 ——
 

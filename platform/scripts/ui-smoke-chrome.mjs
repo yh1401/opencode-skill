@@ -3,12 +3,13 @@
  *
  * 用法：
  *   node scripts/ui-smoke-chrome.mjs
- *   BASE_URL=http://localhost:5173 node scripts/ui-smoke-chrome.mjs
+ *   BASE_URL=http://localhost:5173 AIOPS_USER=admin AIOPS_PASSWORD=admin12345 node scripts/ui-smoke-chrome.mjs
  *
  * 说明：
  * - 自动拉起一个独立的无头 Chrome（临时 profile，不复用日常浏览器数据），测完自动关闭。
- * - 逐个路由全量刷新，收集 DOM 指标与 JS 异常；favicon 404 不算失败。
- * - 退出码：0 全部通过；1 存在失败路由。
+ * - 先调 `/api/auth/login` 拿令牌写入 localStorage，再逐路由全量刷新，收集 DOM 指标与 JS 异常；
+ *   favicon 404 不算失败。
+ * - 退出码：0 全部通过；1 存在失败路由或登录失败。
  *
  * 依赖：Node 22+（内置 fetch / WebSocket）与本机 Google Chrome。
  */
@@ -21,6 +22,9 @@ const PORT = Number(process.env.CDP_PORT || 9222);
 const CHROME_BIN = process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PROFILE_DIR = '/tmp/aiops-ui-smoke-profile';
 const SETTLE_MS = 1200;
+const LOGIN_USER = process.env.AIOPS_USER || 'admin';
+const LOGIN_PASSWORD = process.env.AIOPS_PASSWORD || 'admin12345';
+const TOKEN_KEY = 'aiops-auth-token';
 
 const ROUTES = [
   '/dashboard', '/diagnosis', '/alert-center', '/inspection',
@@ -102,6 +106,21 @@ function connectCDP(wsUrl) {
   return { ws, send, waitEvent, opened, listeners };
 }
 
+/** 调后端登录接口拿令牌（同域经 nginx 反代 /api） */
+async function login() {
+  const res = await fetch(`${BASE_URL}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: LOGIN_USER, password: LOGIN_PASSWORD }),
+  });
+  if (!res.ok) {
+    throw new Error(`登录失败 HTTP ${res.status}（账号 ${LOGIN_USER}），可用 AIOPS_USER / AIOPS_PASSWORD 覆盖`);
+  }
+  const data = await res.json();
+  if (!data.token) throw new Error('登录接口未返回 token');
+  return data.token;
+}
+
 async function main() {
   const chrome = launchChrome();
   const stop = () => { try { chrome.kill('SIGKILL'); } catch { /* 已退出 */ } };
@@ -135,6 +154,16 @@ async function main() {
         errors.push('log: ' + msg.params.entry.text.slice(0, 160));
       }
     });
+
+    // 先登录并写入令牌：前端 AuthContext 从 localStorage 读取
+    const token = await login();
+    const loginLoaded = cdp.waitEvent('Page.loadEventFired', sessionId);
+    await cdp.send('Page.navigate', { url: `${BASE_URL}/login` }, sessionId);
+    await loginLoaded;
+    await cdp.send('Runtime.evaluate', {
+      expression: `localStorage.setItem(${JSON.stringify(TOKEN_KEY)}, ${JSON.stringify(token)})`,
+    }, sessionId);
+    console.log(`已登录 ${LOGIN_USER}，开始检查路由\n`);
 
     const rows = [];
     for (const route of ROUTES) {

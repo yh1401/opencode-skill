@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Layout, Menu, Popover, Segmented, Switch } from 'antd';
+import { Button, Layout, Menu, Popover, Segmented, Space, Switch, Tag } from 'antd';
 import { MenuFoldOutlined, MenuOutlined, MenuUnfoldOutlined, SettingOutlined } from '@ant-design/icons';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { ALL_ITEMS, HOME, NAV, type NavGroup, type NavStatus } from './nav';
 import { useThemeMode, type ThemeMode } from './theme';
+import { useAuth } from './AuthContext';
+import Login from './pages/Login';
+import type { Role } from './types';
 
 const { Sider, Header, Content } = Layout;
+
+const ROLE_LABEL: Record<Role, string> = { admin: '管理员', ops: '运维', viewer: '只读' };
+const ROLE_COLOR: Record<Role, string> = { admin: 'red', ops: 'blue', viewer: 'default' };
 
 /** 菜单状态药丸（设计系统 v1.0）：done 不显示标签，缺省即正常 */
 const STATUS_PILL: Record<NavStatus, { tone: string; text: string } | null> = {
@@ -35,21 +41,48 @@ function readPrefs(): MenuPrefs {
   return DEFAULT_PREFS;
 }
 
-/** 按偏好过滤菜单：整组开关优先，其次过滤规划项；空组直接移除 */
-function visibleNav(prefs: MenuPrefs): NavGroup[] {
+/** 按偏好与角色过滤菜单：整组开关优先，其次过滤规划项与无权限项；空组直接移除 */
+function visibleNav(prefs: MenuPrefs, role: Role): NavGroup[] {
   return NAV.map((g) => {
     if (g.toggle && !prefs[g.toggle]) return { ...g, items: [] };
     const items = g.items.filter(
-      (i) => i.status !== 'planned' || prefs.planned || g.plannedGroup,
+      (i) =>
+        (i.status !== 'planned' || prefs.planned || g.plannedGroup) &&
+        (!i.roles || i.roles.includes(role)),
     );
     return { ...g, items };
   }).filter((g) => g.items.length > 0);
 }
 
+/** 顶层路由：未登录一律跳转登录页，登录页不渲染主框架。 */
 export default function App() {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return <div className="auth-loading">正在校验登录状态…</div>;
+  }
+
+  const redirectParam = new URLSearchParams(location.search).get('redirect') || HOME.key;
+
+  if (location.pathname === '/login') {
+    return user ? <Navigate to={redirectParam} replace /> : <Login />;
+  }
+
+  if (!user) {
+    const redirect = location.pathname + location.search;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(redirect)}`} replace />;
+  }
+
+  return <Shell />;
+}
+
+function Shell() {
   const navigate = useNavigate();
   const location = useLocation();
   const { mode, setMode } = useThemeMode();
+  const { user, logout } = useAuth();
+  const role = user?.role ?? 'viewer';
 
   const [prefs, setPrefs] = useState<MenuPrefs>(readPrefs);
   useEffect(() => {
@@ -60,7 +93,7 @@ export default function App() {
     }
   }, [prefs]);
 
-  const nav = useMemo(() => visibleNav(prefs), [prefs]);
+  const nav = useMemo(() => visibleNav(prefs, role), [prefs, role]);
   const hiddenCount = useMemo(
     () => ALL_ITEMS.length - nav.reduce((n, g) => n + g.items.length, 0),
     [nav],
@@ -117,6 +150,11 @@ export default function App() {
   // 一键展开 / 合并：所有可见分组都展开时视为「已展开」
   const allOpen = nav.length > 0 && nav.every((g) => openKeys.includes(g.key));
   const toggleAllGroups = () => setOpenKeys(allOpen ? [] : nav.map((g) => g.key));
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
 
   const menuPanel = (
     <div className="menu-panel">
@@ -225,6 +263,15 @@ export default function App() {
       <Layout>
         <Header className="app-header">
           <div className="page-title">{flat.find((i) => i.key === selected)?.label}</div>
+          <Space size={8} align="center">
+            <span className="app-header-user">{user?.displayName}</span>
+            <Tag color={ROLE_COLOR[role]} bordered={false}>
+              {ROLE_LABEL[role]}
+            </Tag>
+            <Button size="small" type="text" onClick={handleLogout}>
+              退出
+            </Button>
+          </Space>
         </Header>
         <Content className="app-content">
           <Routes>

@@ -10,7 +10,6 @@ import {
   Drawer,
   Empty,
   Input,
-  Row,
   Select,
   Space,
   Table,
@@ -21,7 +20,8 @@ import { LinkOutlined } from '@ant-design/icons';
 import { api } from '../api';
 import StatusPill from '../components/StatusPill';
 import type { PillTone } from '../components/StatusPill';
-import type { Ticket, TicketStatus } from '../types';
+import type { Ticket, TicketEvent, TicketStatus } from '../types';
+import { useAuth } from '../AuthContext';
 
 const PRIORITY_TONE: Record<string, PillTone> = {
   P0: 'risk',
@@ -54,13 +54,39 @@ const STATUS_LABEL: Record<TicketStatus, string> = {
   closed: '已关闭',
 };
 
+const ACTION_LABEL: Record<string, string> = {
+  created: '建单',
+  claim: '认领',
+  assign: '指派',
+  reassign: '改派',
+  start: '开始处置',
+  resolve: '标记已处置',
+  auto_resolve: '告警恢复自动处置',
+  close: '关闭',
+  reopen: '重开',
+};
+
 const STATUS_FLOW: TicketStatus[] = ['open', 'assigned', 'in_progress', 'resolved', 'closed'];
+
+/** 秒数转「x 小时 y 分钟」，用于 MTTA / MTTR 展示。 */
+function formatDuration(seconds?: number): string {
+  if (!seconds || seconds <= 0) return '—';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  if (h > 0) return `${h} 小时 ${m} 分钟`;
+  return `${m} 分钟`;
+}
 
 export default function Tickets() {
   const { message } = AntdApp.useApp();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const canWrite = user?.role === 'admin' || user?.role === 'ops';
+
   const [viewing, setViewing] = useState<Ticket | null>(null);
+  const [note, setNote] = useState('');
   const [statusFilter, setStatusFilter] = useState<TicketStatus | undefined>();
   const [priorityFilter, setPriorityFilter] = useState<string | undefined>();
 
@@ -71,31 +97,139 @@ export default function Tickets() {
     refetchInterval: 15000,
   });
 
+  // 处理人来自真实用户体系，仅管理员指派时使用
+  const opsUsers = useQuery({
+    queryKey: ['users', 'ops'],
+    queryFn: () => api.userList('ops'),
+    enabled: isAdmin,
+  });
+
   const filtered = (tickets.data?.tickets ?? []).filter((t) => {
     if (statusFilter && t.status !== statusFilter) return false;
     if (priorityFilter && t.priority !== priorityFilter) return false;
     return true;
   });
 
-  const statusChange = useMutation({
-    mutationFn: (args: { id: string; status: TicketStatus; assignee?: string }) =>
-      api.ticketUpdateStatus(args.id, args.status, args.assignee),
-    onSuccess: () => {
+  const action = useMutation({
+    mutationFn: (fn: () => Promise<Ticket>) => fn(),
+    onSuccess: (updated) => {
+      setViewing(updated);
+      setNote('');
+      message.success('操作成功');
       qc.invalidateQueries({ queryKey: ['tickets'] });
-      message.success('状态已更新');
-      setViewing(null);
     },
     onError: (e: Error) => message.error(e.message),
   });
 
-  const resolve = useMutation({
-    mutationFn: (id: string) => api.ticketResolve(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tickets'] });
-      message.success('已标记处置完成');
-    },
-    onError: (e: Error) => message.error(e.message),
-  });
+  /** 处理人本人或管理员可推进工单 */
+  const canHandle = (t: Ticket) => !!user && (isAdmin || (!!t.assigneeId && t.assigneeId === user.id));
+
+  /** 指派下拉：ops 与管理员均可作为处理人，排除只读账号 */
+  const assigneeOptions = (opsUsers.data?.users ?? []).map((u) => ({
+    value: u.id,
+    label: u.displayName || u.username,
+  }));
+
+  const renderActions = (t: Ticket) => {
+    if (!canWrite) {
+      return <Typography.Text type="secondary">只读账号不可操作工单</Typography.Text>;
+    }
+    return (
+      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+        <Input.TextArea
+          rows={2}
+          value={note}
+          placeholder="操作说明（可选，例如处置过程 / 关闭原因）"
+          onChange={(e) => setNote(e.target.value)}
+        />
+        <Space wrap>
+          {t.status === 'open' && (
+            <Button
+              size="small"
+              type="primary"
+              loading={action.isPending}
+              onClick={() => action.mutate(() => api.ticketClaim(t.id, t.version))}
+            >
+              认领
+            </Button>
+          )}
+          {t.status === 'assigned' && canHandle(t) && (
+            <Button
+              size="small"
+              type="primary"
+              loading={action.isPending}
+              onClick={() => action.mutate(() => api.ticketStart(t.id, t.version))}
+            >
+              开始处置
+            </Button>
+          )}
+          {t.status === 'in_progress' && canHandle(t) && (
+            <Button
+              size="small"
+              type="primary"
+              loading={action.isPending}
+              onClick={() => action.mutate(() => api.ticketResolve(t.id, note, t.version))}
+            >
+              标记已处置
+            </Button>
+          )}
+          {t.status === 'resolved' && canHandle(t) && (
+            <Button
+              size="small"
+              danger
+              loading={action.isPending}
+              onClick={() => action.mutate(() => api.ticketClose(t.id, note, t.version))}
+            >
+              确认关闭
+            </Button>
+          )}
+          {isAdmin && (t.status === 'resolved' || t.status === 'closed') && (
+            <Button
+              size="small"
+              loading={action.isPending}
+              onClick={() => action.mutate(() => api.ticketReopen(t.id, note, t.version))}
+            >
+              重开
+            </Button>
+          )}
+        </Space>
+        {isAdmin && (t.status === 'open' || t.status === 'assigned') && (
+          <Select
+            key={t.version}
+            style={{ width: 220 }}
+            placeholder={t.status === 'open' ? '指派处理人' : '改派处理人'}
+            loading={opsUsers.isLoading}
+            options={assigneeOptions}
+            onChange={(assigneeId) =>
+              action.mutate(() => api.ticketAssign(t.id, assigneeId, t.version, note))
+            }
+          />
+        )}
+        {!isAdmin && t.status === 'open' && (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            认领后由你负责处置，管理员可改派
+          </Typography.Text>
+        )}
+      </Space>
+    );
+  };
+
+  const historyItems = (history: TicketEvent[] | undefined) =>
+    (history ?? []).map((h) => ({
+      color: h.to === 'closed' ? 'gray' : h.to === 'resolved' ? 'green' : 'blue',
+      children: (
+        <Space direction="vertical" size={0}>
+          <Typography.Text>
+            {ACTION_LABEL[h.action] ?? h.action}
+            {h.from && h.to ? `：${STATUS_LABEL[h.from]} → ${STATUS_LABEL[h.to]}` : ''}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {h.actorName} · {new Date(h.at).toLocaleString()}
+          </Typography.Text>
+          {h.note && <Typography.Text style={{ fontSize: 12 }}>{h.note}</Typography.Text>}
+        </Space>
+      ),
+    }));
 
   return (
     <>
@@ -200,6 +334,13 @@ export default function Tickets() {
                 ),
               },
               {
+                title: '处理人',
+                width: 100,
+                dataIndex: 'assignee',
+                render: (v: string | undefined) =>
+                  v || <Typography.Text type="secondary">待认领</Typography.Text>,
+              },
+              {
                 title: '置信度',
                 width: 90,
                 render: (_, t) => `${Math.round(t.confidence * 100)}%`,
@@ -262,11 +403,16 @@ export default function Tickets() {
                 <Descriptions.Item label="来源会话">{viewing.sourceId}</Descriptions.Item>
                 {viewing.appId && <Descriptions.Item label="应用">{viewing.appId}</Descriptions.Item>}
                 {viewing.mwType && <Descriptions.Item label="中间件" span={viewing.appId ? 1 : 2}>{`${viewing.mwType}:${viewing.addr ?? '-'}`}</Descriptions.Item>}
-                {viewing.assignee && <Descriptions.Item label="处理人" span={viewing.appId && viewing.mwType ? 0 : 2}>{viewing.assignee}</Descriptions.Item>}
+                <Descriptions.Item label="处理人">
+                  {viewing.assignee || '待认领'}
+                </Descriptions.Item>
+                <Descriptions.Item label="重开次数">{viewing.reopenCount ?? 0}</Descriptions.Item>
                 <Descriptions.Item label="发现时间">
                   {new Date(viewing.detectedAt ?? viewing.createdAt).toLocaleString()}
                 </Descriptions.Item>
                 <Descriptions.Item label="建单时间">{new Date(viewing.createdAt).toLocaleString()}</Descriptions.Item>
+                <Descriptions.Item label="响应时长(MTTA)">{formatDuration(viewing.mttaSeconds)}</Descriptions.Item>
+                <Descriptions.Item label="处置时长(MTTR)">{formatDuration(viewing.mttrSeconds)}</Descriptions.Item>
                 <Descriptions.Item label="处置完成">
                   {viewing.resolvedAt ? new Date(viewing.resolvedAt).toLocaleString() : '—'}
                 </Descriptions.Item>
@@ -285,17 +431,17 @@ export default function Tickets() {
               </Descriptions>
             </Card>
 
-            {viewing.findings.length > 0 && (
+            {(viewing.findings ?? []).length > 0 && (
               <Card size="small" title="证据链摘要" style={{ marginBottom: 12 }}>
                 <div style={{ maxHeight: 200, overflow: 'auto' }}>
-                  {viewing.findings.map((f, i) => (
+                  {(viewing.findings ?? []).map((f, i) => (
                     <div key={i} style={{ fontSize: 12, padding: '2px 0', fontFamily: 'monospace' }}>{f}</div>
                   ))}
                 </div>
               </Card>
             )}
 
-            {/* 状态流转 Timeline */}
+            {/* 状态流转 + 动作区 */}
             <Card size="small" title="处置进度" style={{ marginBottom: 12 }}>
               <Timeline
                 items={STATUS_FLOW.map((s) => {
@@ -320,63 +466,21 @@ export default function Tickets() {
                 })}
               />
 
-              <Row gutter={8} style={{ marginTop: 12 }}>
-                <Space wrap>
-                  {viewing.status !== 'closed' && (
-                    <>
-                      <Select
-                        placeholder="指派处理人"
-                        style={{ width: 160 }}
-                        allowClear
-                        options={['张三', '李四', '王五'].map((n) => ({ value: n, label: n }))}
-                        onChange={(assignee) => {
-                          statusChange.mutate({ id: viewing.id, status: viewing.status, assignee: assignee ?? undefined });
-                        }}
-                      />
-                      {viewing.status === 'open' && (
-                        <Button
-                          size="small"
-                          onClick={() => statusChange.mutate({ id: viewing.id, status: 'assigned' })}
-                          loading={statusChange.isPending}
-                        >
-                          标记已指派
-                        </Button>
-                      )}
-                      {(viewing.status === 'open' || viewing.status === 'assigned') && (
-                        <Button
-                          size="small"
-                          type="primary"
-                          onClick={() => statusChange.mutate({ id: viewing.id, status: 'in_progress' })}
-                          loading={statusChange.isPending}
-                        >
-                          开始处置
-                        </Button>
-                      )}
-                      {viewing.status !== 'resolved' && (
-                        <Button
-                          size="small"
-                          type="primary"
-                          onClick={() => resolve.mutate(viewing.id)}
-                          loading={resolve.isPending}
-                        >
-                          标记已处置
-                        </Button>
-                      )}
-                      <Button
-                        size="small"
-                        danger
-                        onClick={() => statusChange.mutate({ id: viewing.id, status: 'closed' })}
-                        loading={statusChange.isPending}
-                      >
-                        关闭工单
-                      </Button>
-                    </>
-                  )}
-                  <Button icon={<LinkOutlined />} onClick={() => navigate(viewing.evidenceRef)}>
-                    查看完整证据链
-                  </Button>
-                </Space>
-              </Row>
+              <div style={{ marginTop: 12 }}>{renderActions(viewing)}</div>
+
+              <div style={{ marginTop: 12 }}>
+                <Button icon={<LinkOutlined />} onClick={() => navigate(viewing.evidenceRef)}>
+                  查看完整证据链
+                </Button>
+              </div>
+            </Card>
+
+            <Card size="small" title="操作记录" style={{ marginBottom: 12 }}>
+              {(viewing.history ?? []).length === 0 ? (
+                <Typography.Text type="secondary">暂无操作记录</Typography.Text>
+              ) : (
+                <Timeline items={historyItems(viewing.history)} />
+              )}
             </Card>
 
             {viewing.priority === 'P0' && (

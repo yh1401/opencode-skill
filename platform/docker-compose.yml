@@ -64,6 +64,13 @@ services:
       # 本机 8000 被 prometheus-mcp-server 占用，故统一改用 8020。
       LOG_ANALYZER_URL: ${LOG_ANALYZER_URL:-http://host.docker.internal:8020}
       POSTGRES_DSN: ${POSTGRES_DSN:-}
+      # 登录鉴权：首次启动用此账号创建管理员，务必在正式环境通过环境变量覆盖默认口令。
+      AUTH_ENABLED: ${AUTH_ENABLED:-true}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      AUTH_TOKEN_TTL_HOURS: "8"
+      AUTH_INIT_ADMIN_USER: ${AUTH_INIT_ADMIN_USER:-admin}
+      AUTH_INIT_ADMIN_PASSWORD: ${AUTH_INIT_ADMIN_PASSWORD:-admin12345}
+      AUTH_ALLOWED_ORIGINS: ${AUTH_ALLOWED_ORIGINS:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

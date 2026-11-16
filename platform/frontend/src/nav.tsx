@@ -33,6 +33,7 @@ import BizMonitor from './pages/BizMonitor';
 import Quality from './pages/Quality';
 import Relations from './pages/Relations';
 import Knowledge from './pages/Knowledge';
+import type { Role } from './types';
 
 export type NavStatus = 'done' | 'partial' | 'planned';
 
@@ -44,6 +45,8 @@ export interface NavItem {
   label: string;
   element: ReactNode;
   status: NavStatus;
+  /** 仅这些角色可见；不填表示所有登录用户可见 */
+  roles?: Role[];
 }
 
 export interface NavGroup {
@@ -282,7 +285,13 @@ export const NAV: NavGroup[] = [
     label: '通用能力',
     icon: <RobotOutlined />,
     items: [
-      { key: '/mcp', label: '数据与能力接口', status: 'partial', element: <McpConsole /> },
+      {
+        key: '/mcp',
+        label: '数据与能力接口',
+        status: 'partial',
+        element: <McpConsole />,
+        roles: ['admin'],
+      },
       {
         key: '/knowledge',
         label: '历史故障库与知识库',
