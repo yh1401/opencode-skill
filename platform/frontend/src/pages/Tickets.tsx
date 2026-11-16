@@ -67,6 +67,8 @@ export default function Tickets() {
   const tickets = useQuery({
     queryKey: ['tickets', statusFilter, priorityFilter],
     queryFn: () => api.ticketList(200),
+    // 后端重启/短暂不可用后能自愈，不用手动刷新页面。
+    refetchInterval: 15000,
   });
 
   const filtered = (tickets.data?.tickets ?? []).filter((t) => {
@@ -122,12 +124,47 @@ export default function Tickets() {
       </Card>
 
       {/* 工单列表 */}
-      <Card size="small" title={`工单列表（${filtered.length} / ${tickets.data?.total ?? 0}）`}>
+      <Card
+        size="small"
+        title={
+          tickets.isError && !tickets.data
+            ? '工单列表（加载失败）'
+            : `工单列表（${filtered.length} / ${tickets.data?.total ?? 0}）`
+        }
+      >
+        {tickets.isError && tickets.data && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="刷新失败，当前展示的是上次成功加载的数据"
+            description={(tickets.error as Error)?.message}
+            action={
+              <Button size="small" onClick={() => tickets.refetch()} loading={tickets.isFetching}>
+                重试
+              </Button>
+            }
+          />
+        )}
+        {tickets.isError && !tickets.data && (
+          <Alert
+            type="error"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="工单列表加载失败"
+            description={(tickets.error as Error)?.message ?? '请求后端接口失败，请确认后端服务是否在运行'}
+            action={
+              <Button size="small" onClick={() => tickets.refetch()} loading={tickets.isFetching}>
+                重试
+              </Button>
+            }
+          />
+        )}
         {tickets.isLoading && <div style={{ textAlign: 'center', padding: 40 }}>加载中…</div>}
-        {!tickets.isLoading && filtered.length === 0 && (
+        {!tickets.isLoading && !tickets.isError && filtered.length === 0 && (
           <Empty description="暂无工单。先跑一次排障会话触发根因推断，工单会自动生成" />
         )}
-        {filtered.length > 0 && (
+        {(!tickets.isError || tickets.data) && filtered.length > 0 && (
           <Table
             size="small"
             rowKey="id"
@@ -174,10 +211,16 @@ export default function Tickets() {
                 ellipsis: true,
               },
               {
-                title: '创建时间',
+                title: '发现时间',
                 width: 150,
-                dataIndex: 'createdAt',
-                render: (v: string) => new Date(v).toLocaleString(),
+                dataIndex: 'detectedAt',
+                render: (v: string | undefined, t) => new Date(v ?? t.createdAt).toLocaleString(),
+              },
+              {
+                title: '处置完成',
+                width: 150,
+                dataIndex: 'resolvedAt',
+                render: (v: string | undefined) => (v ? new Date(v).toLocaleString() : '—'),
               },
               {
                 title: '操作',
@@ -220,8 +263,17 @@ export default function Tickets() {
                 {viewing.appId && <Descriptions.Item label="应用">{viewing.appId}</Descriptions.Item>}
                 {viewing.mwType && <Descriptions.Item label="中间件" span={viewing.appId ? 1 : 2}>{`${viewing.mwType}:${viewing.addr ?? '-'}`}</Descriptions.Item>}
                 {viewing.assignee && <Descriptions.Item label="处理人" span={viewing.appId && viewing.mwType ? 0 : 2}>{viewing.assignee}</Descriptions.Item>}
-                <Descriptions.Item label="创建时间">{new Date(viewing.createdAt).toLocaleString()}</Descriptions.Item>
-                <Descriptions.Item label="更新时间">{new Date(viewing.updatedAt).toLocaleString()}</Descriptions.Item>
+                <Descriptions.Item label="发现时间">
+                  {new Date(viewing.detectedAt ?? viewing.createdAt).toLocaleString()}
+                </Descriptions.Item>
+                <Descriptions.Item label="建单时间">{new Date(viewing.createdAt).toLocaleString()}</Descriptions.Item>
+                <Descriptions.Item label="处置完成">
+                  {viewing.resolvedAt ? new Date(viewing.resolvedAt).toLocaleString() : '—'}
+                </Descriptions.Item>
+                <Descriptions.Item label="关闭时间">
+                  {viewing.closedAt ? new Date(viewing.closedAt).toLocaleString() : '—'}
+                </Descriptions.Item>
+                <Descriptions.Item label="更新时间" span={2}>{new Date(viewing.updatedAt).toLocaleString()}</Descriptions.Item>
               </Descriptions>
             </Card>
 

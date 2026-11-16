@@ -602,8 +602,12 @@ export interface Ticket {
   assignee?: string;
   findings: string[];
   evidenceRef: string;
+  /** 发现时间：来源排障会话创建时间 */
+  detectedAt?: string;
   createdAt: string;
   updatedAt: string;
+  /** 处置完成时间：标记「已处置」时写入 */
+  resolvedAt?: string;
   closedAt?: string;
 }
 

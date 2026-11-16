@@ -73,10 +73,8 @@ func (e *Engine) ResolveExternal(ctx context.Context, source string, keep map[st
 			ev.State = "resolved"
 			ev.ResolvedAt = &t
 			resolved = append(resolved, ev)
-			if tk, ok := e.tickets.Get(ev.TicketID); ok && tk != nil {
-				tk.Findings = append(tk.Findings, fmt.Sprintf("外部告警已恢复（%s），建议人工确认处置", now.Format("2006-01-02 15:04:05")))
-				_ = e.st.Put("ticket", tk.ID, tk)
-			}
+			// 恢复闭环：关联工单自动流转到「已处置」，等人工确认后关闭
+			e.tickets.AutoResolve(ev.TicketID, "外部告警已恢复")
 		}
 		_ = e.st.Put(Kind, ev.Fingerprint, ev)
 	}

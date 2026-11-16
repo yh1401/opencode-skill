@@ -60,6 +60,8 @@ func (e *Engine) IngestInspectionFindings(run *domain.InspectionRun, findings []
 		ev.State = "resolved"
 		resolvedAt := now
 		ev.ResolvedAt = &resolvedAt
+		// 恢复闭环：关联工单自动流转到「已处置」，等人工确认后关闭
+		e.tickets.AutoResolve(ev.TicketID, "巡检风险已消除")
 		_ = e.st.Put(Kind, ev.Fingerprint, ev)
 	}
 

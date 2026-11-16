@@ -41,7 +41,11 @@ type Ticket struct {
 	Assignee    string         `json:"assignee,omitempty"`
 	Findings    []string       `json:"findings"`
 	EvidenceRef string         `json:"evidenceRef"`
-	CreatedAt   time.Time      `json:"createdAt"`
-	UpdatedAt   time.Time      `json:"updatedAt"`
-	ClosedAt    *time.Time     `json:"closedAt,omitempty"`
+	// DetectedAt 发现时间：取来源排障会话的创建时间（即告警首次被定位的时刻）。
+	DetectedAt *time.Time `json:"detectedAt,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
+	// ResolvedAt 处置完成时间：标记「已处置」时写入，用于计算处置时长。
+	ResolvedAt *time.Time `json:"resolvedAt,omitempty"`
+	ClosedAt   *time.Time `json:"closedAt,omitempty"`
 }

@@ -114,6 +114,13 @@ type Config struct {
 
 	// 排障默认观测时间窗（分钟）
 	DiagWindowMin int
+
+	// 知识库语义重排（公网大模型，OpenAI 兼容 /v1/chat/completions）
+	// API Key 为空表示关闭，检索完全沿用字面打分。
+	LLMBaseURL string
+	LLMAPIKey  string
+	LLMModel   string
+	LLMTimeout time.Duration
 }
 
 func Load() Config {
@@ -197,6 +204,11 @@ func Load() Config {
 		IdentityCMDBPageSize:  getint("IDENTITY_CMDB_PAGE_SIZE", 200),
 		IdentityDNSResolve:    getbool("IDENTITY_DNS_RESOLVE", false),
 		DiagWindowMin:         getint("DIAG_WINDOW_MIN", 5),
+
+		LLMBaseURL: strings.TrimRight(getenv("LLM_BASE_URL", "https://api.deepseek.com"), "/"),
+		LLMAPIKey:  getenv("LLM_API_KEY", ""),
+		LLMModel:   getenv("LLM_MODEL", "deepseek-flash"),
+		LLMTimeout: time.Duration(getint("LLM_TIMEOUT_SEC", 20)) * time.Second,
 	}
 	if c.TopoDataDir == "" {
 		c.TopoDataDir = locateTopoData()

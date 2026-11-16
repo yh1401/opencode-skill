@@ -37,7 +37,7 @@ import Knowledge from './pages/Knowledge';
 export type NavStatus = 'done' | 'partial' | 'planned';
 
 /** 菜单显示开关：绑定分组的显隐，偏好保存在浏览器本地 */
-export type NavToggle = 'change' | 'ai';
+export type NavToggle = 'change' | 'ai' | 'outcome';
 
 export interface NavItem {
   key: string;
@@ -267,6 +267,7 @@ export const NAV: NavGroup[] = [
     key: 'outcome',
     label: '运营指标',
     icon: <TrophyOutlined />,
+    toggle: 'outcome',
     items: [
       {
         key: '/metrics',

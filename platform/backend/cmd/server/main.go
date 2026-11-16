@@ -49,7 +49,7 @@ func main() {
 	ae := audit.New(tp, gw, st, reg)
 	al := alarm.New(cfg, gw, st, tp, de, te, reg)
 	rel := relations.New(tp, st)
-	kb := knowledge.New(de, st)
+	kb := knowledge.New(de, st, knowledge.NewRanker(cfg.LLMAPIKey, cfg.LLMBaseURL, cfg.LLMModel, cfg.LLMTimeout))
 	api.EnsureDefaultTask(st, cfg)
 
 	// 身份映射：启动时异步重建（拓扑 + Pinpoint + CMDB），失败不阻断服务启动。

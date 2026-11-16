@@ -13,9 +13,10 @@ import (
 
 // Engine 工单引擎：排障会话 → 工单自动映射 + 状态流转。
 type Engine struct {
-	mu    sync.Mutex // 同步建单需串行，避免并发请求为同一会话重复建单
-	diag  *diagnose.Engine
-	store store.Store
+	mu         sync.Mutex // 同步建单需串行，避免并发请求为同一会话重复建单
+	diag       *diagnose.Engine
+	store      store.Store
+	backfilled bool // 历史字段只回填一次；新工单在 fromSession 里直接写入
 }
 
 func New(de *diagnose.Engine, st store.Store) *Engine {
@@ -28,10 +29,15 @@ func (e *Engine) SyncFromSessions() int {
 	defer e.mu.Unlock()
 
 	sessions := e.diag.List(500)
+	byID := make(map[string]*domain.DiagnosisSession, len(sessions))
 	existing := e.loadAll()
 
 	created := 0
-	for _, sess := range sessions {
+	for i := range sessions {
+		sess := &sessions[i]
+		if !sess.CreatedAt.IsZero() {
+			byID[sess.ID] = sess
+		}
 		// 条件：status=root_caused 或（status=investigating 且已有根因候选且 confidence≥0.3）
 		hasRoot := sess.Status == "root_caused" ||
 			(len(sess.Candidates) > 0 && sess.Confidence >= 0.3)
@@ -41,13 +47,47 @@ func (e *Engine) SyncFromSessions() int {
 		if existing[sess.ID] {
 			continue // 已存在对应工单
 		}
-		t := e.fromSession(&sess)
+		t := e.fromSession(sess)
 		if err := e.store.Put("ticket", t.ID, t); err == nil {
 			existing[sess.ID] = true
 			created++
 		}
 	}
+	if !e.backfilled {
+		e.backfillDetectedAt(byID)
+		e.backfilled = true
+	}
 	return created
+}
+
+// backfillDetectedAt 为历史工单补「发现时间」：优先来源会话创建时间，缺失时退回建单时间。
+// 已处置/已关闭但缺 ResolvedAt 的工单用最近更新时间兜底，保证处置时长可计算。
+func (e *Engine) backfillDetectedAt(byID map[string]*domain.DiagnosisSession) {
+	for _, t := range store.ListInto[domain.Ticket](e.store, "ticket") {
+		changed := false
+		if t.DetectedAt == nil {
+			detected := t.CreatedAt
+			if sess, ok := byID[t.SourceID]; ok {
+				detected = sess.CreatedAt
+			}
+			t.DetectedAt = &detected
+			changed = true
+		}
+		if t.Assignee == "" {
+			if sess, ok := byID[t.SourceID]; ok && sess.Ticket != nil && sess.Ticket.Entity.Owner != "" {
+				t.Assignee = sess.Ticket.Entity.Owner
+				changed = true
+			}
+		}
+		if t.ResolvedAt == nil && (t.Status == domain.TicketResolved || t.Status == domain.TicketClosed) {
+			resolved := t.UpdatedAt
+			t.ResolvedAt = &resolved
+			changed = true
+		}
+		if changed {
+			_ = e.store.Put("ticket", t.ID, t)
+		}
+	}
 }
 
 // loadAll 直接从存储加载全部工单（不触发 SyncFromSessions）。
@@ -64,6 +104,11 @@ func (e *Engine) loadAll() map[string]bool {
 
 // fromSession 把排障会话映射成工单。
 func (e *Engine) fromSession(sess *domain.DiagnosisSession) domain.Ticket {
+	now := time.Now()
+	detected := sess.CreatedAt
+	if detected.IsZero() {
+		detected = now
+	}
 	t := domain.Ticket{
 		ID:          store.NewID("ticket"),
 		SourceType:  "diagnosis",
@@ -77,8 +122,13 @@ func (e *Engine) fromSession(sess *domain.DiagnosisSession) domain.Ticket {
 		Symptom:     sess.Symptom,
 		RootCause:   sess.RootCause,
 		EvidenceRef: fmt.Sprintf("/diagnosis/%s", sess.ID),
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		DetectedAt:  &detected,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	// 处理人：沿用问题单实体上由 CMDB 资产匹配到的负责人，避免建单后无人认领
+	if sess.Ticket != nil {
+		t.Assignee = sess.Ticket.Entity.Owner
 	}
 	// 优先级：confidence ≥ 0.8 → P0；≥ 0.6 → P1；≥ 0.4 → P2；其余 P3
 	switch {
@@ -136,9 +186,15 @@ func (e *Engine) UpdateStatus(id string, newStatus domain.TicketStatus, assignee
 	if assignee != "" {
 		t.Assignee = assignee
 	}
-	t.UpdatedAt = time.Now()
+	now := time.Now()
+	t.UpdatedAt = now
+	if newStatus == domain.TicketResolved && t.ResolvedAt == nil {
+		t.ResolvedAt = &now
+	}
 	if newStatus == domain.TicketClosed {
-		now := time.Now()
+		if t.ResolvedAt == nil {
+			t.ResolvedAt = &now
+		}
 		t.ClosedAt = &now
 	}
 	if err := e.store.Put("ticket", t.ID, t); err != nil {
@@ -156,12 +212,44 @@ func (e *Engine) Resolve(id string) (*domain.Ticket, error) {
 	if t.Status == domain.TicketClosed {
 		return t, nil // 幂等
 	}
+	now := time.Now()
 	t.Status = domain.TicketResolved
-	t.UpdatedAt = time.Now()
+	t.UpdatedAt = now
+	if t.ResolvedAt == nil {
+		t.ResolvedAt = &now
+	}
 	if err := e.store.Put("ticket", t.ID, t); err != nil {
 		return nil, err
 	}
 	return t, nil
+}
+
+// AutoResolve 告警恢复时自动把工单流转到「已处置」，并追加一条恢复说明。
+// 只处理 open / assigned / in_progress；已处置或已关闭的工单保持原样（幂等）。
+// 返回工单与「本次是否发生流转」。
+func (e *Engine) AutoResolve(id, reason string) (*domain.Ticket, bool) {
+	if id == "" {
+		return nil, false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	t, ok := e.Get(id)
+	if !ok || t == nil {
+		return nil, false
+	}
+	if t.Status == domain.TicketResolved || t.Status == domain.TicketClosed {
+		return t, false
+	}
+	now := time.Now()
+	t.Status = domain.TicketResolved
+	t.ResolvedAt = &now
+	t.UpdatedAt = now
+	t.Findings = append(t.Findings, fmt.Sprintf("%s（%s），系统自动标记已处置，待人工确认关闭", reason, now.Format("2006-01-02 15:04:05")))
+	if err := e.store.Put("ticket", t.ID, t); err != nil {
+		return nil, false
+	}
+	return t, true
 }
 
 // validTransition 简单状态机校验。

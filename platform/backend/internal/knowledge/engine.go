@@ -1,6 +1,8 @@
 package knowledge
 
 import (
+	"context"
+	"log"
 	"sort"
 	"strings"
 
@@ -10,13 +12,15 @@ import (
 )
 
 // Engine 知识库引擎：排障会话归档 + 关键词检索 + 相似案例推荐。
+// ranker 非空时，带 q 的检索会先做字面召回，再交给大模型语义重排。
 type Engine struct {
-	diag  *diagnose.Engine
-	store store.Store
+	diag   *diagnose.Engine
+	store  store.Store
+	ranker *Ranker
 }
 
-func New(de *diagnose.Engine, st store.Store) *Engine {
-	return &Engine{diag: de, store: st}
+func New(de *diagnose.Engine, st store.Store, ranker *Ranker) *Engine {
+	return &Engine{diag: de, store: st, ranker: ranker}
 }
 
 // Reindex 全量归档：把 root_caused 会话与已标注会话写入 knowledge_case（幂等）。
@@ -40,28 +44,82 @@ func (e *Engine) List(q, appID string, limit int) []Case {
 	e.Reindex()
 	out := store.ListInto[Case](e.store, "knowledge_case")
 	terms := splitTerms(q)
+	// 语义重排开启时不按字面分淘汰，否则「换个说法」的查询在召回阶段就被丢光了。
+	semantic := strings.TrimSpace(q) != "" && e.ranker.Enabled()
 	filtered := make([]Case, 0, len(out))
 	for _, c := range out {
 		if appID != "" && c.AppID != appID {
 			continue
 		}
 		score := scoreCase(c, terms, appID)
-		if len(terms) > 0 && score == 0 {
+		if len(terms) > 0 && score == 0 && !semantic {
 			continue
 		}
 		c.Score = score
 		filtered = append(filtered, c)
 	}
-	sort.Slice(filtered, func(i, j int) bool {
-		if filtered[i].Score != filtered[j].Score {
-			return filtered[i].Score > filtered[j].Score
+	sortCases(filtered)
+	if semantic {
+		ranked, err := e.rerank(q, filtered)
+		switch {
+		case err != nil:
+			log.Printf("[knowledge] semantic rank failed, fallback to literal: %v", err)
+			filtered = positiveOnly(filtered)
+		case len(ranked) > 0:
+			filtered = ranked
+		default:
+			// 模型认为都不相关时仍保留字面命中，避免关键词查询被语义判定清空。
+			filtered = positiveOnly(filtered)
 		}
-		return filtered[i].CreatedAt.After(filtered[j].CreatedAt)
-	})
+	}
 	if limit > 0 && len(filtered) > limit {
 		filtered = filtered[:limit]
 	}
 	return filtered
+}
+
+// positiveOnly 只保留字面分 > 0 的案例（语义重排不可用时的兜底）。
+func positiveOnly(cases []Case) []Case {
+	kept := cases[:0]
+	for _, c := range cases {
+		if c.Score > 0 {
+			kept = append(kept, c)
+		}
+	}
+	return kept
+}
+
+// rerank 语义重排：字面分已排好序，取前 rankMaxCandidates 条交给大模型打分，
+// 命中（≥ rankMinScore）按模型分重排。返回空切片表示模型认为都不相关。
+func (e *Engine) rerank(q string, cases []Case) ([]Case, error) {
+	candidates := cases
+	if len(candidates) > rankMaxCandidates {
+		candidates = candidates[:rankMaxCandidates]
+	}
+	scores, err := e.ranker.Rank(context.Background(), q, candidates)
+	if err != nil {
+		return nil, err
+	}
+	hits := make([]Case, 0, len(scores))
+	for _, c := range candidates {
+		score, ok := scores[c.ID]
+		if !ok || score < rankMinScore {
+			continue
+		}
+		c.Score = score
+		hits = append(hits, c)
+	}
+	sortCases(hits)
+	return hits, nil
+}
+
+func sortCases(cases []Case) {
+	sort.Slice(cases, func(i, j int) bool {
+		if cases[i].Score != cases[j].Score {
+			return cases[i].Score > cases[j].Score
+		}
+		return cases[i].CreatedAt.After(cases[j].CreatedAt)
+	})
 }
 
 // Similar 相似案例：同应用加权，按症状/根因关键词重合度排序。

@@ -14,15 +14,16 @@ const STATUS_PILL: Record<NavStatus, { tone: string; text: string } | null> = {
   planned: { tone: 'neutral', text: '规划' },
 };
 
-/** 菜单显示偏好：默认收起规划中入口与模型/算法整组，割接维护按需隐藏 */
+/** 菜单显示偏好：默认收起规划中入口、模型/算法整组与运营指标（评价体系），割接维护按需隐藏 */
 interface MenuPrefs {
   planned: boolean;
   change: boolean;
   ai: boolean;
+  outcome: boolean;
 }
 
 const MENU_PREFS_KEY = 'aiops-menu-prefs';
-const DEFAULT_PREFS: MenuPrefs = { planned: false, change: true, ai: false };
+const DEFAULT_PREFS: MenuPrefs = { planned: false, change: true, ai: false, outcome: false };
 
 function readPrefs(): MenuPrefs {
   try {
@@ -141,6 +142,13 @@ export default function App() {
         </div>
         <Switch size="small" checked={prefs.change} onChange={toggle('change')} />
       </div>
+      <div className="menu-panel-row">
+        <div>
+          <div className="menu-panel-label">运营指标与评价体系</div>
+          <div className="menu-panel-desc">考核指标看板（时延 / 达标率 / 自动化率）</div>
+        </div>
+        <Switch size="small" checked={prefs.outcome} onChange={toggle('outcome')} />
+      </div>
       <div className="theme-panel-hint">
         {hiddenCount > 0 ? `已隐藏 ${hiddenCount} 项，仍可通过地址直接访问` : '全部菜单已显示'}
         <br />
@@ -151,7 +159,7 @@ export default function App() {
           size="small"
           type="link"
           className="menu-panel-reset"
-          onClick={() => setPrefs({ planned: true, change: true, ai: true })}
+          onClick={() => setPrefs({ planned: true, change: true, ai: true, outcome: true })}
         >
           全部显示
         </Button>

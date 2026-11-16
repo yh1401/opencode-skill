@@ -152,11 +152,8 @@ func (e *Engine) PollOnce(ctx context.Context) (upserted int, autoDiag int) {
 			ev.State = "resolved"
 			now := time.Now()
 			ev.ResolvedAt = &now
-			// 自动追加工单备注（不改 tickets.Engine 状态机）
-			if tk, ok := e.tickets.Get(ev.TicketID); ok && tk != nil {
-				tk.Findings = append(tk.Findings, fmt.Sprintf("告警已恢复（%s），建议人工确认处置", now.Format("2006-01-02 15:04:05")))
-				_ = e.st.Put("ticket", tk.ID, tk)
-			}
+			// 恢复闭环：关联工单自动流转到「已处置」，等人工确认后关闭
+			e.tickets.AutoResolve(ev.TicketID, "Prometheus 告警已恢复")
 		}
 		_ = e.st.Put(Kind, ev.Fingerprint, ev)
 	}
@@ -628,12 +625,22 @@ func (e *Engine) SyncTickets() {
 		}
 	}
 	for _, ev := range e.List("") {
-		if ev.DiagSessionID == "" || ev.TicketID != "" {
+		if ev.DiagSessionID == "" {
 			continue
 		}
-		if tid, ok := bySource[ev.DiagSessionID]; ok {
+		tid := ev.TicketID
+		if tid == "" {
+			mapped, ok := bySource[ev.DiagSessionID]
+			if !ok {
+				continue
+			}
+			tid = mapped
 			ev.TicketID = tid
 			_ = e.st.Put(Kind, ev.Fingerprint, ev)
+		}
+		// 已恢复但工单还没结：补一次自动处置，避免工单永久停留在 open
+		if ev.State == "resolved" {
+			e.tickets.AutoResolve(tid, "告警已恢复（补记恢复闭环）")
 		}
 	}
 }
