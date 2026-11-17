@@ -65,6 +65,13 @@ Thumbs.db
 cookies.txt
 *.cookie
 
+# 本地密钥文件（任何可能放真实 API key 的临时文件都别入库）
+*-local-key-*
+*_local_keys*
+*.secrets
+*.local.env
+ai-ops/platform/backend/.env
+
 # Backup directories
 .trae/skills/*/.backup_*/
 
@@ -112,3 +119,4 @@ __pycache__/
 *.env
 !*.env.example
 !*.env-example
+*.env.local

@@ -5,3 +5,7 @@ data/
 build/
 *.log
 .DS_Store
+
+# 本地凭据（勿入库）
+backend/.env.local
+backend/*.secrets
