@@ -128,10 +128,10 @@ func (e *Engine) PollOnce(ctx context.Context) (upserted int, autoDiag int) {
 		ev, isNew := e.upsertAlert(a)
 		seen[ev.Fingerprint] = true
 		upserted++
-		if isNew && a.Suppressed == "" {
+		if isNew && a.Suppressed == "" && a.State != "resolved" {
 			fresh = append(fresh, ev)
 		}
-		if a.Suppressed == "" {
+		if a.Suppressed == "" && a.State != "resolved" {
 			diagnosable = append(diagnosable, a)
 		}
 	}
@@ -197,6 +197,20 @@ func (e *Engine) upsertAlertWithFP(fp string, a alertView) (AlarmEvent, bool) {
 
 	switch {
 	case ev.Fingerprint == "":
+		// FirstSeenAt 优先取上游 activeAt（告警真实首次触发时间），让趋势图按小时分布；
+		// 解析失败 / 未来时间回退到入库时刻。
+		firstSeen := now
+		if ts, err := time.Parse(time.RFC3339, a.ActiveAt); err == nil && !ts.After(now.Add(time.Minute)) {
+			firstSeen = ts
+		}
+		state := "firing"
+		var resolvedAt *time.Time
+		if a.State == "resolved" {
+			// 上游直接给出的已恢复告警：入库即 resolved，不进排障与通知。
+			state = "resolved"
+			t := firstSeen
+			resolvedAt = &t
+		}
 		ev = AlarmEvent{
 			Fingerprint:  fp,
 			Source:       source,
@@ -206,9 +220,10 @@ func (e *Engine) upsertAlertWithFP(fp string, a alertView) (AlarmEvent, bool) {
 			Severity:     a.Severity,
 			Labels:       labels,
 			Summary:      a.Summary,
-			State:        "firing",
-			FirstSeenAt:  now,
-			LastSeenAt:   now,
+			State:        state,
+			FirstSeenAt:  firstSeen,
+			LastSeenAt:   firstSeen,
+			ResolvedAt:   resolvedAt,
 			FireCount:    1,
 			SuppressedBy: a.Suppressed,
 		}

@@ -670,7 +670,7 @@ M2–M5 复测（2026-11-06，mock 四服务）：
 
 | 项 | 实现 |
 |---|---|
-| T12 规则模型 | 新增 kind `biz_rule`：`{id,name,appId,metric(error_rate/tp99/request_total),comparator(gt/lt),threshold,severity,windowMin,enabled}`；`GET /api/biz-monitor/rules` 首次访问自动初始化 3 条演示规则（应用 `apollo-ehome-pro`） |
+| T12 规则模型 | 新增 kind `biz_rule`：`{id,name,appId,metric(error_rate/tp99/request_total),comparator(gt/lt),threshold,severity,windowMin,enabled}`；`GET /api/biz-monitor/rules` 首次访问自动初始化 8 条演示规则（apollo-ehome-pro 3 条会越界 + cloud-ehome 等 5 条背景规则正常不越界） |
 | T12 采集与判定 | `ScanBiz` 通过上游接口 `query` 拉取瞬时指标（`http_requests_total` / `histogram_quantile` 推导 TP99），按规则的比较符与阈值判定越界；采集走 `Gateway.CallSilent`，不污染 `tool_call_log` |
 | T12 告警写入 | 统一通道 `alarm.IngestExternalEvents`：`source=biz`，`fingerprint=biz\|{ruleId}\|{appId}`；越界即 upsert firing，本轮未再越界的旧事件置 `resolved`（`PollOnce` 跳过 `source=biz`，生命周期由扫描维护） |
 | T12 扫描留痕 | 新增 kind `biz_scan`（key `latest`）：`{at,rules,breaches,created,items[]}`，`GET /api/biz-monitor/overview` 返回规则/统计/明细/当前告警；`POST /api/biz-monitor/scan` 手动触发，后台按 `BIZ_MON_INTERVAL_SEC`（默认 60s）周期扫描 |

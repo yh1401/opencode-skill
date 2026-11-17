@@ -1062,7 +1062,7 @@ flowchart LR
       <div class="expect">
         <div class="lab">预期数据</div>
         <ul>
-          <li>业务监控：3 条规则全部越界（错误率 8.0% &gt; 5%、请求量 1200 &lt; 2000、TP99 1.6s &gt; 1.0s），首轮 <code>breaches=3, created=3</code>；再扫一次页面显示「本轮新建 0 条」（同一指纹不重复建单）</li>
+          <li>业务监控：8 条规则中 apollo 3 条全部越界（错误率 8.0% &gt; 5%、请求量 1200 &lt; 2000、TP99 1.6s &gt; 1.0s），首轮 <code>breaches=3, created=3</code>；另 5 条背景规则监控 cloud-ehome 等应用，正常值不越界。再扫一次页面显示「本轮新建 0 条」（同一指纹不重复建单）</li>
           <li>指标劣化：<code>scanned=10, degraded=9</code>，生成 9 条隐患告警，<code>本轮自动排障 5</code></li>
           <li>质差分析：不用选应用，页面默认展示最近一次报告 <code>apollo-ehome-pro</code>，<code>degraded=true</code>、质量分 <strong>100.0%</strong>、根因 <code>database / ehome-pro.mysql.ehomeinner.cn:13303</code></li>
         </ul>
@@ -1070,10 +1070,10 @@ flowchart LR
 
       <h4>① 业务监控：规则越界就报，不等阈值告警</h4>
       <figure class="shot">
-        <img src="assets/shots/09-biz-monitor.png" alt="业务监控：3 条规则、3 条越界、3 条当前告警与扫描明细">
+        <img src="assets/shots/09-biz-monitor.png" alt="业务监控：8 条规则、3 条越界、当前告警与扫描明细">
         <figcaption>
           <b>截图 6 · 业务监控 <code>/biz-monitor</code></b>
-          <span class="where"><em>看哪里：</em>① 顶部四张卡「监控规则 3 / 本轮越界 3 / 当前告警 3 / 最近扫描 12:52:55」；② 规则表里阈值写得清清楚楚（错误率 &gt; 5%、请求量 &lt; 2000、TP99 &gt; 1s）；③ 中间「扫描明细」三条实际值 8.0% / 1200 / 1.6s 全部标红越界；④ 底部「当前告警」3 条 <code>BizMetricBreach</code>，2 条警告 + 1 条严重。</span>
+          <span class="where"><em>看哪里：</em>① 顶部四张卡「监控规则 8 / 本轮越界 3 / 当前告警 3 / 最近扫描 …」；② 规则表里阈值写得清清楚楚（错误率 &gt; 5%、请求量 &lt; 2000、TP99 &gt; 1s），另有 5 条背景规则覆盖 cloud-ehome / cloud-video / auth 等应用；③ 中间「扫描明细」apollo 三条实际值 8.0% / 1200 / 1.6s 全部标红越界，背景五条灰色不越界；④ 底部「当前告警」3 条 <code>BizMetricBreach</code>，2 条警告 + 1 条严重。（注：现有截图为早期 3 条规则版本，演示前需重截）</span>
         </figcaption>
       </figure>
 

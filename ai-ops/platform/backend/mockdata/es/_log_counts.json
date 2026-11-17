@@ -7,5 +7,16 @@
   "ehome.mysql.ehomeinner.cn": 86,
   "sdk3a4-detectmessage1.rocketmq.ehome.dlifeinner.cn": 240,
   "public-push3.rocketmq.ehome.dlifeinner.cn": 45,
-  "public-push1.rocketmq.ehome.dlifeinner.cn": 30
+  "public-push1.rocketmq.ehome.dlifeinner.cn": 30,
+  "public-push2.rocketmq.ehome.dlifeinner.cn": 88,
+  "common.redis-cluster.camellia.ehome.ctseelinkinner.cn": 64,
+  "common-alarmmessage1.rocketmq.ehome.dlifeinner.cn": 52,
+  "sdk3a4-onofflinemessage1.rocketmq.ehome.dlifeinner.cn": 41,
+  "vpaas-nacos.vpaas-nacos": 36,
+  "cloud-ehome": 73,
+  "sdk3a4-detectmessage2.rocketmq.ehome.dlifeinner.cn": 47,
+  "core.redis-cluster.camellia.ehome.ctseelinkinner.cn": 33,
+  "sdk2-detectmessage3.rocketmq.ehome.dlifeinner.cn": 58,
+  "common-alarmmessage2.rocketmq.ehome.dlifeinner.cn": 24,
+  "order.mysql.ehomeinner.cn": 61
 }

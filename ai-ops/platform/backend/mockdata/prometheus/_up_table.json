@@ -328,5 +328,6 @@
   "sdk3a4-onofflinemessage3-gz4.rocketmq.ehome.ctseelinkinner.cn": 1,
   "sdk3a4-onofflinemessage4-gz4.rocketmq.ehome.ctseelinkinner.cn": 1,
   "common.mysql.ehome.ctseelinkinner.cn": 1,
-  "common.redis.ehome.ctseelinkinner.cn": 1
+  "common.redis.ehome.ctseelinkinner.cn": 1,
+  "cloud-ehome": 1
 }

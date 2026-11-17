@@ -149,7 +149,7 @@
 | 6 | `/op-topology` | 看图例「排障中 / 工单待处理」与节点描边 | — |
 | 7 | `/inspection` | 跑一次批次，看风险项与报告 | 第 4.9 步 |
 | 8 | `/audit` | 点「执行稽核」→「详情」看 C1/C2/C4 | 第 2 步 |
-| 9 | `/biz-monitor` | 点「立即扫描」，3 条规则越界回流告警 | 第 4.10 步 |
+| 9 | `/biz-monitor` | 点「立即扫描」，8 条规则中越界 3 条回流告警 | 第 4.10 步 |
 | 10 | `/degradation` | 点「立即扫描」，看劣化项与处置状态 | 第 4.5 步 |
 | 11 | `/knowledge` | 点「详情」看归档案例与证据链 | 第 4.11 步 |
 | 12 | `/metrics` | 看 1/5/10 分钟达标率与每日趋势 | 第 4.7 步 |
@@ -287,11 +287,11 @@ curl -s http://127.0.0.1:8080/api/alarms/stats            # 分级统计
 curl -s http://127.0.0.1:8080/api/alarms                  # 列表（含排障/工单关联字段）
 ```
 
-预期：4 条 mock 告警入库（2 critical：`HighErrorRate` / `TargetDown`；2 warning：`MySQLReplicationDelay` / `HostHighCPU`），已过准入的自动开出排障会话并回填 `diagSessionId` / `ticketId`；页面顶部 4 张统计卡、表格 4 行、分级药丸红/橙。
+预期：15 条 mock 告警入库（10 firing + 5 resolved）。其中 4 条场景告警（2 critical：`HighErrorRate` / `TargetDown`；2 warning：`MySQLReplicationDelay` / `HostHighCPU`）+ 6 条 firing 背景告警 + 5 条 resolved 历史告警；已过准入的自动开出排障会话（首轮上限 5 个，场景 4 条优先，背景 critical/warning 排后），resolved 只进统计与趋势不进排障；页面顶部统计卡显示分级/状态计数，表格 15 行、分级药丸红/橙/灰，趋势图按 `FirstSeenAt` 分散在过去 24 小时。
 
-**mock 生命周期**：`promListAlerts` 优先读取 `mockdata/prometheus/list_alerts.json`（当前为 4 条静态告警），文件存在时原样返回；仅当该文件缺失或为空时，才回退到按 `mockmcp` 进程启动时间分桶的动态模拟（0–90s 全 6 条 → 90–150s 去掉 2 条 TargetDown → 150s+ 恢复 6 条，用于演示"告警恢复→死灰复燃"）。因此当前演示态下连续 `poll` 结果为 4 条稳定 firing。
+**mock 生命周期**：`promListAlerts` 优先读取 `mockdata/prometheus/list_alerts.json`（当前为 15 条静态告警：4 条场景告警 + 11 条背景告警，其中 5 条背景为 `state=resolved` 的历史恢复数据），文件存在时原样返回；仅当该文件缺失或为空时，才回退到按 `mockmcp` 进程启动时间分桶的动态模拟（0–90s 全 6 条 → 90–150s 去掉 2 条 TargetDown → 150s+ 恢复 6 条，用于演示"告警恢复→死灰复燃"）。因此当前演示态下连续 `poll` 结果稳定为 15 条（10 firing + 5 resolved），`activeAt` 分散在过去 1–23 小时，告警入库取 `activeAt` 作为 `FirstSeenAt`，趋势图按小时展开。
 
-**讲解词**：「当前演示态读的是 `list_alerts.json` 的 4 条静态告警，稳定可复现；如果把该文件移走，mockmcp 会按进程运行时间模拟'告警消失又复发'，那时恢复检测和工单回写才是动态跑出来的。」
+**讲解词**：「当前演示态读的是 `list_alerts.json` 的 15 条静态告警（4 场景 + 11 背景，含 5 条历史恢复），稳定可复现；如果把该文件移走，mockmcp 会按进程运行时间模拟'告警消失又复发'，那时恢复检测和工单回写才是动态跑出来的。」
 
 ### 第 4.5 步｜指标劣化 → 隐患告警（S1，1 分钟）
 
@@ -448,7 +448,7 @@ curl -s http://127.0.0.1:8080/api/biz-monitor/rules | python3 -m json.tool
 curl -s -X POST http://127.0.0.1:8080/api/biz-monitor/scan | python3 -m json.tool
 ```
 
-预期：默认 3 条规则（错误率 / TP99 / 请求量），首轮 `breaches=3, created=3`，告警中心出现 `source=biz` 条目；立刻再扫一次 `created=0`（同 fingerprint 幂等）。页面「一键排障」会带 appId 跳排障工作台。
+预期：默认 8 条规则（apollo 3 条演示规则越界：错误率 / TP99 / 请求量；另 5 条背景规则监控 cloud-ehome、cloud-video、auth、adapter-task-api、ddnsmgr，正常值不越界），首轮 `breaches=3, created=3`，告警中心出现 `source=biz` 条目；立刻再扫一次 `created=0`（同 fingerprint 幂等）。页面「一键排障」会带 appId 跳排障工作台。
 
 **T13 质差分析**：打开「质差分析」（`/quality`），点「开始分析」。
 
@@ -538,7 +538,7 @@ backend/mockdata/
   - `label_values`：按 `label` 返回 instance 全集或 job 名
   - `host_metrics_realtime` / `host_metrics_trend`：按主机名哈希生成 12 项指标（同一主机多次调用值稳定）
   - `get_server_map_tool` / `drag_heatmap_tool` / `get_transaction_trace_tool`：按应用名 / traceId 生成
-  - `list_alerts`：优先读 `prometheus/list_alerts.json`（当前 4 条静态告警，原样返回）；文件缺失/为空时才由 `promListAlerts(startTime)` 按进程运行时间分桶返回 6 条模板（0–90s 全量 / 90–150s 去掉 TargetDown / 150s+ 恢复），用于演示 alert 生命周期
+  - `list_alerts`：优先读 `prometheus/list_alerts.json`（当前 15 条静态告警 = 4 场景 + 11 背景，原样返回）；文件缺失/为空时才由 `promListAlerts(startTime)` 按进程运行时间分桶返回 6 条模板（0–90s 全量 / 90–150s 去掉 TargetDown / 150s+ 恢复），用于演示 alert 生命周期
 
 ---
 
@@ -579,7 +579,7 @@ backend/mockdata/
 | 智能监控排障 | `/alert-center` | PASS | 59 条告警，采集/抽屉时间线正常 |
 | | `/diagnosis` | PASS | 18 个自动排障会话，证据链完整 |
 | | `/tickets` | PASS | 18 张工单，详情抽屉正常 |
-| | `/biz-monitor` | PASS | 3 条规则扫描，越界 3 条回流告警 |
+| | `/biz-monitor` | PASS | 8 条规则扫描，越界 3 条回流告警 |
 | | `/log-analysis` | PASS | 已接入 log_analyzer（宿主机 `:8020`），iframe 正常加载；服务未起时自动降级为「启动指引」，不再渲染错误页面 |
 | 巡检与治理 | `/inspection` | PASS | 102 项 / 41 风险，批次与报告正常 |
 | | `/inspect-plans` | PASS | 规则库 11 条，参数区间正常（已修复） |

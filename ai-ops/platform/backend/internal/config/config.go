@@ -272,6 +272,10 @@ func (c Config) ValidateDataMode() error {
 	case "", "mock":
 		return nil
 	case "real":
+		if !c.MCPEnabled {
+			// 网关关闭时上游地址不参与运行，不做强制要求。
+			return nil
+		}
 		missing := make([]string, 0, 3)
 		if c.PinpointURL == "" {
 			missing = append(missing, "PINPOINT_MCP_URL")

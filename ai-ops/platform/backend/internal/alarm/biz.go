@@ -263,18 +263,25 @@ func (e *Engine) saveBizScan(res *BizScanResult) {
 	_ = e.st.Put(bizScanKind, bizScanKey, *res)
 }
 
-// ensureDemoBizRules 首次无规则时写入 3 条演示规则。
+// ensureDemoBizRules 写入演示规则（8 条），按 ID 补缺以兼容已有存储。
 func (e *Engine) ensureDemoBizRules() {
-	if len(e.ListBizRules()) > 0 {
-		return
-	}
 	demos := []BizRule{
 		{ID: "biz-demo-error-rate", Name: "错误率过高", AppID: "apollo-ehome-pro", Metric: "error_rate", Comparator: "gt", Threshold: 0.05, Severity: "critical", Enabled: true, WindowMin: 5},
 		{ID: "biz-demo-tp99", Name: "TP99 过高", AppID: "apollo-ehome-pro", Metric: "tp99", Comparator: "gt", Threshold: 1.0, Severity: "warning", Enabled: true, WindowMin: 5},
 		{ID: "biz-demo-request-total", Name: "请求量跌破底线", AppID: "apollo-ehome-pro", Metric: "request_total", Comparator: "lt", Threshold: 2000, Severity: "warning", Enabled: true, WindowMin: 5},
+		// 背景规则：监控其他真实应用，阈值取"正常值不越界"，让业务监控页覆盖多应用；
+		// mock 下非 apollo 应用 error_rate≈0.01~0.04、tp99≈0.2~0.28，均不触发。
+		{ID: "biz-demo-cloud-ehome-error", Name: "云家视频接口错误率", AppID: "cloud-ehome", Metric: "error_rate", Comparator: "gt", Threshold: 0.05, Severity: "warning", Enabled: true, WindowMin: 5},
+		{ID: "biz-demo-cloud-video-tp99", Name: "云视频播放接口TP99", AppID: "cloud-video", Metric: "tp99", Comparator: "gt", Threshold: 1.0, Severity: "warning", Enabled: true, WindowMin: 5},
+		{ID: "biz-demo-auth-error", Name: "鉴权服务错误率", AppID: "auth", Metric: "error_rate", Comparator: "gt", Threshold: 0.05, Severity: "warning", Enabled: true, WindowMin: 5},
+		{ID: "biz-demo-adapter-tp99", Name: "适配任务接口TP99", AppID: "adapter-task-api", Metric: "tp99", Comparator: "gt", Threshold: 1.0, Severity: "info", Enabled: true, WindowMin: 5},
+		{ID: "biz-demo-ddnsmgr-error", Name: "DNS管理接口错误率", AppID: "ddnsmgr", Metric: "error_rate", Comparator: "gt", Threshold: 0.05, Severity: "critical", Enabled: true, WindowMin: 5},
 	}
+	// 按 ID 补缺：已有存储（例如只有早期 3 条）也能升级，且不覆盖用户改过的同 ID 规则。
 	for i := range demos {
-		_ = e.SaveBizRule(&demos[i])
+		if _, ok := e.GetBizRule(demos[i].ID); !ok {
+			_ = e.SaveBizRule(&demos[i])
+		}
 	}
 }
 
