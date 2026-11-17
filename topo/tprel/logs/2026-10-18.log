@@ -1,2 +1,0 @@
-2026-10-18 00:27:07.530	INFO	[pinpoint] 部署项目映射已加载	{"deps": 1504, "ok": true}
-2026-10-18 00:27:07.548	INFO	[dp_relation] appId↔部署项目 关系索引已加载	{"source": "file", "rows": 1426, "apps": 538, "ok": true}

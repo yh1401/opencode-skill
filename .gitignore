@@ -5,3 +5,12 @@
 
 # Trae 技能测试样本（含 >100MB 大日志，勿入库）
 .trae/skills/test-file/
+
+# === 独立子项目（各自有 .git，顶层不再跟踪）===
+ai-ops/
+apollo-mcp-server/
+arch-opt-mcp-server/
+cmdb-mcp-server/
+elasticsearch-mcp/
+pinpoint-mcp/
+promthus-mcp/

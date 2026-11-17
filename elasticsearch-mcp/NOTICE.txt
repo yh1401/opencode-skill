@@ -1,2 +1,0 @@
-Elasticsearch MCP Server
-Copyright 2025 Elasticsearch B.V.
