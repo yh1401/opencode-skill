@@ -24,6 +24,13 @@ type Case struct {
 	CreatedAt       time.Time  `json:"createdAt"`
 	FinishedAt      time.Time  `json:"finishedAt,omitempty"`
 	Score           int        `json:"score,omitempty"`
+
+	// LLM 结构化总结：手动 enrich 端点触发写入，失败时为零值，静默降级不阻塞入库。
+	AISummary     string   `json:"aiSummary,omitempty"`     // 一两句故障总结（如 "RocketMQ broker 磁盘过高，扩容后恢复"）
+	AICategory    string   `json:"aiCategory,omitempty"`    // 根因分类（基础设施/中间件/业务代码/配置变更/资源不足/外部依赖/待人工确认）
+	AIKeywords    []string `json:"aiKeywords,omitempty"`    // 模型抽取的关键词（补充检索召回）
+	AIConfidence  float64  `json:"aiConfidence,omitempty"`  // 模型置信度 0-100（对根因判断的把握）
+	AIRebuildAt   time.Time `json:"aiRebuildAt,omitempty"`   // 最后一次 LLM 总结成功的时间
 }
 
 // Evidence 证据链摘要（不含大体量原始结果）。

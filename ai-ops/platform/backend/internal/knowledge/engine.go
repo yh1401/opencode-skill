@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sort"
 	"strings"
@@ -11,16 +12,50 @@ import (
 	"aiops-platform/backend/internal/store"
 )
 
-// Engine 知识库引擎：排障会话归档 + 关键词检索 + 相似案例推荐。
-// ranker 非空时，带 q 的检索会先做字面召回，再交给大模型语义重排。
+// Engine 知识库引擎：排障会话归档 + 关键词检索 + 相似案例推荐 + LLM 总结 enrich。
+// ranker 非空时，带 q 的检索会先做字面召回，再交给大模型语义重排；
+// enricher 复用 ranker 的 LLM 客户端，给 Case 做 AI 结构化总结（手动端点触发）。
 type Engine struct {
-	diag   *diagnose.Engine
-	store  store.Store
-	ranker *Ranker
+	diag     *diagnose.Engine
+	store    store.Store
+	ranker   *Ranker
+	enricher *Enricher
 }
 
 func New(de *diagnose.Engine, st store.Store, ranker *Ranker) *Engine {
-	return &Engine{diag: de, store: st, ranker: ranker}
+	return &Engine{
+		diag:     de,
+		store:    st,
+		ranker:   ranker,
+		enricher: NewEnricher(ranker, st),
+	}
+}
+
+// Enrich 是否可用（LLM_API_KEY 已注入）。
+func (e *Engine) EnrichEnabled() bool { return e != nil && e.enricher != nil && e.enricher.Enabled() }
+
+// EnrichOne 对单条 Case 做 LLM 总结并持久化。静默降级：失败返回 error，不阻塞 Reindex。
+func (e *Engine) EnrichOne(ctx context.Context, caseID string) error {
+	if e.enricher == nil || !e.enricher.Enabled() {
+		return fmt.Errorf("LLM_API_KEY 未配置，enrich 不可用")
+	}
+	return e.enricher.EnrichOne(ctx, caseID)
+}
+
+// EnrichAll 遍历全部 Case 做 LLM 总结，返回 total/enriched/failed 计数。
+func (e *Engine) EnrichAll(ctx context.Context, limit int) (total, enriched, failed int) {
+	if e.enricher == nil || !e.enricher.Enabled() {
+		return 0, 0, 0
+	}
+	return e.enricher.EnrichAll(ctx, limit)
+}
+
+// EnrichFresh 只处理还没 AI 总结过的 Case。
+func (e *Engine) EnrichFresh(ctx context.Context) (total, enriched, failed int) {
+	if e.enricher == nil || !e.enricher.Enabled() {
+		return 0, 0, 0
+	}
+	return e.enricher.EnrichFresh(ctx)
 }
 
 // Reindex 全量归档：把 root_caused 会话与已标注会话写入 knowledge_case（幂等）。
@@ -268,6 +303,8 @@ func splitTerms(q string) []string {
 }
 
 // scoreCase 检索打分：应用命中权重最高，其次根因/症状/关键词包含。
+// LLM enrich 过的 Case（aiSummary/aiKeywords 非空）额外把 AI 产出也纳入 haystack，
+// 让模型总结的同义词/关联词（如 "broker 磁盘过高" 匹配 "RocketMQBrokerHighDisk"）也能被字面召回。
 func scoreCase(c Case, terms []string, appID string) int {
 	score := 0
 	if appID != "" && c.AppID == appID {
@@ -276,9 +313,13 @@ func scoreCase(c Case, terms []string, appID string) int {
 	if len(terms) == 0 {
 		return score
 	}
-	haystack := strings.ToLower(strings.Join([]string{
-		c.Title, c.Symptom, c.RootCause, c.AppID, c.MiddlewareType, c.Addr, strings.Join(c.Keywords, " "),
-	}, " "))
+	haystackParts := []string{
+		c.Title, c.Symptom, c.RootCause, c.AppID, c.MiddlewareType, c.Addr,
+		strings.Join(c.Keywords, " "),
+	}
+	// AI 总结字段：enrich 过的 Case 这些字段非空，纳入召回；空字符串自动被 Join 忽略。
+	haystackParts = append(haystackParts, c.AISummary, c.AICategory, strings.Join(c.AIKeywords, " "))
+	haystack := strings.ToLower(strings.Join(haystackParts, " "))
 	for _, t := range terms {
 		if strings.Contains(haystack, t) {
 			score += 2

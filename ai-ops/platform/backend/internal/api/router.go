@@ -226,7 +226,7 @@ func (s *Server) Router() *gin.Engine {
 				rl.POST("/:id/apply", s.relationApply)
 			}
 
-			// 历史故障知识库（T17）：会话归档 + 关键词检索 + 相似案例
+			// 历史故障知识库（T17）：会话归档 + 关键词检索 + 相似案例 + LLM 总结 enrich
 			kb := w.Group("/knowledge")
 			{
 				kb.GET("", s.knowledgeList)
@@ -234,6 +234,7 @@ func (s *Server) Router() *gin.Engine {
 				kb.GET("/similar", s.knowledgeSimilar)
 				kb.GET("/:id", s.knowledgeGet)
 				kb.POST("/reindex", s.knowledgeReindex)
+				kb.POST("/enrich", s.knowledgeEnrich)
 			}
 
 			// 外部日志分析服务（log_analyzer）健康探测：供 /log-analysis 页决定嵌入还是降级提示

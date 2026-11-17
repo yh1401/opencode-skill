@@ -120,6 +120,13 @@ func parseRank(content string) ([]rankItem, error) {
 	return resp.Results, nil
 }
 
+// Chat 通用 LLM 调用（JSON 模式）：暴露给 Enricher 复用，同一 baseURL / apiKey / model。
+// 返回模型的原始 content 字段（已自动去掉可能的 ```json 包裹）。
+// 部分网关不支持 response_format JSON 模式时会降级重试一次。
+func (r *Ranker) Chat(ctx context.Context, system, user string) (string, error) {
+	return r.chat(ctx, system, user)
+}
+
 func (r *Ranker) chat(ctx context.Context, system, user string) (string, error) {
 	body := map[string]any{
 		"model":       r.model,

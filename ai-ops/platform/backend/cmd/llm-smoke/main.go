@@ -212,9 +212,13 @@ func main() {
 	}
 	sort.Slice(hits, func(i, j int) bool { return hits[i].modelScore > hits[j].modelScore })
 
-	fmt.Println("\n🎯 [4] 模型重排 Top 10（≥30 才算相关，见 rankMinScore）")
+	topN := 10
+	if topN > len(hits) {
+		topN = len(hits)
+	}
+	fmt.Printf("\n🎯 [4] 模型重排 Top %d（≥30 才算相关，见 rankMinScore）\n", topN)
 	fmt.Println("    #   模型分   字面分   App        Symptom / RootCause")
-	for i, h := range hits[:10] {
+	for i, h := range hits[:topN] {
 		mark := " "
 		if h.modelScore < 30 {
 			mark = "·"
