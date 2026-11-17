@@ -1,0 +1,66 @@
+
+{
+    // Configure the target Elasticsearch server
+    "elasticsearch": {
+      "url": "${ES_URL}",
+      "api_key": "${ES_API_KEY:}",
+      "username": "${ES_USERNAME:}",
+      "password": "${ES_PASSWORD:}",
+      "ssl_skip_verify": "${ES_SSL_SKIP_VERIFY:false}",
+
+      /* WIP
+      "tools": {
+        // Exclude the "search" builtin tool as it's too broad
+        "exclude": ["search"],
+
+        // Custom tools
+        "custom": {
+          // An ES|QL query
+          "add-42": {
+            "type": "esql",
+            "description": "Adds 42 to the input value",
+            "query": "row value = ?value | eval result = value + 42 | keep result",
+            "parameters": {
+              "value": {
+                "title": "The value",
+                "type": "number"
+              }
+            }
+          },
+          // A stored search template
+          "a-stored-template": {
+            "type": "search_template",
+            "description": "This is the description for this stored template",
+            "template_id": "my-template",
+            "parameters": {
+              "param_1": {
+                "title": "The first parameter",
+                "description": "Use this parameter to blah blah and blah",
+                "type": "string"
+              }
+            }
+          },
+          // An inline search template
+          "an-inline-template": {
+            "type": "search_template",
+            "description": "This is the description for this inline template",
+            "template": {
+              "query": {
+                "term": {
+                  "some-field": "{{param_1}}"
+                }
+              }
+            },
+            "parameters": {
+              "param_1": {
+                "title": "The first parameter",
+                "description": "Use this parameter to blah blah and blah",
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+      */
+    }
+}

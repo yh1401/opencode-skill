@@ -34,6 +34,7 @@ author: Skill Agent Team
 | 参数名 | 类型 | 说明 | 默认值 | 可选值 |
 |--------|------|------|--------|--------|
 | node | string | 机房位置 | - | 详见 [references/node-options.md](references/node-options.md)（263个机房） |
+| nodeIpStr | string | 机房+IP 精确组合（复合查询） | - | 格式『机房名称 IP地址』（空格分隔），多个用换行分隔，如 `云公司-广州 192.168.1.1`；单独按 IP/机房查请用 ip / node |
 | state | string | 服务器状态 | "0" | "0"=在线, "1"=库存, "2"=计划上线, "3"=维修中, "4"=已报废, "5"=待分配, "6"=待清退 |
 | osType | string | 操作系统 | - | "linux", "windows" |
 | type | string | 服务器类型 | - | "0"=物理机, "1"=自有虚拟机, "2"=第三方云机 |
@@ -44,8 +45,19 @@ author: Skill Agent Team
 | belong | integer | 归属类型 | - | 1=云网, 2=视联 |
 | isFromOutside | string | 信创标识 | - | "0"=非信创, "1"=信创 |
 | isReplaceForChinaProduction | string | 国产化替换状态 | - | "0"=未替换, "1"=已替换 |
+| productId | string | 产品ID（单选） | - | 需先从 [references/product-options.md](references/product-options.md) 名称匹配出ID |
+| productIdList | array[string] | 产品ID数组（多选，与 productId 二选一） | - | 需先名称匹配出ID数组 |
+| projectIdList | array[string] | 项目ID数组（多选） | - | 需先名称匹配出ID数组 |
+| rack | string | 机架位置（单选） | - | 直接传机架名称，如"龙晖九楼B01机架" |
+| operABList | array[string] | 负责人A或B（多选） | - | 直接传姓名；"XX负责的服务器"不区分主备时优先用 |
+| operAList | array[string] | 负责人A-主负责人（多选） | - | 仅匹配 operA 字段 |
+| operBList | array[string] | 负责人B-备/协同（多选） | - | 仅匹配 operB 字段 |
+| contractType | integer | 合同类型（单选） | - | 传合同类型ID（contract-options 文档未内置，无法确定时不传） |
+| fields | array[string] | 只返回指定字段（性能优化） | 全部字段 | 如 `["hostName","type","cpuCores","gpus","os","usingBy","productProjectList"]` |
 | currentPage | integer | 页码 | 1 | ≥1 |
 | pageSize | integer | 每页条数 | 15 | 1~100 |
+
+> **负责人筛选**：`operABList` / `operAList` / `operBList` 是同一组负责人的三种筛法（A或B / 仅A / 仅B），**一般三选一，勿叠加**。用户说"XX负责的服务器"而不区分主备时，用 `operABList: ["XX"]`。
 
 ## 工具调用 Schema
 
@@ -59,6 +71,10 @@ author: Skill Agent Team
       "node": {
         "type": "string",
         "description": "机房位置，如'云公司->贵州'"
+      },
+      "nodeIpStr": {
+        "type": "string",
+        "description": "复合查询：机房+IP 精确组合，格式为『机房名称 IP地址』（空格分隔），多个组合用换行分隔，如 '云公司-广州 192.168.1.1'。仅当用户同时给出机房和 IP 的组合条件时使用；单独按 IP 或机房查询请分别用 ip / node"
       },
       "state": {
         "type": "string",
@@ -105,6 +121,48 @@ author: Skill Agent Team
         "type": "string",
         "description": "国产化替换状态，0=未替换, 1=已替换",
         "enum": ["0", "1"]
+      },
+      "productId": {
+        "type": "string",
+        "description": "产品ID（单选，需先将产品名称匹配为ID后传入）"
+      },
+      "productIdList": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "产品ID数组（多选，与 productId 二选一）"
+      },
+      "projectIdList": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "项目ID数组（多选，需先将项目名称匹配为ID数组后传入）"
+      },
+      "rack": {
+        "type": "string",
+        "description": "机架位置（单选），直接传机架名称，如'龙晖九楼B01机架'"
+      },
+      "operABList": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "负责人A或B姓名数组（多选，数组内为或），直接传用户提到的姓名。用户只说'XX负责的服务器'、不区分主备时优先用这个。与 operAList/operBList 一般三选一，勿叠加"
+      },
+      "operAList": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "负责人A（主负责人）姓名数组（多选），仅匹配 operA 字段。仅当用户明确要'主负责人'时使用"
+      },
+      "operBList": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "负责人B（备/协同负责人）姓名数组（多选），仅匹配 operB 字段。仅当用户明确要'B角负责人'时使用"
+      },
+      "contractType": {
+        "type": "integer",
+        "description": "合同类型（单选），传合同类型ID。取值参考 contract-options 文档（当前技能未内置，无法确定ID时不传）"
+      },
+      "fields": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "【性能优化】只返回这些字段，可大幅减小响应体积。不传则返回全部字段"
       },
       "currentPage": {
         "type": "integer",

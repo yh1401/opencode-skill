@@ -11,6 +11,11 @@ MCP 工具层
 ├── apollo_app_list            ──→ 接口2: GET /thirdApi/apollo/apps
 ├── apollo_config_query        ──→ 接口3: GET /thirdApi/apollo/namespace
 └── apollo_config_global_search ──→ 接口1 + 接口2 + 接口3（组合调用）
+```
+
+> 适用版本：**v3.2.1**。全局搜索支持 `apolloHostIds`/`scanBudget`/`namespaces` 收窄范围做分阶段搜索；
+> 返回 `status`（complete/partial/scan_failed/empty_scan）+ `hostsDetail` 诊断；namespace 瞬时错误自带 1 次重试、失败不入缓存；
+> 外层看门狗保证调用在预算+约15s 内必返回（详见第 7、8 章）。
 
 EasyOps 代理层（https://easyops.tech.ctseelink.cn）
     │
@@ -402,17 +407,29 @@ def decrypt_token(encrypted_token, session_id):
 | `apollo_host_list` | 接口 1（host_list） | 获取全部 Apollo 服务列表，MCP 自动解密 token |
 | `apollo_app_list` | 接口 1 → 接口 2 | 先查 host_list 获取 apolloHostId，再查 apps；指定套异常时自动 fallback |
 | `apollo_config_query` | 接口 1 → 接口 2 → 接口 3 | 先查 apps 获取 namespace 列表（MCP 内置默认集合），再查 config |
-| `apollo_config_global_search` | 接口 1 + 接口 2 + 接口 3 | **三阶段全链路组合调用**，总预算 60s 硬上限，超时返回部分结果 |
+| `apollo_config_global_search` | 接口 1 + 接口 2 + 接口 3 | **全链路组合调用**：host_list → 各套应用列表 → 逐应用扫描 namespace。默认总预算 60s（可被 `scanBudget` 覆盖），外层**硬性看门狗**（预算 + 约 15s 宽限，最长 ~75s）兜底；支持 `apolloHostIds`（按套收窄）/ `namespaces`（收窄 ns 链路）/ 返回 `status` + `hostsDetail` 诊断（3.2.1） |
 
-### 全局搜索三阶段预算（60s）
+### 全局搜索预算与执行流程
 
 ```
-阶段1: host_list    ← 接口1，预算检查 + 最多 8s 超时
-阶段2: probe+apps   ← 接口2，预算检查 + 并发探活标记可用套
-阶段3: 扫描 config  ← 接口3，wait(timeout) 硬截断，返回 partial
+stage1: host_list      ← 接口1（默认 8s 超时；指定 apolloHostIds 时只取目标套）
+stage2: 各套应用列表    ← 接口2，并行拉取 + 探活标记（按套记录 appList 状态，缓存 5min）
+stage3: 逐应用扫描 ns   ← 接口3，任务下沉到每个 app，共享线程池(APOLLO_GLOBAL_SEARCH_WORKERS=8)
+                         并行；ns_list = namespaces 或 默认 application+扩展(≤MAX_NS)
 ```
 
-每个阶段都有**预算检查点**，任何阶段耗尽预算立即返回 `partial=true` + 标注哪个阶段耗尽。
+- 每个阶段都检查剩余预算；任一阶段耗尽立即返回 `partial=true` + `unfinishedApps` 标注未完成项；
+- 整次搜索置于独立线程，外层看门狗兜底：即使 DNS/host 列表挂起等极端情况，也会在 **预算 + 约15s 宽限** 内强制返回 `partial`，不会卡到被调用方超时掐断；
+- namespace 拉取失败**不入缓存**，瞬时错误（429/5xx/网络异常）自动重试 1 次，重试后仍失败才计入 `summary.nsErrorCount` 与 `hostsDetail.errorSample`；
+- 扫出 0 条时不再静默返回 `success`：有应用却全失败 → `status=scan_failed`（message 带失败样例）；有应用却全空内容（无错误）→ `status=empty_scan`（提示 env 不匹配/配置在其它 namespace）。
+
+### 全局搜索返回诊断字段（v3.2.1）
+
+| 字段 | 说明 |
+|---|---|
+| `data.status` | `complete`（扫完）/ `partial`（预算内未扫完，附 unfinishedApps）/ `scan_failed`（应用已获取但 ns 全部拉取失败）/ `empty_scan`（内容全空无错误） |
+| `data.hostsDetail[]` | 每套统计：`appListStatus`(ok/error/timeout)、`appListCount`、`tasksSubmitted`、`scannedNamespaces`、`nsErrors`、`errorSample`（首条失败样例）、`status`(ok/partial/failed/no_apps) |
+| `summary.nsErrorCount` | 重试后仍失败的 namespace 拉取总次数 |
 
 ---
 
@@ -423,13 +440,13 @@ apollo-mcp-server 内部的超时/重试/fallback 全部可通过环境变量配
 | 环境变量 | 默认值 | 作用范围 |
 |---|---|---|
 | `APOLLO_HOST_LIST_TIMEOUT` | 8 | 接口 1（host_list）单次请求超时秒数 |
-| `APOLLO_MAX_RETRIES` | 1 | 接口 1 失败重试次数（接口 2、3 固定 0 重试） |
+| `APOLLO_MAX_RETRIES` | 1 | 接口 1 失败重试次数（接口 2、3 常规调用固定 0 重试；全局搜索内 namespace 拉取对瞬时错误另有 1 次自带重试） |
 | `APOLLO_APPS_TIMEOUT` | 6 | 接口 2（apps）超时秒数 |
 | `APOLLO_REQUEST_TIMEOUT` | 6 | 接口 3（namespace）超时秒数 |
 | `APOLLO_TRAVERSAL_BUDGET` | 20 | 遍历可用套的总预算秒数（apps/config fallback 时） |
-| `APOLLO_GLOBAL_SEARCH_BUDGET` | 60 | 全局搜索总预算秒数（覆盖接口 1+2+3） |
-| `APOLLO_GLOBAL_SEARCH_WORKERS` | 8 | 全局扫描并发线程数 |
-| `APOLLO_GLOBAL_SEARCH_MAX_NS` | 5 | 全局搜索每个 app 扫描的 namespace 数量 |
+| `APOLLO_GLOBAL_SEARCH_BUDGET` | 60 | 全局搜索总预算秒数（覆盖接口 1+2+3），可被入参 `scanBudget` 覆盖；外层看门狗再放宽约 15s 强制返回 |
+| `APOLLO_GLOBAL_SEARCH_WORKERS` | 8 | 全局扫描并发线程数（**应用级并行**，任务下沉到每个 app） |
+| `APOLLO_GLOBAL_SEARCH_MAX_NS` | 5 | 全局搜索每个 app 扫描的 namespace 数量（不传 namespaces 时的默认扩展上限） |
 | `APOLLO_HOST_PROBE_ENABLED` | true | 是否开启 host 探活（标记可用/不可用后跳过无效套） |
 | `APOLLO_HOST_PROBE_TTL` | 60 | 探活结果缓存秒数 |
 
@@ -437,7 +454,9 @@ apollo-mcp-server 内部的超时/重试/fallback 全部可通过环境变量配
 
 - **指定套异常**（5xx / 超时 / ApolloRequestError）：接口 2、3 自动切换到第一个探活可用的套
 - **全部套不可用**：接口 2、3 逐层向上抛 `RuntimeError`，MCP 返回 `code=503`
-- **全局搜索超时**：返回 `partial=true` + `unfinishedApps` 标注未完成的应用，不会卡死
+- **全局搜索预算/卡死兜底**：预算耗尽或 DNS/请求挂起时，由硬性看门狗在 **预算 + 约15s** 内强制返回 `partial=true` + `unfinishedApps` 标注未完成项，不会卡死也不会拖到调用方超时
+- **namespace 瞬时失败容错**：全局搜索单次 namespace 拉取失败不入缓存，429/5xx/网络异常自动重试 1 次后再失败才计入 `nsErrorCount`
+- **0 条结果不静默**：应用已获取但全部拉取失败 → `scan_failed`；内容全空（无错误）→ `empty_scan`；两种情况 message 均给出诊断方向（含 `hostsDetail.errorSample`），避免 agent 误判"确无匹配/工具不可用"
 
 ---
 

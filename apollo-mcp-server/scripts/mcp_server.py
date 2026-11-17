@@ -747,26 +747,47 @@ class ConfigClient:
             logger.debug(f"[ConfigClient] 全局搜索 apps 查询失败: host_id={host_id}, error={e}")
         return None
 
-    def _cached_fetch_namespace(self, host_id, env, app_id, ns_name) -> Optional[Dict]:
-        """带缓存的 Namespace 配置查询：缓存命中直接返回，未命中请求后存入缓存。"""
+    def _cached_fetch_namespace(self, host_id, env, app_id, ns_name) -> Tuple[Optional[Dict], Optional[str]]:
+        """带缓存的 Namespace 配置查询。
+
+        返回 (configurations, error)：
+        - error 为 None：拉取成功（configurations 可能为空 dict，表示该 ns 无配置内容）；
+        - error 非 None：拉取失败（业务错误/异常），**失败结果不入缓存**，供上层统计诊断。
+        对瞬时性错误（429/5xx）与网络异常自动重试 1 次，缓解全局搜索高并发下的偶发失败。
+        """
+        transient_codes = frozenset(('429', '500', '502', '503', '504'))
         cache_key = (host_id, app_id, env, ns_name)
         now = time.time()
         with self._search_cache_lock:
             cached = self._config_cache.get(cache_key)
             if cached and (now - cached[1]) < self._config_cache_ttl:
                 logger.debug(f"[ConfigClient] config_cache 命中: {cache_key}")
-                return cached[0]
-        try:
-            result = self.fetch_proxy_namespace(host_id, env, app_id, 'default', ns_name)
-            if str(result.get('code')) in ('200', 'success'):
+                return cached[0], None
+        last_error = None
+        for attempt in (0, 1):  # 首次失败后重试 1 次（仅瞬时性错误/异常）
+            try:
+                result = self.fetch_proxy_namespace(host_id, env, app_id, 'default', ns_name)
+            except Exception as e:
+                last_error = f"{type(e).__name__}: {e}"
+                logger.debug(f"[ConfigClient] 全局搜索 config 查询异常: {cache_key}, error={last_error}")
+                if attempt == 0:
+                    time.sleep(0.2)
+                    continue
+                return None, last_error
+            code = str(result.get('code'))
+            if code in ('200', 'success'):
                 data = result.get('data') or {}
                 configurations = data.get('configurations') or {}
                 with self._search_cache_lock:
                     self._config_cache[cache_key] = (configurations, time.time())
-                return configurations
-        except Exception as e:
-            logger.debug(f"[ConfigClient] 全局搜索 config 查询失败: {cache_key}, error={e}")
-        return None
+                return configurations, None
+            last_error = f"业务错误 code={code}, message={result.get('message', '未知')}"
+            logger.debug(f"[ConfigClient] 全局搜索 config 查询失败: {cache_key}, {last_error}")
+            if attempt == 0 and code in transient_codes:
+                time.sleep(0.2)
+                continue
+            return None, last_error
+        return None, last_error  # 理论不可达，兜底返回
 
     def _clear_search_cache(self):
         """清空全局搜索缓存（可手动触发）"""
@@ -782,18 +803,92 @@ class ConfigClient:
 
     def fetch_global_search(self, keyword: str, search_field: str = "both",
                             env: str = "PRO", max_results: int = 100,
-                            namespace_name: str = "application") -> dict:
-        """全局配置搜索：并发遍历所有可用 Apollo 套的所有应用，按 keyword 匹配 key 或 value。
+                            namespace_name: str = "application",
+                            apollo_host_ids: Optional[List[int]] = None,
+                            scan_budget: Optional[int] = None,
+                            namespaces: Optional[List[str]] = None) -> dict:
+        """全局配置搜索（对外入口）：并发遍历所有可用 Apollo 套的所有应用，按 keyword 匹配 key 或 value。
+
+        scan_budget: 可选，本次扫描预算（秒）。默认用服务端 APOLLO_GLOBAL_SEARCH_BUDGET(60s)。
+                     传小值（如 10-20s）做"快速摸底/分批扫"：预算到点即返回 partial + unfinishedApps，
+                     供"先摸底 → 再对候选应用精查"的分步流程使用，避免每次都跑满 60s 全量。
+        namespaces: 可选，只扫描指定的 namespace 列表（如 ["application"] 或 ["application", "redis"]），
+                    用于收窄链路、减少请求量。默认不传时扫 namespace_name（application 会自动扩展
+                    datasource/redis/common/logging，受 APOLLO_GLOBAL_SEARCH_MAX_NS 限制）。
+
+        硬性兜底（解决"基本每次都超时"）：
+        把整次搜索放到独立 daemon 线程执行，外层只等待 预算(budget) + 宽限(grace) 秒。
+        一旦 EasyOps DNS 挂起 / requests 超时不生效等导致内部某阶段无限卡死
+        （典型是 host 列表阶段：requests 超时不覆盖 DNS 解析，getaddrinfo 可能长时间阻塞，
+        预算检查在请求返回后才执行 → 整调用拖到平台侧超时被掐断），
+        到点强制返回 partial 结果 + 提示，绝不让调用超过平台侧工具超时。
+
+        实现逻辑与参数说明见 _global_search_impl。
+        """
+        budget_sec = int(scan_budget) if scan_budget else int(getattr(self, '_global_search_budget', 60))
+        grace = max(5, int(budget_sec * 0.25))  # 给正常收尾留余量，且显著小于平台侧工具超时
+        hard_timeout = budget_sec + grace
+        start = time.time()
+        holder: dict = {}
+
+        def _run():
+            try:
+                holder['result'] = self._global_search_impl(
+                    keyword=keyword, search_field=search_field, env=env,
+                    max_results=max_results, namespace_name=namespace_name,
+                    apollo_host_ids=apollo_host_ids, scan_budget=scan_budget,
+                    namespaces=namespaces)
+            except Exception as e:
+                holder['error'] = e
+
+        t = threading.Thread(target=_run, name='global-search', daemon=True)
+        t.start()
+        t.join(timeout=hard_timeout)
+
+        if 'result' in holder:
+            return holder['result']
+        if not t.is_alive() and 'error' in holder:
+            raise holder['error']  # 内部异常（如 keyword 为空）原样抛给上层
+        elapsed = round((time.time() - start) * 1000)
+        logger.warning(f"[ConfigClient] 全局搜索超过硬性预算 {hard_timeout:.0f}s 仍无结果，"
+                       f"已强制返回 partial（疑似 host 列表 DNS/请求挂起），elapsed={elapsed}ms")
+        return {"code": 200,
+                "message": f"部分结果（搜索超过硬性预算 {hard_timeout:.0f}s，疑似 EasyOps host 列表请求/DNS 挂起被强制中断，"
+                           f"建议缩小 apolloHostIds/namespaceName 范围后重试）",
+                "data": {"keyword": keyword, "searchField": search_field, "env": env, "namespace": namespace_name,
+                         "summary": {"hostCount": 0, "appCount": 0, "scannedApps": 0,
+                                     "matchedCount": 0, "maskedCount": 0, "elapsedMs": elapsed},
+                         "matches": [], "partial": True, "truncated": False,
+                         "unfinishedApps": ["hard_timeout/搜索被硬性预算强制中断"]}}
+
+    def _global_search_impl(self, keyword: str, search_field: str = "both",
+                            env: str = "PRO", max_results: int = 100,
+                            namespace_name: str = "application",
+                            apollo_host_ids: Optional[List[int]] = None,
+                            scan_budget: Optional[int] = None,
+                            namespaces: Optional[List[str]] = None) -> dict:
+        """全局配置搜索内部实现（由 fetch_global_search 放入独立线程执行）：并发遍历所有可用
+        Apollo 套的所有应用，按 keyword 匹配 key 或 value。对外硬性超时兜底见 fetch_global_search。
 
         解决的场景："哪些应用的配置用到了某个地址/关键词"——这是日常排障/比对的高频需求，
         原来需要逐个应用调用 apollo_config_query（700 应用 × 6s = 小时级），
         现在由 MCP 内部用 ThreadPoolExecutor 并行完成，单次调用即可返回结果。
 
+        apollo_host_ids: 可选，只扫描指定的 Apollo 套 ID 列表（如 [3, 14] 只扫天翼云眼两套），
+                         不传则扫描所有可用套。缩小范围可显著减少扫描量、避免全量浪费预算。
+        scan_budget: 可选，本次扫描预算（秒），覆盖服务端默认(60s)。传小值（如 10-20s）做
+                     快速摸底/分批扫：预算到点即返回 partial + unfinishedApps，配合
+                     apolloHostIds/namespaceName 实现"先摸底 → 精查候选应用"的分步流程。
+        namespaces: 可选，只扫描指定的 namespace 列表（如 ["application"]），收窄链路、减少请求量；
+                    默认不传时扫 namespace_name（application 自动扩展 datasource/redis/common/logging）。
+
         策略：
-        1. 并发遍历可用 host（按探活结果排序，跳过不可用套）
-        2. 每个 host 并发遍历所有 app 的指定 namespace 配置
+        1. （可选）只保留 apollo_host_ids 指定的套，跳过其余套的探活与扫描
+        2. 应用级并行：先并行拉取各套应用列表，再把任务下沉到"每个 app"，
+           由共享 worker 池并行扫描（不再是一套一个 worker 串行扫全部应用），
+           单套应用再多也能被多个 worker 同时消化，全量扫描显著提速
         3. 对每个配置项按 keyword 匹配 key 或 value（search_field 控制）
-        4. 总预算 self._global_search_budget 秒，超时返回已查到的部分结果 + 未完成标记
+        4. 总预算 scan_budget 或 self._global_search_budget 秒，超时返回已查到的部分结果 + 未完成标记
         5. 结果带 host_id/host_name/app_id/namespace 标注，脱敏后返回
 
         返回结构：
@@ -811,7 +906,7 @@ class ConfigClient:
         """
         start = time.time()
         # 预算从函数入口算起（覆盖 host_list + probe + 扫描全阶段）
-        budget_sec = self._global_search_budget
+        budget_sec = int(scan_budget) if scan_budget else self._global_search_budget
         budget_start = start
 
         def _budget_remaining() -> float:
@@ -850,7 +945,23 @@ class ConfigClient:
                              "matches": [], "partial": True, "truncated": False,
                              "unfinishedApps": ["host_list 阶段耗尽预算"]}}
 
-        # ====== 阶段 2: 并发探活 ======
+        # ====== 阶段 2: （可选）只保留指定的套，避免全量扫描浪费预算 ======
+        if apollo_host_ids:
+            target_ids = {int(i) for i in apollo_host_ids if i is not None}
+            all_host_ids = [h.get('id') for h in host_list]
+            filtered_hosts = [h for h in host_list if h.get('id') in target_ids]
+            if not filtered_hosts:
+                return {"code": 404,
+                        "message": f"apolloHostIds={sorted(target_ids)} 未匹配到任何 Apollo 套，可用套 ID: {all_host_ids}",
+                        "data": {"keyword": keyword, "searchField": search_field, "env": env, "namespace": namespace_name,
+                                 "summary": {"hostCount": 0, "appCount": 0, "scannedApps": 0,
+                                             "matchedCount": 0, "maskedCount": 0,
+                                             "elapsedMs": round((time.time() - start) * 1000)},
+                                 "matches": [], "partial": False, "truncated": False}}
+            host_list = filtered_hosts
+            logger.info(f"[ConfigClient] 全局搜索限定套 {sorted(target_ids)}（跳过其余 {len(all_host_ids) - len(filtered_hosts)} 套）")
+
+        # ====== 阶段 3: 并发探活（仅对本次要扫的套，命中缓存则不发请求）======
         # 探活也有预算限制！避免 DNS 挂 / EasyOps 整体不可用时 as_completed 无限等待
         probe_budget = max(_budget_remaining() - 5, 1)  # 留至少 5s 给扫描阶段
         default_id = self._select_target_host(host_list).get('id')
@@ -873,40 +984,101 @@ class ConfigClient:
         scanned_count = 0
         max_ns = self._global_search_max_ns
 
-        # 2. 并发遍历：每个 host 内遍历 apps，每个 app 查 namespace 配置
-        def _scan_host(host_info) -> Tuple[List[dict], List[str], int]:
-            """扫描单个 host 下所有应用，返回 (matches, unfinished_apps, scanned_count)"""
+        # ====== 阶段 4: 应用级并行扫描 ======
+        # 关键点：任务下沉到"每个 app"，由共享 worker 池并行消化，而非老实现的
+        # "一套一个 worker 串行扫完全部应用"。单套应用再多也能被多 worker 同时处理，
+        # 避免大套成为整个搜索的长尾瓶颈（也避免只扫 1-2 套时并发被套数卡死）。
+
+        # 4a. 并行拉取各套应用列表（缓存命中不发请求），构建应用级扫描任务
+        #     同时按套统计（appList 状态/条数/提交任务数），用于最终 hostsDetail 诊断
+        app_tasks: List[Tuple[dict, dict]] = []  # [(host_info, app), ...]
+        host_stats: dict = {}
+        for h in active_hosts:
+            hid = h.get('id')
+            host_stats[hid] = {
+                'apolloHostId': hid,
+                'hostName': h.get('name', ''),
+                'probeAvailable': probe_map.get(hid, {}).get('available'),  # None=探活缓存未覆盖
+                'appListStatus': 'ok',   # ok / error（拉取失败）/ timeout（超预算未返回）
+                'appListCount': 0,       # 该套应用列表实际条数（error 时为 0）
+                'tasksSubmitted': 0,     # 去重后实际进入扫描的应用数
+                'scannedNamespaces': 0,  # 扫到内容的 namespace 数
+                'nsErrors': 0,           # namespace 拉取失败次数（重试后仍失败，不入缓存）
+                'errorSample': None,     # 首条失败样例（≤200 字符），便于定位根因
+            }
+        if active_hosts:
+            list_budget = max(_budget_remaining() - 2, 1)  # 至少留 2s 给扫描阶段
+            pool_apps = ThreadPoolExecutor(max_workers=min(self._global_search_workers, len(active_hosts)))
+            fut2host = {pool_apps.submit(self._cached_fetch_apps, h.get('id')): h for h in active_hosts}
+            try:
+                done_apps, pending_apps = wait(fut2host, timeout=list_budget)
+                for fut in done_apps:
+                    h = fut2host[fut]
+                    hid = h.get('id')
+                    apps = None
+                    try:
+                        apps = fut.result(timeout=3)
+                    except Exception as e:
+                        logger.debug(f"[ConfigClient] 全局搜索应用列表解析异常: host={hid}, error={e}")
+                    if apps is None:
+                        # None 表示拉取失败（业务错误/异常）；[] 表示该套确无应用
+                        host_stats[hid]['appListStatus'] = 'error'
+                        host_stats[hid]['errorSample'] = f"应用列表拉取失败（host {hid}）"
+                        continue
+                    host_stats[hid]['appListCount'] = len(apps)
+                    if not apps:
+                        continue
+                    for app in apps:
+                        app_id = app.get('appId') or app.get('appid', '')
+                        if not app_id or app_id in app_id_set:
+                            continue
+                        app_id_set.add(app_id)
+                        app_tasks.append((h, app))
+                        host_stats[hid]['tasksSubmitted'] += 1
+                # 应用列表拉取超时的套，与扫描超时同等标记（不阻塞主流程）
+                for fut in pending_apps:
+                    h = fut2host[fut]
+                    hid = h.get('id')
+                    host_stats[hid]['appListStatus'] = 'timeout'
+                    unfinished_apps.append(f"applist_timeout/{hid}/{h.get('name', '')}")
+                if pending_apps:
+                    logger.warning(f"[ConfigClient] 全局搜索应用列表拉取超时 {len(pending_apps)} 套，已标记未完成")
+            finally:
+                try:
+                    pool_apps.shutdown(wait=False, cancel_futures=True)
+                except TypeError:
+                    pool_apps.shutdown(wait=False)
+
+        # 4b. 应用级扫描任务：单 app 内最多扫 max_ns 个 namespace
+        def _scan_app(task) -> Tuple[List[dict], List[str], int, int, Optional[str]]:
+            """扫描单个 app，返回 (matches, unfinished_apps, scanned_ns, ns_errors, error_sample)。
+
+            scanned_ns: 扫到非空内容的 namespace 数（用于汇总 scannedApps）；
+            ns_errors:  该 app 各 namespace 拉取失败次数（重试后仍失败，已留痕不入缓存）；
+            error_sample: 首条失败样例，供 hostsDetail 诊断根因。
+            """
+            host_info, app = task
             hid = host_info.get('id')
             hname = host_info.get('name', '')
+            app_id = app.get('appId') or app.get('appid', '')
+            app_name = app.get('name', '') or app_id
             local_matches: List[dict] = []
             local_unfinished: List[str] = []
             local_scanned = 0
+            local_errors = 0
+            error_sample = None
 
-            # 预算检查
             if time.time() - budget_start > budget_sec:
-                local_unfinished.append(f"host_{hid}_{hname}")
-                return local_matches, local_unfinished, local_scanned
+                local_unfinished.append(f"{hid}/{app_id}")
+                return local_matches, local_unfinished, local_scanned, local_errors, error_sample
 
-            apps = self._cached_fetch_apps(hid)
-            if not apps:
-                return local_matches, local_unfinished, local_scanned
-
-            for app in apps:
-                # 再次检查预算
-                if time.time() - budget_start > budget_sec:
-                    local_unfinished.append(f"{hid}/{app.get('appId')}")
-                    break
-
-                app_id = app.get('appId') or app.get('appid', '')
-                app_name = app.get('name', '') or app_id
-                if not app_id or app_id in app_id_set:
-                    continue
-                app_id_set.add(app_id)
-
-                # 扫描 namespace（默认 application，外加常见的几个）
+            # 扫描 namespace：显式传 namespaces 时按指定列表扫（缩小链路/减少请求量），
+            # 否则默认扫 namespace_name，值为 application 时自动扩展常见 namespace（最多 max_ns 个）
+            if namespaces:
+                ns_list = namespaces
+            else:
                 ns_list = [namespace_name]
                 if namespace_name == 'application':
-                    # 同时扫 datasource/redis 等常见 namespace（最多 max_ns 个）
                     extras = ['datasource', 'redis', 'common', 'logging']
                     for ns in extras:
                         if len(ns_list) >= max_ns:
@@ -914,67 +1086,82 @@ class ConfigClient:
                         if ns not in ns_list:
                             ns_list.append(ns)
 
-                for ns in ns_list:
-                    if time.time() - budget_start > budget_sec:
-                        break
-                    configs = self._cached_fetch_namespace(hid, env, app_id, ns)
-                    if not configs:
-                        continue
-                    local_scanned += 1
-                    for k, v in configs.items():
-                        k_lower = str(k).lower()
-                        v_lower = str(v).lower()
-                        hit = False
-                        if search_field in ('key', 'both') and kw in k_lower:
-                            hit = True
-                        if not hit and search_field in ('value', 'both') and kw in v_lower:
-                            hit = True
-                        if hit:
-                            local_matches.append({
-                                'apolloHostId': hid,
-                                'hostName': hname,
-                                'appId': app_id,
-                                'appName': app_name,
-                                'namespaceName': ns,
-                                'key': k,
-                                'value': v,
-                            })
-            return local_matches, local_unfinished, local_scanned
+            for ns in ns_list:
+                if time.time() - budget_start > budget_sec:
+                    local_unfinished.append(f"{hid}/{app_id}/{ns}")
+                    break
+                configs, ns_err = self._cached_fetch_namespace(hid, env, app_id, ns)
+                if ns_err:
+                    local_errors += 1
+                    if error_sample is None:
+                        error_sample = f"ns={ns}: {ns_err}"
+                    continue
+                if not configs:
+                    continue
+                local_scanned += 1
+                for k, v in configs.items():
+                    k_lower = str(k).lower()
+                    v_lower = str(v).lower()
+                    hit = False
+                    if search_field in ('key', 'both') and kw in k_lower:
+                        hit = True
+                    if not hit and search_field in ('value', 'both') and kw in v_lower:
+                        hit = True
+                    if hit:
+                        local_matches.append({
+                            'apolloHostId': hid,
+                            'hostName': hname,
+                            'appId': app_id,
+                            'appName': app_name,
+                            'namespaceName': ns,
+                            'key': k,
+                            'value': v,
+                        })
+            return local_matches, local_unfinished, local_scanned, local_errors, error_sample
 
-        # 3. 并发执行各 host 扫描
+        # 4c. 并发执行所有应用级扫描任务
         #    关键修复：手动创建 ThreadPoolExecutor + concurrent.futures.wait，
         #    替代 with ThreadPoolExecutor（会 shutdown(wait=True) 等待所有 future 完成）。
         #    用 wait(timeout=剩余预算) 拿到已完成的 futures 就处理，
         #    未完成的直接标记为 unfinished，pool.shutdown(wait=False, cancel_futures=True)
         #    让主流程立即返回，运行中的线程在后台继续（结果被忽略）。
-        actual_workers = min(self._global_search_workers, max(len(active_hosts), 1))
+        actual_workers = min(self._global_search_workers, max(len(app_tasks), 1))
         logger.info(f"[ConfigClient] 开始全局搜索: keyword='{kw}', field={search_field}, env={env}, "
-                    f"hosts={len(active_hosts)}, workers={actual_workers}, budget={budget_sec}s")
+                    f"hosts={len(active_hosts)}, apps={len(app_tasks)}, workers={actual_workers}, budget={budget_sec}s")
 
         pool = ThreadPoolExecutor(max_workers=actual_workers)
-        futures = {pool.submit(_scan_host, h): h for h in active_hosts}
+        futures = {pool.submit(_scan_app, t): t for t in app_tasks}
         pending = set()  # 安全初始化，try 内 wait 失败时也能正常引用
 
         try:
-            # 计算剩余预算（host_list + probe 已花的时间也要算）
+            # 计算剩余预算（host_list + probe + 应用列表已花的时间也要算）
             total_elapsed = time.time() - start
             remaining = max(budget_sec - total_elapsed, 1)  # 至少 1s 避免立即 timeout
             # wait 返回已完成的 futures；超时则返回 (已完成, 未完成)
             done, pending = wait(futures, timeout=remaining)
 
             for fut in done:
+                task = futures[fut]
+                hid = task[0].get('id')
                 try:
-                    m, uf, sc = fut.result(timeout=5)
+                    m, uf, sc, ns_err, err_sample = fut.result(timeout=5)
                     matches.extend(m)
                     unfinished_apps.extend(uf)
                     scanned_count += sc
+                    st = host_stats.get(hid)
+                    if st is not None:
+                        st['scannedNamespaces'] += sc
+                        st['nsErrors'] += ns_err
+                        if ns_err and st['errorSample'] is None and err_sample:
+                            st['errorSample'] = str(err_sample)[:200]
                 except Exception as e:
-                    logger.debug(f"[ConfigClient] 全局搜索 host 扫描异常: {e}")
+                    logger.debug(f"[ConfigClient] 全局搜索 app 扫描异常: {e}")
 
-            # 未完成的 host 直接标记为 unfinished（不等待它们完成）
+            # 未完成的 app 直接标记为 unfinished（不等待它们完成）
             for fut in pending:
-                h = futures[fut]
-                unfinished_apps.append(f"timeout/{h.get('id')}/{h.get('name', '')}")
+                h, app = futures[fut]
+                app_id = app.get('appId') or app.get('appid', '') or 'unknown'
+                unfinished_apps.append(f"timeout/{h.get('id')}/{app_id}")
         finally:
             # wait=False + cancel_futures=True: 不等待运行中的线程完成，直接关闭
             # cancel_futures=True 只取消排队中的（尚未开始）futures，运行中的不受影响
@@ -986,6 +1173,29 @@ class ConfigClient:
 
         elapsed_ms = round((time.time() - start) * 1000)
         partial = len(pending) > 0 or len(unfinished_apps) > 0 or (time.time() - start) > budget_sec
+
+        # 汇总每套诊断信息（hostsDetail），并按套对 namespace 拉取失败给出 WARNING（便于线上定位）
+        total_ns_errors = 0
+        hosts_detail: List[dict] = []
+        for h in active_hosts:
+            hid = h.get('id')
+            st = host_stats[hid]
+            if st['nsErrors']:
+                total_ns_errors += st['nsErrors']
+                logger.warning(f"[ConfigClient] 全局搜索套 {hid}({st['hostName']}) namespace 拉取失败 "
+                               f"{st['nsErrors']} 次（首例: {st['errorSample']}），"
+                               f"若失败数占比较高疑似该套 env/代理接口异常")
+            if st['appListStatus'] != 'ok':
+                st['status'] = st['appListStatus']
+            elif st['tasksSubmitted'] == 0:
+                st['status'] = 'no_apps'
+            elif st['nsErrors'] and st['scannedNamespaces'] == 0:
+                st['status'] = 'failed'
+            elif st['nsErrors']:
+                st['status'] = 'partial'
+            else:
+                st['status'] = 'ok'
+            hosts_detail.append(st)
 
         # 应用脱敏（与单配置查询一致，直接调用模块顶层函数）
         masked_count = 0
@@ -1006,23 +1216,44 @@ class ConfigClient:
             unfinished_apps = unfinished_apps[:20]
             unfinished_apps.append(f"... 另有 {len(unfinished_apps) - 20} 项未完成")
 
+        # 状态机：partial（预算内未扫完）→ partial；scannedApps=0 且确有应用 → 显式诊断（不再静默 success）
+        data_status = 'partial' if partial else 'complete'
+        final_message = 'success'
+        if scanned_count == 0 and len(app_id_set) > 0 and not unfinished_apps:
+            if total_ns_errors > 0:
+                sample_h = next((d for d in hosts_detail if d['nsErrors'] and d['errorSample']), None)
+                final_message = (f"已获取 {len(app_id_set)} 个应用，但 namespace 拉取全部失败"
+                                 f"（共 {total_ns_errors} 次，样例: {sample_h['errorSample'] if sample_h else '无'}）。"
+                                 f"疑似 env='{env}' 与目标套不对应或代理接口异常，"
+                                 f"建议先对单个 app 用 apollo_config_query 抽查验证，再决定是否重试")
+                data_status = 'scan_failed'
+            else:
+                final_message = (f"已获取 {len(app_id_set)} 个应用，但所有 namespace 内容为空"
+                                 f"（env='{env}'，namespaces={'、'.join(namespaces) if namespaces else 'application(+扩展)'}），"
+                                 f"疑似 env 与目标套不匹配或配置存放于其它 namespace；"
+                                 f"可传 namespaces 指定范围，或先用 apollo_config_query 抽查单个 app")
+                data_status = 'empty_scan'
+
         logger.info(f"[ConfigClient] 全局搜索完成: keyword='{kw}', matches={len(matches)}, "
-                    f"scanned_apps={scanned_count}, elapsed={elapsed_ms}ms, partial={partial}, "
-                    f"pending_hosts={len(pending)}")
+                    f"scanned_apps={scanned_count}, ns_errors={total_ns_errors}, "
+                    f"elapsed={elapsed_ms}ms, partial={partial}, pending_apps={len(pending)}")
 
         result_data = {
             "keyword": keyword,
             "searchField": search_field,
             "env": env,
             "namespace": namespace_name,
+            "status": data_status,
             "summary": {
                 "hostCount": len(active_hosts),
                 "appCount": len(app_id_set),
                 "scannedApps": scanned_count,
+                "nsErrorCount": total_ns_errors,
                 "matchedCount": len(matches),
                 "maskedCount": masked_count,
                 "elapsedMs": elapsed_ms,
             },
+            "hostsDetail": hosts_detail,
             "matches": matches,
             "partial": partial,
             "truncated": truncated,
@@ -1030,7 +1261,7 @@ class ConfigClient:
         if unfinished_apps:
             result_data["unfinishedApps"] = unfinished_apps
 
-        return {"code": 200, "message": "success", "data": result_data}
+        return {"code": 200, "message": final_message, "data": result_data}
 
     def _load_local_template(self) -> dict:
         """加载本地模板 api_endpoints.json（作为组装远程配置的基底）"""
@@ -1422,10 +1653,13 @@ class ApolloAPIClient:
 
     def query_global_search(self, keyword: str, search_field: str = "both",
                             env: str = "PRO", max_results: int = 100,
-                            namespace_name: str = "application") -> dict:
+                            namespace_name: str = "application",
+                            apollo_host_ids: Optional[List[int]] = None,
+                            scan_budget: Optional[int] = None,
+                            namespaces: Optional[List[str]] = None) -> dict:
         """全局配置搜索（解决"哪些应用的配置用到了某个地址/关键词"的高频排障需求）。
 
-        自动并发遍历所有可用 Apollo 套的所有应用（线程池并行），按 keyword 匹配 key 或 value。
+        自动并发遍历所有可用 Apollo 套的所有应用（应用级线程池并行），按 keyword 匹配 key 或 value。
         单次调用返回结果——无需 agent 逐个应用调 apollo_config_query（700+ 应用原来小时级，现在 30-60 秒）。
 
         参数:
@@ -1434,10 +1668,20 @@ class ApolloAPIClient:
             env: 环境，默认 PRO
             max_results: 最多返回多少条匹配（默认 100）
             namespace_name: 搜索哪个 namespace 的配置（默认 application；值为 application 时自动扩展扫常见 namespace）
+            apollo_host_ids: 可选，只扫描指定的 Apollo 套 ID 列表（如 [3, 14] 只扫天翼云眼两套），
+                             不传则扫描所有可用套。缩小范围可大幅减少扫描量、更快返回完整结果
+            scan_budget: 可选，本次扫描预算（秒），默认 60s。传小值（如 10-20s）做快速摸底：
+                         预算到点即返回 partial + unfinishedApps，用于"先摸底→再精查"的分步流程
+            namespaces: 可选，只扫描指定 namespace 列表（如 ["application"]），收窄链路减少请求量；
+                        不传则扫 namespace_name（application 自动扩展常见 ns）
 
         返回结构：
             code=200，data.matches 每条含 host_id/host_name/app_id/app_name/namespace/key/value，
             summary 有扫描统计，partial=true 表示超预算提前终止（结果可能不全）。
+            data.status 取值：complete / partial / scan_failed / empty_scan——
+            scan_failed（应用已获取但 namespace 全部拉取失败）/ empty_scan（全部内容为空）用于
+            让 agent 在"扫出 0 条"时能区分是异常还是确无匹配，并给出可重试/抽查的诊断方向。
+            data.hostsDetail 为每套统计（appListStatus/tasksSubmitted/nsErrors/errorSample 等）。
         """
         if USE_MOCK:
             # Mock 模式：在已有的 mock app 里模拟搜索匹配
@@ -1454,6 +1698,9 @@ class ApolloAPIClient:
                 env=env,
                 max_results=max_results,
                 namespace_name=namespace_name,
+                apollo_host_ids=apollo_host_ids,
+                scan_budget=scan_budget,
+                namespaces=namespaces,
             )
             self._success_count += 1
             duration = round((time.time() - start) * 1000)
@@ -1584,7 +1831,7 @@ MCP_TOOLS = [
     },
     {
         "name": "apollo_config_global_search",
-        "description": "【全局配置搜索】并发遍历所有可用 Apollo 套的所有应用，按关键词匹配配置的 Key 或 Value。解决日常排障高频需求：'哪些应用的配置用到了某个地址/关键词'、'比对所有应用是否都有某个配置项'。输入 keyword（必填），自动扫描所有 host × 所有 app × 配置，单次调用返回结果（预计 30-60 秒，比逐个应用调 apollo_config_query 快几十倍）。结果每条标注 host_id/app_id/namespace/key/value，超时返回部分结果+未完成标记。敏感字段已脱敏。",
+        "description": "【全局配置搜索】并发遍历可用 Apollo 套的所有应用，按关键词匹配配置的 Key 或 Value。解决日常排障高频需求：'哪些应用的配置用到了某个地址/关键词'、'比对所有应用是否都有某个配置项'。输入 keyword（必填），自动扫描 host × app × 配置（单次调用返回结果，比逐个应用调 apollo_config_query 快几十倍）。可通过 apolloHostIds 指定只扫某几套 Apollo（如天翼云眼 ID=3、14）；可传 scanBudget（秒）限定本次扫描预算做'快速摸底'（到点返回 partial+unfinishedApps，配合分步搜索）；可传 namespaces 只扫指定 ns 收窄链路。结果每条标注 host_id/app_id/namespace/key/value；data.status=complete/partial/scan_failed/empty_scan，data.hostsDetail 给出每套应用列表/扫描数/失败数诊断，超时返回部分结果+未完成标记。敏感字段已脱敏。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1592,7 +1839,10 @@ MCP_TOOLS = [
                 "searchField": {"type": "string", "description": "匹配字段：'key' 只匹配配置项 Key，'value' 只匹配值，'both' 都匹配。默认 'both'"},
                 "env": {"type": "string", "description": "环境，默认 'PRO'。如需搜索开发环境配置传 'DEV'"},
                 "maxResults": {"type": "integer", "description": "最多返回多少条匹配结果（默认 100，避免结果过多）"},
-                "namespaceName": {"type": "string", "description": "搜索哪个 namespace 的配置（默认 'application'；设为 'application' 时自动扩展扫描 datasource/redis/common/logging 等常见 namespace）"}
+                "namespaceName": {"type": "string", "description": "搜索哪个 namespace 的配置（默认 'application'；设为 'application' 时自动扩展扫描 datasource/redis/common/logging 等常见 namespace）"},
+                "apolloHostIds": {"type": "array", "items": {"type": "integer"}, "description": "只扫描指定的 Apollo 套 ID 列表（来自 apollo_host_list 的 apolloHostId，如 [3, 14] 只扫天翼云眼两套）；不传则扫描所有可用套"},
+                "scanBudget": {"type": "integer", "description": "本次扫描预算（秒），默认服务端 60s。传小值（如 10-20s）做快速摸底/分批扫：预算到点即返回 partial+unfinishedApps，再结合 apolloHostIds/namespaceName 分步得到最终答案，避免每次都跑满 60s"},
+                "namespaces": {"type": "array", "items": {"type": "string"}, "description": "（可选）只扫描指定的 namespace 列表，如 [\"application\"] 或 [\"application\",\"redis\"]，用于收窄链路、减少请求量。不传时默认扫 namespaceName（为 application 时自动扩展 datasource/redis/common/logging）"}
             },
             "required": ["keyword"]
         }
@@ -1650,12 +1900,47 @@ class MCPProtocolHandler:
             keyword = arguments.get("keyword")
             if not keyword:
                 raise ValueError("keyword 是必填参数，请指定搜索关键词")
+            # apolloHostIds: 支持 [3, 14] / ["3", "14"] / "3,14" 三种形式，统一转 int 列表
+            apollo_host_ids = None
+            host_ids_arg = arguments.get("apolloHostIds")
+            if host_ids_arg is not None:
+                raw_items = host_ids_arg if isinstance(host_ids_arg, (list, tuple)) else str(host_ids_arg).split(',')
+                apollo_host_ids = [i for i in (_to_int(x) for x in raw_items) if i is not None]
+                if not apollo_host_ids:
+                    raise ValueError("apolloHostIds 需为 Apollo 套 ID 列表（来自 apollo_host_list 的 apolloHostId），如 [3, 14]")
+            # scanBudget: 本次扫描预算（秒，如 15），<=0 视为未传（用服务端默认 60s）
+            scan_budget = None
+            budget_raw = arguments.get("scanBudget")
+            if budget_raw is not None:
+                try:
+                    scan_budget = int(budget_raw)
+                except (TypeError, ValueError):
+                    raise ValueError("scanBudget 需为整数秒数（如 10、15、20）")
+                if scan_budget <= 0:
+                    scan_budget = None
+            # namespaces: 只扫描指定 namespace 列表（如 ["application"] / "application,redis"），收窄链路
+            namespaces = None
+            ns_arg = arguments.get("namespaces")
+            if ns_arg is not None:
+                raw_ns = ns_arg if isinstance(ns_arg, (list, tuple)) else str(ns_arg).split(',')
+                namespaces = []
+                for x in raw_ns:
+                    s = str(x).strip()
+                    if s and s not in namespaces:
+                        namespaces.append(s)
+                if not namespaces:
+                    raise ValueError("namespaces 需为 namespace 名称列表，如 [\"application\"] 或 [\"application\",\"redis\"]")
+                if len(namespaces) > 5:
+                    raise ValueError("namespaces 最多 5 个，如 [\"application\",\"datasource\",\"redis\"]")
             return client.query_global_search(
                 keyword=keyword,
                 search_field=arguments.get("searchField", "both"),
                 env=arguments.get("env", "PRO"),
                 max_results=int(arguments.get("maxResults", 100)),
                 namespace_name=arguments.get("namespaceName", "application"),
+                apollo_host_ids=apollo_host_ids,
+                scan_budget=scan_budget,
+                namespaces=namespaces,
             )
         else:
             raise ValueError(f"Unknown tool: {tool_name}")
@@ -1683,7 +1968,7 @@ class MCPProtocolHandler:
                     },
                     "serverInfo": {
                         "name": "apollo-config-query-mcp",
-                        "version": "3.2.0"
+                        "version": "3.2.1"
                     }
                 })
                 return response, False
@@ -1762,7 +2047,7 @@ if HAS_FASTAPI:
     def root():
         return {
             "service": "apollo-config-query-mcp",
-            "version": "3.2.0",
+            "version": "3.2.1",
             "description": "Apollo 配置查询 MCP 服务",
             "mcp_protocol": "standard",
             "capabilities": ["tools/list", "tools/call"],
@@ -1775,7 +2060,7 @@ if HAS_FASTAPI:
         return {
             "status": "healthy",
             "service": "apollo-config-query-mcp",
-            "version": "3.2.0",
+            "version": "3.2.1",
             "environment": client.config.current_env,
             "mock_enabled": USE_MOCK,
             "log_enabled": _LOG_ENABLED,

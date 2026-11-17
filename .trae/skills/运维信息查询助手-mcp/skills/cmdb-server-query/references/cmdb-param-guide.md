@@ -2,6 +2,26 @@
 
 **⚠️ 本文件是 CMDB 服务器查询参数转换规则的唯一权威来源！**
 
+> **✅ MCP 版适用性说明（必读）**
+>
+> 本文档源自 **技能直连 CMDB 业务 API** 的版本，记录了接口层的完整查询字段。
+> 当前通过 MCP 工具 `cmdb_server_query` 取数，**MCP schema 已暴露除 `nodeIpStr` 之外的查询字段**，映射如下：
+>
+> | 分类 | MCP schema 已暴露 | schema 未暴露（不可作为入参） |
+> |------|------------------|------------------------------|
+> | 固定映射 | node、state、osType、type、belong、isFromOutside、isReplaceForChinaProduction | - |
+> | 模糊匹配 | ip、hostName、assetNo、serial | - |
+> | 文档可选值 | productId（产品，传ID单选）、productIdList（产品ID数组，MCP 内部拆单后按服务器ID去重合并）、projectIdList（项目，传ID数组多选）、rack（机架）、operABList / operAList / operBList（负责人A或B / 仅A / 仅B）、contractType（合同类型） | - |
+> | 分页 | currentPage、pageSize | - |
+> | 其它 | - | nodeIpStr |
+>
+> **使用规则**：
+> 1. **产品/项目维度筛选用 `productId`/`productIdList`/`projectIdList`**：先到 5.x 节对应参考文档（product-options.md 等）把用户产品/项目名**匹配成 ID**，再作为 MCP 入参传给工具（**传 ID，不传名称**）
+> 2. productId 为**单选**：用户提到多个产品时改用 `productIdList`；用户要"平台/含子孙/整树"统计时产品ID覆盖不全，**改用 belong 域(belong=1/2)全量 + productProjectList 归属分组**（见子 SKILL.md「产品/平台维度统计执行模式 → 模式B」）
+> 3. **负责人筛选用 `operABList`（优先）/ `operAList` / `operBList`**：用户说"XX负责的服务器"、不区分主备时用 `operABList: ["XX"]`；三者一般**三选一，勿叠加**。姓名数组直接传用户输入值即可（后端按姓名匹配）
+> 4. **rack / contractType**：机架直接传机架名称；合同类型需传ID，但当前技能未内置 contract-options 文档，无法确定ID时**不要传该参数**
+> 5. 匹配失败**不得静默跳过**退回全量——显式告知用户"未在产品表匹配到该产品"
+
 本文档定义了从用户自然语言查询到 CMDB API 参数的完整转换规则。
 
 ---
@@ -165,6 +185,10 @@ CMDB API 共支持 **20个查询字段**，按处理方式分为 5 类：
 | operBList | 负责人B | person-options.md | 传名称数组 | 多选 | 用户输入负责人姓名 → 匹配到operB即加入数组 |
 | contractType | 合同类型 | contract-options.md | 传id | 单选 | 用户输入合同类型名称 → 文档匹配 → 取对应id |
 
+> **说明**：上表引用的 `rack-options.md`、`person-options.md`（负责人）、`contract-options.md` 当前**未内置**。
+> - `rack` 与负责人（`operABList`/`operAList`/`operBList`）可直接传名称/姓名，后端按名称匹配；
+> - `contractType` 需传ID，在无 contract-options 文档时**不要传该参数**（无法确定ID）。
+
 ### 5.3 文档格式建议
 
 每份参考文档使用统一的 Markdown 表格格式，便于技能读取和匹配：
@@ -304,7 +328,7 @@ CMDB API 共支持 **20个查询字段**，按处理方式分为 5 类：
 }
 ```
 
-> **说明**：输出参数中仅包含用户查询中提取到的字段，未提到的字段不会出现在输出中。
+> **说明**：输出参数中仅包含用户查询中提取到的字段，未提到的字段不会出现在输出中；上例为"全字段结构演示"，实际调用时 `operABList` / `operAList` / `operBList` **三选一**，不会同时传。
 
 ---
 

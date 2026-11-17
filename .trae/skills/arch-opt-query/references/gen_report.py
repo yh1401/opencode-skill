@@ -1,0 +1,226 @@
+# -*- coding: utf-8 -*-
+"""生成 云公司->广州4d 架构风险巡检报告（markdown）"""
+import io, os, json, collections
+
+base = os.path.dirname(os.path.abspath(__file__))
+
+def load(name):
+    return json.load(io.open(os.path.join(base, name), encoding="utf-8"))
+
+ff = load("full_findings.json")
+lk = load("link_summary.json")
+imb = load("imbalance_recheck.json")
+
+summary = ff["summary"]
+rules = ff["rules"]
+nsMap = ff["nsMap"]
+
+L = []
+A = L.append
+
+A("# 云公司->广州4d 节点架构风险巡检报告")
+A("")
+A("| 项目 | 内容 |")
+A("| --- | --- |")
+A("| 任务标识 | arch-patrol-gz4d-20261105 |")
+A("| 节点 | 云公司->广州4d（中心节点，天翼看家） |")
+A("| 部署集群 | 广州4d生产（guangzhou4d-prod）、看家广州4d多az生产（tykj-guangzhou4d-az-prod） |")
+A("| 巡检时间 | 2026-11-05 16:28 ~ 16:55（UTC+8） |")
+A("| 分析窗口 | 持续型规则 15 分钟（15 点 × 60s）；OOM/重启 7 天窗口 |")
+A("| 规则版本 | V2.3（8 条规则，minCoverage 0.8） |")
+A("| 巡检口径 | 生产环境；仅 -dep 业务应用；排除系统/监控/灰度命名空间（工具层 35 项排除清单） |")
+A("")
+A("## 一、分析范围")
+A("")
+A("| 模块 | 应用数（-dep） | 有指标数据 | 风险项 |")
+A("| --- | --- | --- | --- |")
+for m in ff["moduleSummary"]:
+    A(f'| {m["module"]} | {m["appCount"]} | {m.get("appsWithMetricData", 0)} | {m["riskCount"]} |')
+A("| **合计** | **121** | **105（86.8%）** | **230** |")
+A("")
+A("- 排除应用 27 个（lvs 负载均衡 16、kong 网关 4、非 -dep 业务应用 7），均已显式记录，未静默丢弃。")
+A("- `ehome-router-dep-dep` 同时归属「核心业务API」与「设备信令调度」，按双归属保留。")
+A("- **设备云存上传(苏州) 15 个应用无任何指标数据**（疑似部署在苏州集群，未纳入本节点指标采集），本阶段未覆盖，不得据此判定无风险。")
+A("")
+A("## 二、风险汇总（按优先级）")
+A("")
+A("| 优先级 | 风险 | 对象 | 模块 | 类型 | 状态 |")
+A("| --- | --- | --- | --- | --- | --- |")
+A("| P0 | OOM 大面积发生（41 个 Pod OOMKilled，max 重启 2 次） | vcp-tree-service-201722-dep（ns: vcp-tree-service-new） | 云眼核心业务 | 稳定性 | 已发现风险（复核确认） |")
+A("| P0 | 下游依赖扇出 76 个目标，16+ 条省级调用边错误率 3%~12% | access-prod-002254-dep（ns: ehome-access） | 核心业务API | 链路依赖 | 已发现风险 |")
+A("| P0 | 2 个 Pod OOMKilled，且对 access-prod-002254-dep 调用错误率 8.46%（133 慢调用） | dstatus-prod-195938-dep（ns: device-status-service） | 核心业务API | 稳定性+链路 | 已发现风险 |")
+A("| P0 | 内存 96.6%（limit 8Gi，复核 96.7%）+ 10 Pod 重启 + 链路 34 错误/84 慢 | edrive-prod-gb-stream-182446-dep（ns: vcp-edrive-prod-gb-stream） | 云眼核心业务 | 容量+稳定性+链路 | 已发现风险（复核确认） |")
+A("| P1 | 8 个 Pod OOMKilled，重启 4~6 次 | vcp-baseline-dep（ns: vcp-vcp-pro） | 云眼核心业务 | 稳定性 | 已发现风险（复核确认） |")
+A("| P1 | 内存 88.3% + 对 vnet-vpaas-device-control-dep 调用错误率 2.19%（41 错误/19 慢） | ehome-public-fusion-dep-dep（ns: ehome-public） | 核心业务API | 容量+链路 | 已发现风险 |")
+A("| P1 | 内存 85.3%~94.3%（10 个应用） | auth-prod-180510 / edrive-prod-download-122007 / edrive-stream-api-callback / seelink-device-center-application / vcp-edrive-stream-api / sl-center-device-access / sl-center-goods-packages / ehome-public-hf / ehome-order-package / vcp-saas-north-gateway | 云眼核心业务/核心业务API | 容量 | 已发现风险 |")
+A("| P1 | CPU 负载不均衡（同规格 max/avg 2.22~2.49，持续 15 分钟） | ehome-geturls-232049-dep / ehome-public-hf-dep / sl-device-center-event-dep | 核心业务API/云眼核心业务 | 负载 | 已发现风险（同规格复核确认） |")
+A("| P2 | 2 个 Pod OOMKilled | edrive-media-ability-170243-dep（ns: yicun-platform） | 云眼核心业务 | 稳定性 | 已发现风险 |")
+A("| P2 | 期望副本 1（<2） | sl-gateway-dep（ns: **sl-gateway-gray**） | 云眼核心业务 | 可用性 | 过滤边界存疑（疑似灰度环境，未计入生产风险） |")
+A("| P2 | 期望副本 0（已下线/暂停，不计风险） | vcp-saas-cmpt-workflow-dep 等 3 个应用 | 云眼核心业务 | 不适用 | 已下线（offlineCount=3） |")
+A("")
+A("## 三、规则判定结果（8 条规则 · 四态）")
+A("")
+A("| 规则 | 分类 | 状态 | 目标数 | 风险 | 数据不足 | 不适用 | 正常 | 下线 |")
+A("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+for r in ["deployment_replicas", "deployment_available", "cpu_throttle_ratio", "memory_ratio", "hpa_replicas", "pod_cpu_imbalance", "oom_killed", "restart_increase"]:
+    x = rules[r]
+    cat = {"deployment_replicas": "可用性", "deployment_available": "可用性", "cpu_throttle_ratio": "容量",
+           "memory_ratio": "容量", "hpa_replicas": "容量", "pod_cpu_imbalance": "负载",
+           "oom_killed": "稳定性", "restart_increase": "稳定性"}[r]
+    A(f'| {r} | {cat} | {x["status"]} | {x["targetCount"]} | {x["riskCount"]} | {x["insufficientCount"]} | {x["naCount"]} | {x["okCount"]} | {x.get("offlineCount", 0)} |')
+A("")
+A("> 注：`deployment_available` 在 16:37 批量窗口内 106 目标全部「数据不足」（spec 指标瞬时缺口）。已用节点标签口径直接查询复核：20 个首轮疑似应用 **spec == available 全部一致**（其中 3 个完成 65 分钟范围验证），首轮 20 条「副本不可用」为**跨集群聚合假阳性**（详见第五节澄清），不作为风险结论。")
+A("")
+A("## 四、风险明细与证据")
+A("")
+A("### 4.1 稳定性：OOM（oom_killed + restart_increase 组合判定，7 天窗口）")
+A("")
+A("| 应用 | 命名空间 | OOMKilled Pod 数 | 重启情况（复核） | 证据 |")
+A("| --- | --- | --- | --- | --- |")
+A("| vcp-tree-service-201722-dep | vcp-tree-service-new | 41 | top Pod 重启 2/1 次 | last_terminated_reason=OOMKilled 计数 49（含 vcp-baseline 8）；批量 15 点窗口 41 Pod 触发 |")
+A("| vcp-baseline-dep | vcp-vcp-pro | 8 | 8 Pod 重启 6/5/5/5/4/4/4/4 次 | topk 复核；批量 8 Pod 触发 |")
+A("| edrive-media-ability-170243-dep | yicun-platform | 2 | 批量窗口重启增长 | 批量 2 Pod 触发 |")
+A("")
+A("伴随重启增长（restart_increase，163 个 Pod / 24 个应用，Top10）：")
+A("")
+rst = collections.defaultdict(lambda: [0, 0])
+for it in rules["restart_increase"]["items"]:
+    if it["status"] == "RISK":
+        k = (it["deployment"], it["namespace"])
+        rst[k][0] += 1
+        rst[k][1] = max(rst[k][1], int(it["obs"] or 0))
+A("| 应用 | 命名空间 | 重启 Pod 数 | 单 Pod 最大重启 |")
+A("| --- | --- | --- | --- |")
+for (dep, ns), (c, mx) in sorted(rst.items(), key=lambda kv: (-kv[1][0], -kv[1][1]))[:10]:
+    A(f"| {dep} | {ns} | {c} | {mx} |")
+A("")
+A("### 4.2 容量：内存（memory_ratio > 85%，持续 15 分钟）")
+A("")
+A("| 应用 | 命名空间 | 峰值工作集/limit | 模块 |")
+A("| --- | --- | --- | --- |")
+mod_of = {}
+for it in rules["memory_ratio"]["items"]:
+    if it["status"] == "RISK":
+        A(f"| {it['deployment']} | {it['namespace']} | {it['obs']*100:.1f}% | 见 nsMap |")
+A("")
+A("复核：edrive-prod-gb-stream-182446-dep 全部 Pod limit=8Gi（KSM），实测工作集 8.02~8.31GB → 峰值 96.7%，与批量 96.6% 一致。")
+A("")
+A("### 4.3 负载：CPU 不均衡（同规格 max/avg > 2，持续 15 分钟，已同规格复核）")
+A("")
+A("| 应用 | 命名空间 | 规格分组 | Pod 数 | max | avg | 比值 | 结论 |")
+A("| --- | --- | --- | --- | --- | --- | --- | --- |")
+for app, groups in imb.items():
+    for g in groups:
+        if g["spec"] is None:
+            continue
+        A(f"| {app} | {nsMap.get(app)} | {g['spec']:.0f} 核 | {g['pods']} | {g['max']} | {g['avg']} | {g['ratio']} | {g['flag']} |")
+A("")
+A("> ehome-public-hf-dep 有 16 个 Pod 的 CPU limit 未取到（查询截断），按数据不足单列；2 核组 24 Pod 已确认不均衡。")
+A("")
+A("### 4.4 链路依赖（核心业务API 模块 29 应用，15 分钟窗口，236 节点/311 边）")
+A("")
+A("**集中依赖 / 下游依赖过多**：`access-prod-002254-dep` 出度 **76**（全节点最高），入度 18，为设备接入核心枢纽；向全国省级 gb-dispatcher / gb-access-gateway 扇出。")
+A("")
+A("**异常调用边**（错误率 ≥1% 或慢调用 ≥10，节选）：")
+A("")
+A("| 源 | 目标 | 调用量 | 错误率 | 慢调用 |")
+A("| --- | --- | --- | --- | --- |")
+for a in lk["anomalous"][:18]:
+    A(f'| {a["src"]} | {a["dst"]} | {a["total"]} | {a["errRate"]}% | {a["slow"]} |')
+A("")
+A("**跨集群/跨区域调用**（调用量 ≥50，节选）：")
+A("")
+A("| 源 | 目标 | 调用量 | 错误率 | 慢调用 |")
+A("| --- | --- | --- | --- | --- |")
+for a in lk["crossRegion"][:12]:
+    A(f'| {a["src"]} | {a["dst"]} | {a["total"]} | {a["errRate"]}% | {a["slow"]} |')
+A("")
+A("### 4.5 可用性：副本（deployment_replicas / deployment_available）")
+A("")
+A("- 106 个应用（KSM 有数据）中 102 个期望副本 ≥2 且可用 = 期望，未触发。")
+A("- `sl-gateway-dep` 在 **sl-gateway-gray** 命名空间 spec=1：疑似灰度环境，命名空间排除清单未覆盖该命名，**过滤边界存疑**，未计入生产风险，建议业务确认灰度命名规范。")
+A("- `vcp-saas-cmpt-workflow-dep`（vcp-saas）spec=0 持续 65 分钟以上：已下线/暂停，记不适用（offlineCount=3 之一）。")
+A("")
+A("## 五、重要澄清：首轮「副本不可用 20 项」为假阳性")
+A("")
+A("16:30 首轮批量判定 20 个应用「期望 80 / 可用 0~30」，16:37 复跑同规则 106 目标全部数据不足。直接以 `cmdb_node=云公司->广州4d` 标签查询验证：")
+A("")
+A("| 应用 | 首轮「期望」 | 实际 spec（节点口径） | 实际 available | 65 分钟范围验证 |")
+A("| --- | --- | --- | --- | --- |")
+A("| vcp-saas-cmpt-workflow-dep | 80 | **0** | 0 | 全程 0 |")
+A("| ehomeorder-white-list-dep-dep | 80 | **2** | 2 | 全程 2 |")
+A("| vnet-vpaas-message-server-dep | 80 | **10** | 10 | 全程 10 |")
+A("")
+A("其余 17 个应用即时代查 spec==available 一致。根因：**应用名跨集群重复**（同名 -dep 部署同时存在于 云眼-贵州、小A 系列 17+ 节点、国际节点阿曼等，单应用名全集群序列达 192 条），首轮 spec 侧发生了跨集群聚合，available 侧仅本节点，差值失真。")
+A("")
+A("**结论：本节点 20 个应用不存在副本不可用缺口。** 建议工具侧修复：应用名口径查询必须叠加 cmdb_node/cluster + namespace 唯一标识，禁止跨集群聚合。")
+A("")
+A("## 六、数据限制")
+A("")
+for x in ff["dataLimitations"]:
+    A(f"- {x}")
+A("- 设备云存上传(苏州) 15 个应用无指标数据（采集未覆盖），本阶段未检查。")
+A("- 容器级指标（cAdvisor）仅 69/121 应用有数据；CPU 限流/内存/不均衡规则未覆盖其余应用（含部分无 Pod 指标的应用）。")
+A("- `container_memory_limit_bytes` 指标缺失，内存 limit 取 KSM `kube_pod_container_resource_limits` 口径。")
+A("- 链路分析仅覆盖核心业务API 模块 29 应用（全量 121 应用链路工具超时，16:44/16:46 两次 90s 超时）；云眼核心业务等 5 模块链路待补。")
+A("- 16:37 窗口 `kube_deployment_spec_replicas` 出现瞬时缺口（106 目标数据不足），16:43 起恢复。")
+A("- `arch_rule_check_tool` 单应用复核在 16:46~16:50 连续超时（后端负载），已按 SKILL 允许改用经验证 PromQL 同口径复核。")
+A("")
+A("## 七、优化建议")
+A("")
+A("| # | 优先级 | 建议 | 前置条件 / 说明 |")
+A("| --- | --- | --- | --- |")
+A("| 1 | P0 | vcp-tree-service-201722-dep：41 Pod OOM，立即核查堆内存配置与 limit 匹配度，调整 -Xmx / 容器 limit，排查内存泄漏（版本 release 后是否近期变更） | 结合 GC 日志与最近发布记录 |")
+A("| 2 | P0 | access-prod-002254-dep：梳理 76 个下游依赖，对错误率 >5% 的省级边（beibei4 11.8%、wulumuqi 9.1%、etouch 8.0% 等）逐一定位对端网关故障或超时配置；评估省级调用重试/降级策略 | 需省级节点配合；区分对端故障与本端超时 |")
+A("| 3 | P0 | dstatus-prod-195938-dep：2 Pod OOM 与 8.46% 下游错误率联动排查（疑似 OOM 重启导致调用失败），先解决 OOM 再观察错误率是否回落 | 与 #1 同批处理 |")
+A("| 4 | P0 | edrive-prod-gb-stream-182446-dep：内存 96.6% 贴近 limit 且 10 Pod 重启，提高内存 limit 或优化流媒体缓冲，防止 OOM 蔓延 | 复核 limit 8Gi 是否合理 |")
+A("| 5 | P1 | vcp-baseline-dep：8 Pod OOM（max 6 重启），内存配置与代码泄漏排查 | 同 #1 方法 |")
+A("| 6 | P1 | ehome-public-fusion-dep-dep：内存 88.3% + 对 device-control 2.19% 错误率，扩内存并核查调用超时 | 与 #2 联动 |")
+A("| 7 | P1 | 其余 10 个内存 85%~94% 应用：统一提高 limit 或优化，避免逐步逼近 OOM | 按 4.2 清单逐项 |")
+A("| 8 | P1 | 3 个 CPU 不均衡应用：检查 Pod 反亲和/负载分发，ehome-geturls 同时有 15.5 万次/15min Redis 调用，核查热点 Key | 同规格复核已确认 |")
+A("| 9 | P2 | 确认 sl-gateway-gray 灰度命名空间是否纳入排除清单；灰度副本数单列口径 | 业务确认 |")
+A("| 10 | P2 | 接入 HPA 指标（kube-state-metrics）以启用扩容容量规则 | 当前 HPA 规则不适用 |")
+A("| 11 | P2 | 补齐苏州集群（设备云存上传 15 应用）指标采集；补齐容器级指标覆盖（69→121） | 采集链路整改 |")
+A("| 12 | P2 | 修复巡检工具跨集群聚合缺陷（应用名唯一标识 = cmdb_node/cluster + namespace + deployment） | 本次假阳性根因 |")
+A("")
+A("## 八、附录：完整风险清单")
+A("")
+A("### 8.1 内存风险（12 项）")
+A("")
+A("| 应用 | 命名空间 | 峰值比值 |")
+A("| --- | --- | --- |")
+for it in rules["memory_ratio"]["items"]:
+    if it["status"] == "RISK":
+        A(f"| {it['deployment']} | {it['namespace']} | {it['obs']*100:.1f}% |")
+A("")
+A("### 8.2 OOM 风险 Pod（51 项，按应用）")
+A("")
+oom = collections.defaultdict(int)
+for it in rules["oom_killed"]["items"]:
+    if it["status"] == "RISK":
+        oom[(it["deployment"], it["namespace"])] += 1
+A("| 应用 | 命名空间 | OOMKilled Pod 数 |")
+A("| --- | --- | --- |")
+for (dep, ns), c in sorted(oom.items(), key=lambda kv: -kv[1]):
+    A(f"| {dep} | {ns} | {c} |")
+A("")
+A("### 8.3 重启增长 Pod（163 项，按应用）")
+A("")
+A("| 应用 | 命名空间 | 重启 Pod 数 | 单 Pod 最大重启 |")
+A("| --- | --- | --- | --- |")
+for (dep, ns), (c, mx) in sorted(rst.items(), key=lambda kv: (-kv[1][0], -kv[1][1])):
+    A(f"| {dep} | {ns} | {c} | {mx} |")
+A("")
+A("### 8.4 链路异常边全量（错误率≥1% 或 慢调用≥10）")
+A("")
+A("| 源 | 目标 | 调用量 | 错误率 | 慢调用 |")
+A("| --- | --- | --- | --- | --- |")
+for a in lk["anomalous"]:
+    A(f'| {a["src"]} | {a["dst"]} | {a["total"]} | {a["errRate"]}% | {a["slow"]} |')
+A("")
+A("---")
+A("*报告生成：架构优化助手（AI1470）· 规则版本 V2.3 · 任务 arch-patrol-gz4d-20261105 · 2026-11-05 16:55*")
+
+out = os.path.join(base, "广州4d架构风险巡检报告_20261105.md")
+io.open(out, "w", encoding="utf-8").write("\n".join(L))
+print("saved:", out, len("\n".join(L)), "chars,", len(L), "lines")

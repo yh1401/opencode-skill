@@ -117,7 +117,7 @@ author: Skill Agent Team
 ```json
 {
   "name": "apollo_config_global_search",
-  "description": "【全局配置搜索】并发遍历所有可用 Apollo 套的所有应用配置，按关键词匹配 Key 或 Value。解决高频排障需求：'哪些应用的配置用到了某个地址/关键词'、'比对所有应用是否都有某个配置项'。keyword 必填；自动扫描所有 host × 所有 app × 配置，结果每条标注 host_id/app_id/namespace/key/value；超时返回部分结果+未完成标记。敏感字段已脱敏。预计耗时 30-60 秒。",
+  "description": "【全局配置搜索】并发遍历可用 Apollo 套的所有应用配置，按关键词匹配 Key 或 Value。解决高频排障需求：'哪些应用的配置用到了某个地址/关键词'、'比对所有应用是否都有某个配置项'。keyword 必填；自动扫描 host × app × 配置，结果每条标注 host_id/app_id/namespace/key/value；超时返回部分结果+未完成标记。可通过 apolloHostIds 限定只扫某几套、scanBudget 限定本次扫描秒数做快速摸底（见下方分阶段策略）。敏感字段已脱敏。全量档预计 30-60 秒，摸底档 10-20 秒。",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -125,7 +125,9 @@ author: Skill Agent Team
       "searchField": {"type": "string", "description": "'key' 只匹配配置项 Key（配置名），'value' 只匹配值（如数据库地址），'both' 都匹配。默认 'both'"},
       "env": {"type": "string", "description": "环境，默认 'PRO'。如需搜索开发/预发环境配置传 'DEV'/'UAT'"},
       "maxResults": {"type": "integer", "description": "最多返回多少条匹配结果（默认 100），避免结果过多超出界面限制"},
-      "namespaceName": {"type": "string", "description": "搜索哪个 namespace 的配置。默认 'application'（设为 application 时自动扩展扫描 datasource/redis/common/logging 等常见 namespace）"}
+      "namespaceName": {"type": "string", "description": "搜索哪个 namespace 的配置。默认 'application'（设为 application 时自动扩展扫描 datasource/redis/common/logging 等常见 namespace）"},
+      "apolloHostIds": {"type": "array", "items": {"type": "integer"}, "description": "只扫描指定的 Apollo 套 ID 列表（如 [3, 14] 只扫天翼云眼两套），不传则扫描所有可用套"},
+      "scanBudget": {"type": "integer", "description": "本次扫描预算（秒），默认服务端 60s。传小值（如 10-20s）做快速摸底/分片扫：预算到点即返回 partial + unfinishedApps，配合 apolloHostIds 分步收敛，避免每次都干等 60s"}
     },
     "required": ["keyword"]
   }
@@ -138,7 +140,26 @@ author: Skill Agent Team
 - `data.partial=true`：超预算提前终止，结果可能不全，附 `unfinishedApps` 列未完成应用
 - `data.truncated=true`：结果超过 maxResults 被截断
 
-**交互前提示**：全局搜索耗时较长（30-60 秒），回复前先告知用户"正在全局搜索所有应用配置，可能需要几十秒..."
+**交互前提示**：先按下方策略判断用"摸底档"还是"全量档"，回复前告知用户预计时长（摸底 10-20 秒 / 全量 30-60 秒+）。
+
+### 全局搜索分阶段执行策略（数据量大时按此分步，避免干等/超时）
+
+全局搜索耗时本质 = **套数 × 应用数 × namespace数** 次代理请求，与关键词命中多少无关（每个 app 都得拉全量配置才能比对 value）。范围越大越可能 partial/超时。**不要一上来就全量跑满 60s**，按两步/三步走，每步都先给用户结果：
+
+**第 1 步 · 摸底（快，10-20s）**：先跑一版拿到命中样本与规模——
+- 带上 `apolloHostIds`（用户已明确目标套，如天翼云眼 [3, 14]；未明确则先调 apollo_host_list 让用户选，不要全量扫所有套）
+- `scanBudget` 传 10-20（到点强制返回，不等满 60s）
+- `maxResults` 传小值（如 200）
+→ 即使 `partial=true`：**matches 里的命中已经是有效结果**，先展示给用户；summary 里的 hostCount/appCount 帮助判断规模，unfinishedApps 提示还有哪些没扫到。
+
+**第 2 步 · 精查候选（秒级）**：对摸底到的候选 appId，用 `apollo_config_query` 逐个补查其余 namespace（datasource/redis/common/logging）确认命中项与精确值（应用/配置结果有 5 分钟缓存，连续查很快）。
+
+**第 3 步 · 覆盖收尾（需要"没有遗漏"时）**：对第 1 步未覆盖的部分继续分片——
+- 用更大 `scanBudget`（30-60）或对 unfinishedApps 中未完成的套缩小 `apolloHostIds` 再扫，每片 10-30s 各返回一批结果，最后汇总；
+- 全部 namespace 都要覆盖时再保留默认 namespaceName='application'（自动扩扫 5 个 ns）跑收尾全量档。
+
+> 典型节奏：mysql/redis 高频词 → 摸底 15s 得命中样本 → 精查确认 → 有遗漏再收尾。用户每步等待 <20s 且有结果可看，而不是干等 60s+ 后还可能整体超时。
+
 
 ## 交互引导
 
@@ -445,10 +466,10 @@ author: Skill Agent Team
 
 **先回复用户**：
 ```
-正在全局搜索所有 Apollo 套和应用的配置，可能需要 30-60 秒，请稍候...
+该搜索范围很大（全部套 × 全部应用 × 多个 namespace），先做约 15 秒快速摸底拿命中样本，结果会分批返回；需要完整覆盖时再继续收尾（约 30-60 秒），请稍候...
 ```
 
-**工具调用**（搜 VALUE 匹配 + 限制 50 条）：
+**第 1 步 · 摸底调用**（短预算快速拿命中样本；用户已明确目标套时务必带 apolloHostIds，未明确时可先调 apollo_host_list 让用户选，再决定要不要全量摸底）：
 ```json
 {
   "tool_name": "apollo_config_global_search",
@@ -456,7 +477,21 @@ author: Skill Agent Team
     "keyword": "vcpinner.cn:13302",
     "searchField": "value",
     "env": "PRO",
-    "maxResults": 50
+    "maxResults": 200,
+    "scanBudget": 15
+  }
+}
+```
+
+**第 3 步 · 完整覆盖（需要"没有遗漏"时）再调用收尾档**（去掉 scanBudget 走默认 60s；或带上 apolloHostIds=[3,14] 只收尾某几套；namespaceName 不传则默认扩扫 5 个常见 namespace）：
+```json
+{
+  "tool_name": "apollo_config_global_search",
+  "parameters": {
+    "keyword": "vcpinner.cn:13302",
+    "searchField": "value",
+    "env": "PRO",
+    "maxResults": 200
   }
 }
 ```
@@ -506,7 +541,7 @@ author: Skill Agent Team
 }
 ```
 
-**进度提示**：调 `apollo_config_global_search` 前**必须先回复用户**"正在全局搜索，预计 30-60 秒..."。调其他工具（config_query/app_list）通常秒级返回，无需进度提示。
+**进度提示**：调 `apollo_config_global_search` 前**必须先回复用户**预计时长：摸底档（scanBudget=10-20）说"约 10-20 秒"，全量档说"约 30-60 秒+，可能返回部分结果"。调其他工具（config_query/app_list）通常秒级返回，无需进度提示。
 
 ### 无查询结果
 

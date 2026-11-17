@@ -1,0 +1,67 @@
+{
+  "status": "success",
+  "data": {
+    "alerts": [
+      {
+        "labels": {
+          "alertname": "HighErrorRate",
+          "appId": "apollo-ehome-pro",
+          "application": "ehome-pro-server",
+          "severity": "critical"
+        },
+        "annotations": {
+          "summary": "应用错误率过高",
+          "description": "5 分钟错误率 8.2%，超过阈值 1%；tp99 1.7s"
+        },
+        "state": "firing",
+        "activeAt": "2026-11-17T10:32:25+08:00",
+        "value": "8.2"
+      },
+      {
+        "labels": {
+          "alertname": "MySQLReplicationDelay",
+          "instance": "ehome.mysql.ehomeinner.cn:3306",
+          "type": "mysql",
+          "severity": "warning"
+        },
+        "annotations": {
+          "summary": "MySQL 主从延迟",
+          "description": "主从延迟 38s，超过阈值 30s"
+        },
+        "state": "firing",
+        "activeAt": "2026-11-17T10:29:25+08:00",
+        "value": "38"
+      },
+      {
+        "labels": {
+          "alertname": "TargetDown",
+          "instance": "sdk3a4-detectmessage1.rocketmq.ehome.dlifeinner.cn:9100",
+          "job": "node_exporter",
+          "severity": "critical"
+        },
+        "annotations": {
+          "summary": "主机失联",
+          "description": "目标已超过 5 分钟未上报指标"
+        },
+        "state": "firing",
+        "activeAt": "2026-11-17T10:26:25+08:00",
+        "value": "0"
+      },
+      {
+        "labels": {
+          "alertname": "HostHighCPU",
+          "instance": "public-push3.rocketmq.ehome.dlifeinner.cn:9100",
+          "job": "node_exporter",
+          "severity": "warning"
+        },
+        "annotations": {
+          "summary": "主机 CPU 过高",
+          "description": "CPU 使用率 15 分钟均值 91.2%"
+        },
+        "state": "firing",
+        "activeAt": "2026-11-17T10:23:25+08:00",
+        "value": "91.2"
+      }
+    ]
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "kube_deployment_spec_replicas": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {"metric": {"cmdb_node": "云公司->贵州", "deployment": "ehome-order-prod-022629-dep", "endpoint": "https-main", "env": "生产"}, "value": [1700000000, "3"]},
+        {"metric": {"cmdb_node": "云公司->贵州", "deployment": "ehome-public-dep", "endpoint": "https-main", "env": "生产"}, "value": [1700000000, "2"]},
+        {"metric": {"cmdb_node": "云公司->贵州", "deployment": "auth-prod-093803-dep", "endpoint": "https-main", "env": "生产"}, "value": [1700000000, "1"]}
+      ]
+    }
+  },
+  "kube_deployment_status_replicas_available": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {"metric": {"cmdb_node": "云公司->贵州", "deployment": "ehome-order-prod-022629-dep", "endpoint": "https-main", "env": "生产"}, "value": [1700000000, "3"]},
+        {"metric": {"cmdb_node": "云公司->贵州", "deployment": "ehome-public-dep", "endpoint": "https-main", "env": "生产"}, "value": [1700000000, "1"]},
+        {"metric": {"cmdb_node": "云公司->贵州", "deployment": "auth-prod-093803-dep", "endpoint": "https-main", "env": "生产"}, "value": [1700000000, "1"]}
+      ]
+    }
+  },
+  "container_cpu_throttle_ratio": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {"metric": {"pod": "ehome-order-prod-022629-dep-abc1", "deployment": "ehome-order-prod-022629-dep"}, "value": [1700000000, "0.31"]},
+        {"metric": {"pod": "ehome-public-dep-xyz1", "deployment": "ehome-public-dep"}, "value": [1700000000, "0.12"]}
+      ]
+    }
+  },
+  "container_memory_usage_ratio": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {"metric": {"pod": "ehome-order-prod-022629-dep-abc1", "deployment": "ehome-order-prod-022629-dep"}, "value": [1700000000, "0.91"]},
+        {"metric": {"pod": "auth-prod-093803-dep-zzz1", "deployment": "auth-prod-093803-dep"}, "value": [1700000000, "0.60"]}
+      ]
+    }
+  },
+  "hpa_max_reached": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": []
+    }
+  },
+  "pod_load_balance_ratio": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {"metric": {"deployment": "ehome-public-dep"}, "value": [1700000000, "2.4"]}
+      ]
+    }
+  }
+}

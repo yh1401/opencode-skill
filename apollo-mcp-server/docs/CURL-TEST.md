@@ -190,7 +190,7 @@ curl -sS -m 15 -X POST http://localhost:8062/tools/call \
 ```bash
 curl -sS -m 15 -X POST http://localhost:8062/api/config \
   -H "Content-Type: application/json" \
-  -d '{"appId": "user-service", "env": "PRO", "namespaceName": "application", "key": "timeout"}' | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin), ensure_ascii=False, indent=2))"
+  -d '{"appId": "user-service", "env": "PRO", "namespaceName": "application" | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin), ensure_ascii=False, indent=2))"
 ```
 
 ### 5.2 应用列表 GET /api/apps
@@ -269,7 +269,7 @@ done
 
 curl -G \
   -H "Cookie: sessionId=e5e27a7d1805758400287ae86741f889" \
-  --data-urlencode "apolloHostId=1" \
+  --data-urlencode "apolloHostId=2" \
   "https://easyops.tech.ctseelink.cn/thirdApi/apollo/apps" \
     | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin), ensure_ascii=False, indent=2))"
 

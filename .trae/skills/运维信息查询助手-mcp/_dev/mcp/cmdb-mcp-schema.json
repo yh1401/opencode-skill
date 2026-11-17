@@ -5,6 +5,7 @@
     "type": "object",
     "properties": {
       "node": {"type": "string", "description": "机房位置，如'云公司->贵州'"},
+      "nodeIpStr": {"type": "string", "description": "复合查询：机房+IP 精确组合，格式为『机房名称 IP地址』（空格分隔），多个组合用换行分隔，如 '云公司-广州 192.168.1.1'。仅当用户同时给出机房和 IP 的组合条件时使用；单独按 IP 或机房查询请分别用 ip / node"},
       "state": {"type": "string", "description": "服务器状态，0=在线, 1=库存, 2=计划上线, 3=维修中, 4=已报废, 5=待分配, 6=待清退", "enum": ["0", "1", "2", "3", "4", "5", "6"]},
       "osType": {"type": "string", "description": "操作系统", "enum": ["linux", "windows"]},
       "type": {"type": "string", "description": "服务器类型，0=物理机, 1=自有虚拟机, 2=第三方云机", "enum": ["0", "1", "2"]},
@@ -15,6 +16,15 @@
       "belong": {"type": "integer", "description": "归属类型，1=云网, 2=视联"},
       "isFromOutside": {"type": "string", "description": "信创标识，0=非信创, 1=信创", "enum": ["0", "1"]},
       "isReplaceForChinaProduction": {"type": "string", "description": "国产化替换状态，0=未替换, 1=已替换", "enum": ["0", "1"]},
+      "productId": {"type": "string", "description": "产品ID（需先将产品名称在 product-options 文档中匹配为ID后传入，单选）。注意：不要传产品名称，传ID才生效。若不确定ID，先查 skill 的 product-options.md"},
+      "productIdList": {"type": "array", "items": {"type": "string"}, "description": "⚠️【产品层】产品ID数组（天翼看家/云眼等产品树节点，与 productId 二选一勿同时传）。注意别与 projectIdList 混淆（那是最细的【项目层】）。后端只支持产品单选，MCP 内部会按每个产品ID分别查询后按服务器id去重合并，total=并集台数；支持分页与 fields 裁剪。示例: [\"产品A的ID\",\"产品B的ID\"]"},
+      "projectIdList": {"type": "array", "items": {"type": "string"}, "description": "⚠️【项目层】项目ID数组（CMDB 最细层：产品>工程>项目，如某个具体项目名匹配到的ID，多选，后端原生支持）。【勿填产品ID】——产品查询请用 productId / productIdList（两参数仅差一字母，填错会返回 total=0）"},
+      "rack": {"type": "string", "description": "机架位置（单选），直接传机架名称，如'龙晖九楼B01机架'"},
+      "operABList": {"type": "array", "items": {"type": "string"}, "description": "【负责人A或B】负责人姓名数组（多选，数组内为或），直接传用户提到的姓名，后端按姓名命中 operA 或 operB 任一即返回。用户只说\"XX负责的服务器\"、不区分主备时优先用这个。与 operAList/operBList 一般三选一，勿重复叠加"},
+      "operAList": {"type": "array", "items": {"type": "string"}, "description": "【负责人A】主负责人姓名数组（多选，数组内为或），仅匹配 operA 字段。仅当用户明确要\"主负责人\"时使用，与 operABList/operBList 一般三选一"},
+      "operBList": {"type": "array", "items": {"type": "string"}, "description": "【负责人B】备/协同负责人姓名数组（多选，数组内为或），仅匹配 operB 字段。仅当用户明确要\"B角负责人\"时使用，与 operABList/operAList 一般三选一"},
+      "contractType": {"type": "integer", "description": "合同类型（单选），传合同类型对应的ID。取值参考 contract-options 可选值文档（当前技能未内置该文档，无法确定ID时不传此参数）"},
+      "fields": {"type": "array", "items": {"type": "string"}, "description": "【性能优化】只返回这些字段，可大幅减小响应体积。不传则返回全部字段。常见字段: hostName,ip,node,type,state,belong,xc,isFromOutside,os,osType,specification,cpuCode,cpuCores,memory,gpus,hardDisk,usingBy,productRate,product1Id,productProjectList,onlineDate,environment,operA。如统计场景只需: [\"hostName\",\"type\",\"cpuCores\",\"gpus\",\"os\",\"usingBy\",\"productProjectList\"]"},
       "currentPage": {"type": "integer", "description": "页码", "minimum": 1},
       "pageSize": {"type": "integer", "description": "每页条数", "minimum": 1, "maximum": 100}
     },

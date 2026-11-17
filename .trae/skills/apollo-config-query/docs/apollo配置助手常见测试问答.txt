@@ -1,0 +1,17 @@
+Apollo 配置查询 常见问答
+
+1、查看所有的 apollo 实例
+
+2、看看天翼看家有哪些应用
+
+3、天翼看家实例 ehome 的 mysql 的配置
+
+4、查 vnet-vpaas-test 应用的所有配置
+
+5、查 vnet-vpaas-test 应用的数据库配置
+
+6、帮我找 vnet-vpaas-test 的 redis 和超时时间的配置
+
+7、对比 ehome-pro-viidmgr 和 ehome-account 两个应用的数据库配置
+
+8、帮我统计天翼视联集约平台(天翼看家(天翼云眼))的已使用非信创产品数量，包括：服务器(台数)、物理机、CPU(颗数)、VCPU(核数)、GPU数量(卡)、操作系统(套)、数据库(套)

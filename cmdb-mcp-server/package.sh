@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-VERSION="2.0.0"
+VERSION="2.1.0"
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 PKG_NAME="cmdb-mcp-server-${VERSION}-${TIMESTAMP}.tar.gz"
 DIST_DIR="dist"

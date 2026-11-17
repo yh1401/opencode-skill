@@ -1,0 +1,16 @@
+# 版本控制与子模块元数据
+.git
+.gitmodules
+.gitignore
+
+# 本地构建产物与缓存
+dist
+.golangci-lint
+
+# 非构建资源（减小上下文体积）
+images
+grafana
+架构优化
+
+# Windows 本地产物与脚本
+*.exe

@@ -10,7 +10,7 @@ Apollo MCP Server 为 Apollo 配置中心提供标准化的 MCP (Model Context P
 - 配置/应用查询统一走 **EasyOps 代理接口**（无需本地保存 Apollo Token，按 `apolloHostId` 指定任意一套）；调用不通时直接返回错误提示
 - 提供 4 个工具：`apollo_host_list` / `apollo_app_list` / `apollo_config_query` / `apollo_config_global_search`（跨套跨应用全局搜索）
 
-**版本**：v3.2.0
+**版本**：v3.2.1
 **协议**：MCP Streamable HTTP (JSON-RPC 2.0)
 **端口**：8062
 
@@ -140,17 +140,17 @@ python3 scripts/mcp_server.py --port 8062
 
 ### 3.4 全局配置搜索（`apollo_config_global_search`）
 
-> 控制跨套跨应用全局搜索的并发度、预算、缓存。默认值：8 并发 / 60s 硬上限 / 5 个常见 namespace / apps 缓存 5min / config 缓存 2min。
+> 控制跨套跨应用全局搜索的并发度、预算、缓存。默认值：8 并发 / 60s 预算（看门狗 +约15s 宽限）/ 5 个常见 namespace / apps 缓存 5min / config 缓存 2min。
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `APOLLO_GLOBAL_SEARCH_WORKERS` | `8` | 并发线程数：每个 host 一个 worker 并行扫描 |
-| `APOLLO_GLOBAL_SEARCH_BUDGET` | `60` | 全局搜索硬预算（秒）：覆盖 host_list + probe + 扫描全阶段，超时立即返回部分结果 |
+| `APOLLO_GLOBAL_SEARCH_WORKERS` | `8` | 全局扫描并发线程数：**应用级并行**（任务下沉到每个 app，由共享线程池消化），不限套数 |
+| `APOLLO_GLOBAL_SEARCH_BUDGET` | `60` | 全局搜索总预算（秒）：覆盖 host_list + probe + app 列表 + 扫描全阶段。整次搜索放在独立线程中执行，外层**硬性看门狗**最多再等约 15s 宽限（即最长 ~75s）强制返回 partial，保证调用不会被平台超时掐断（DNS/host 列表挂起等极端情况也不会卡死）。也可通过入参 `scanBudget` 覆盖为小值（如 15s）做快速摸底 |
 | `APOLLO_GLOBAL_SEARCH_MAX_NS` | `5` | 每个应用扫描的 namespace 上限（namespaceName=application 时自动扩展：application → datasource → redis → common → logging） |
 | `APOLLO_APPS_CACHE_TTL` | `300` | apps 列表缓存秒数（同套多 app 扫描时复用，避免重复拉取） |
 | `APOLLO_CONFIG_CACHE_TTL` | `120` | config 结果缓存秒数（同 (host, app, env, ns) 扫描时复用） |
 
-> **调优建议**：host 数 > 10 时 `WORKERS` 可提到 10-12；EasyOps 延迟高时 `BUDGET` 可提到 90s。
+> **调优建议**：并发线程把每个 app 的 namespace 拉取请求打到代理上，EasyOps 代理对高并发敏感时不要盲目调大 `WORKERS`（可试 4-6）；`APOLLO_HOST_PROBE_ENABLED` 关闭后走全量遍历；请求链路过宽时优先用入参 `apolloHostIds`（按套收窄）+ `namespaces`（只扫指定 ns，如只扫 application 时请求量约为扩展模式的 1/5）+ `scanBudget`（分阶段多次扫）来控制单次调用规模。
 
 ---
 
@@ -181,7 +181,7 @@ python3 scripts/mcp_server.py --port 8062
   "id": 1,
   "result": {
     "name": "apollo-config-query-mcp",
-    "version": "3.0.0",
+    "version": "3.2.1",
     "capabilities": {
       "tools/list": {},
       "tools/call": {}
@@ -214,7 +214,7 @@ python3 scripts/mcp_server.py --port 8062
 - `"查一下 user-service 的配置"` → 触发 `apollo_config_query`
 - `"当前有哪些应用"` → 触发 `apollo_app_list`
 - `"查一下贵州那套 Apollo 上 user-service 的配置"` → `apollo_host_list` 取 apolloHostId → `apollo_config_query`（完整链路）
-- `"哪些应用的配置用到了 vcpinner.cn:13302"` → 触发 `apollo_config_global_search`（预计 30-60 秒）
+- `"哪些应用的配置用到了 vcpinner.cn:13302"` → 触发 `apollo_config_global_search`（范围大时建议先 `scanBudget=15` 摸底再分阶段补扫）
 
 ---
 
@@ -279,7 +279,7 @@ python3 scripts/mcp_server.py --port 8062
 
 ### Tool: `apollo_config_global_search` （跨套跨应用全局搜索）
 
-**用途**：解决"哪些应用的配置用到了某个地址/关键词"的高频排障需求。单次调用并行扫描所有可用 Apollo 套的所有应用——无需 agent 逐个应用调 `apollo_config_query`（700+ 应用原来小时级，现在 30-60 秒）。
+**用途**：解决"哪些应用的配置用到了某个地址/关键词"的高频排障需求。单次调用并行扫描指定/全部可用 Apollo 套的所有应用——无需 agent 逐个应用调 `apollo_config_query`（700+ 应用原来小时级，现在 30-60 秒，收窄范围后 10-20 秒）。
 
 **参数**：
 
@@ -289,9 +289,12 @@ python3 scripts/mcp_server.py --port 8062
 | searchField | string | 否 | `both` | 匹配字段：`key`（只匹配配置项名）/ `value`（只匹配值）/ `both`（都匹配） |
 | env | string | 否 | `PRO` | 环境：PRO/DEV/SIT/FAT/UAT |
 | maxResults | integer | 否 | `100` | 最多返回多少条匹配，避免结果过长 |
-| namespaceName | string | 否 | `application` | 搜索哪个 namespace；设为 `application` 时**自动扩展扫描** `datasource`/`redis`/`common`/`logging` 5 个常见 namespace |
+| namespaceName | string | 否 | `application` | 搜索哪个 namespace；设为 `application` 时**自动扩展扫描** `datasource`/`redis`/`common`/`logging`（最多 `APOLLO_GLOBAL_SEARCH_MAX_NS` 个） |
+| apolloHostIds | array\<integer\> | 否 | 全部可用套 | 只扫描指定的 Apollo 套 ID 列表（如 `[3, 14]` 只扫天翼云眼两套）；传了不存在的 ID 返回 `code=404` + 可用套列表。缩小范围可显著减少扫描量 |
+| scanBudget | integer | 否 | 服务端 60s | 本次扫描预算（秒）：传小值（如 10-20s）做**快速摸底/分批扫**，预算到点即返回 `partial=true` + `unfinishedApps`（已扫过的部分有 120s 缓存，补扫只花未完成部分的时间），用于分阶段搜索避免单次跑满 |
+| namespaces | array\<string\> | 否 | - | 只扫描指定 namespace 列表（如 `["application"]` 或 `["application","redis"]`），用于收窄链路减少请求量；不传时按 namespaceName 默认行为（application 自动扩展常见 ns） |
 
-**调用路径**：内部并行复用 EasyOps 三个代理接口（`getApolloHostInfo` + `apollo/apps` × N 套 + `apollo/namespace` × N 应用 × M namespace），通过 `ThreadPoolExecutor(max_workers=APOLLO_GLOBAL_SEARCH_WORKERS)` 并发扫描。
+**调用路径**：内部并行复用 EasyOps 三个代理接口（`getApolloHostInfo` + `apollo/apps` × N 套 + `apollo/namespace` × N 应用 × M namespace），**任务下沉到每个 app** 由 `ThreadPoolExecutor(max_workers=APOLLO_GLOBAL_SEARCH_WORKERS)` 共享线程池消化。namespace 拉取失败**不入缓存**，对瞬时错误（429/5xx、网络异常）自动重试 1 次后再失败才计入诊断统计。
 
 **返回结构**：
 
@@ -304,14 +307,30 @@ python3 scripts/mcp_server.py --port 8062
     "searchField": "value",
     "env": "PRO",
     "namespace": "application",
+    "status": "complete",
     "summary": {
-      "hostCount": 8,
-      "appCount": 728,
-      "scannedApps": 728,
+      "hostCount": 2,
+      "appCount": 151,
+      "scannedApps": 151,
+      "nsErrorCount": 0,
       "matchedCount": 12,
       "maskedCount": 0,
       "elapsedMs": 42350
     },
+    "hostsDetail": [
+      {
+        "apolloHostId": 3,
+        "hostName": "天翼云眼Apollo",
+        "probeAvailable": true,
+        "appListStatus": "ok",
+        "appListCount": 151,
+        "tasksSubmitted": 151,
+        "scannedNamespaces": 151,
+        "nsErrors": 0,
+        "errorSample": null,
+        "status": "ok"
+      }
+    ],
     "matches": [
       {
         "apolloHostId": 15,
@@ -331,12 +350,24 @@ python3 scripts/mcp_server.py --port 8062
 ```
 
 **关键字段**：
-- `summary.scannedApps` — 实际扫了多少个 namespace 配置（用于判断是否扫完整）
-- `summary.maskedCount` — 有多少条敏感字段已脱敏（前2后2，如 `SuperSecretPwd` → `Su****wd`）
-- `partial=true` — **超预算提前终止**，结果可能不全（附 `unfinishedApps` 列未完成应用）
+- `data.status` — 本次扫描状态，四种取值：
+  - `complete`：预算内扫完，结果完整；
+  - `partial`：超预算/超时提前终止（附 `unfinishedApps` 未完成项），建议缩小范围补扫；
+  - `scan_failed`：应用已获取（appCount>0）但 namespace 拉取全部失败（`summary.nsErrorCount>0`），此时 `message` 带首个失败样例，疑似 env 与目标套不对应或代理接口异常，**不是"确无匹配"**，勿直接判工具不可用；
+  - `empty_scan`：应用已获取但所有 namespace 内容为空（无错误），疑似 env 不匹配或配置在其它 namespace（可传 `namespaces` 指定）。
+- `data.hostsDetail` — 每套诊断统计（探活结果/应用列表条数与状态/实际提交扫描数/扫到内容的 ns 数/失败数与首条失败样例），用于快速定位是哪套在扫不动
+- `summary.scannedApps` — 实际扫到内容的 namespace 数（用于判断是否扫完整）；`summary.nsErrorCount` — 各 namespace 拉取失败总次数（重试后仍失败）
+- `summary.maskedCount` — 敏感字段脱敏条数（前2后2，如 `SuperSecretPwd` → `Su****wd`）
+- `partial=true` — 超预算提前终止，结果可能不全（附 `unfinishedApps`）
 - `truncated=true` — 匹配数超过 `maxResults`，结果被截断
 
-**预算控制**：硬上限 `APOLLO_GLOBAL_SEARCH_BUDGET=60s`，覆盖 host_list + probe + 扫描全阶段。超预算通过 `concurrent.futures.wait(timeout=剩余秒数)` 立即返回已完成结果 + pending host 标记，`pool.shutdown(wait=False)` 主流程不等待。
+**预算控制与容错**：预算覆盖 host_list + probe + app 列表 + 扫描全阶段，**任务下沉到每个 app** 由共享线程池并行；整次搜索置于独立线程，外层**硬性看门狗**（预算 + 约 15s 宽限，默认最长 ~75s）兜底，DNS/单请求挂起也会强制返回 `partial` 而非卡死。单次 namespace 拉取失败不入缓存，瞬时错误（429/5xx/网络异常）自动重试 1 次。扫出 0 条时返回 `scan_failed` / `empty_scan` 显式诊断（带 `hostsDetail.errorSample`），不再静默返回 `success`。
+
+**分阶段使用建议**（大范围搜索按此收敛，避免单次全量）：
+1. 摸底：`scanBudget=10~20` + `apolloHostIds` + `namespaces=["application"]`，先拿 partial 结果与 `hostsDetail`；
+2. 精查：对命中的 app 用 `apollo_config_query` 查具体 namespace/key；
+3. 收尾：确需"无遗漏"时，去掉 namespaces/加大 scanBudget 补扫（已扫过的 ns 有 120s 缓存，补扫只花增量时间）；
+4. 多次调用聚合时按 `apolloHostId + appId + namespaceName + key` 去重。
 
 ---
 
@@ -506,7 +537,7 @@ tail -f logs/apollo-mcp.log
 | `apollo_host_list` | `query_hosts()` | 无 |
 | `apollo_config_query` | `query_config(appId, env, clusterName, namespaceName, key, apolloHostId)` | appId 必填 |
 | `apollo_app_list` | `query_apps(apolloHostId)` | 可选 |
-| `apollo_config_global_search` | `query_global_search(keyword, searchField, env, maxResults, namespaceName)` | keyword 必填 |
+| `apollo_config_global_search` | `query_global_search(keyword, searchField, env, maxResults, namespaceName, apolloHostIds, scanBudget, namespaces)` | keyword 必填；返回 `status`（complete/partial/scan_failed/empty_scan）+ `hostsDetail` 诊断 |
 
 `apolloHostId` 统一经 `_to_int()` 安全转换（兼容字符串形式）。
 
@@ -553,23 +584,27 @@ query_apps(apolloHostId?) → fetch_proxy_apps(hostId) → _proxy_get()
 **apollo_config_global_search → query_global_search**（跨套跨应用全局搜索，单次调用并行扫描）：
 
 ```
-query_global_search(keyword, searchField=both, env=PRO, maxResults=100, namespaceName=application)
+query_global_search(keyword, searchField=both, env=PRO, maxResults=100, namespaceName=application,
+                    apolloHostIds=None, scanBudget=None, namespaces=None)
    │
-   ├─ start = time.time()（预算从函数入口算起，覆盖 host_list + probe + 扫描全阶段）
+   ├─ fetch_global_search（对外入口）：整次搜索放入独立 daemon 线程，外层"硬性看门狗"
+   │     └─ 最多等 预算(默认60s，可被 scanBudget 覆盖) + 约15s 宽限 → 卡死/挂起也强制返回 partial
    │
-   ├─ fetch_host_list() + _probe_hosts_concurrent()
-   │     └─ 取所有 available=true 的套（跳过不可用套）
+   ├─ _global_search_impl：start = time.time()（预算覆盖 host_list + probe + app 列表 + 扫描全阶段）
+   │     ├─ fetch_host_list_raw() + _probe_hosts_concurrent()
+   │     │     └─ 取可用套；指定 apolloHostIds 时只处理目标套（不存在返回 code=404+可用列表）
+   │     ├─ 阶段1 并行拉各套应用列表（_cached_fetch_apps，缓存 5min），按套记录 appList 状态
+   │     ├─ 阶段2 构建应用级任务 app_tasks（去重 appId）
+   │     ├─ 阶段3 ThreadPoolExecutor(max_workers=APOLLO_GLOBAL_SEARCH_WORKERS=8) 并行扫每个 app：
+   │     │     └─ _scan_app: ns_list = namespaces 或默认 application+扩展（≤ MAX_NS）
+   │     │           ├─ _cached_fetch_namespace(host, app, env, ns)  ← config 缓存 2min，失败不入缓存
+   │     │           ├─     瞬时错误(429/5xx/网络异常)自动重试 1 次
+   │     │           └─ 匹配 keyword → 追加 matches（含 host/app/ns/key/value，敏感字段自动脱敏）
+   │     └─ wait(timeout=剩余预算) → 预算到点立即返回已完成结果，pending 标记 unfinishedApps
    │
-   ├─ ThreadPoolExecutor(max_workers=APOLLO_GLOBAL_SEARCH_WORKERS=8)
-   │     └─ 每个 worker 扫 1 个 host 的所有 app × 5 个常见 namespace：
-   │           ├─ _cached_fetch_apps(host_id)  ← apps 列表缓存 5min
-   │           ├─ _cached_fetch_namespace(host, app, env, ns)  ← config 缓存 2min
-   │           └─ 匹配 keyword → 命中追加到 matches（含 host/app/ns/key/value，敏感字段自动脱敏）
-   │
-   ├─ 预算控制：wait(timeout=剩余秒数) → 预算到点立即返回已完成结果
-   │     └─ pending host 标记到 unfinishedApps，partial=true
-   │
-   └─ pool.shutdown(wait=False, cancel_futures=True) → 主流程不等待
+   └─ 汇总：pool.shutdown(wait=False, cancel_futures=True)；按套聚合 hostsDetail（appList 状态/
+       任务数/扫到的 ns 数/失败数与样例）；scannedApps=0 且确有应用时返回 scan_failed/empty_scan
+       显式诊断（不再静默 success）
 ```
 
 **Mock 分支**：每个工具开头都有 `if USE_MOCK:` 分支（`_get_mock_response` / `_mock_global_search`），Mock 模式下直接读 `mock/mock_responses.json`，不请求任何外部接口——这就是日志里"Mock 模式启用"的来源。

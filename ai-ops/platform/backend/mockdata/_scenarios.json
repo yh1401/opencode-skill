@@ -1,0 +1,184 @@
+{
+  "generatedAt": "2026-11-17 10:44:25",
+  "source": "mockdata/_meta.json 已埋异常样本 + pinpoint/_apps.json 应用依赖",
+  "scenarios": [
+    {
+      "id": "D1",
+      "name": "应用错误率飙升",
+      "chain": [
+        "业务监控",
+        "告警中心",
+        "自动排障",
+        "工单"
+      ],
+      "appId": "apollo-ehome-pro",
+      "appName": "ehome-pro-server",
+      "host": "ehome-pro.mysql.ehomeinner.cn",
+      "addr": "ehome-pro.mysql.ehomeinner.cn:13303",
+      "mwType": "mysql",
+      "alert": {
+        "labels": {
+          "alertname": "HighErrorRate",
+          "appId": "apollo-ehome-pro",
+          "application": "ehome-pro-server",
+          "severity": "critical"
+        },
+        "annotations": {
+          "summary": "应用错误率过高",
+          "description": "5 分钟错误率 8.2%，超过阈值 1%；tp99 1.7s"
+        },
+        "value": "8.2"
+      },
+      "logs": {
+        "ehome-pro.mysql.ehomeinner.cn": 120
+      },
+      "cmdbRecord": true,
+      "expect": {
+        "alarm": "HighErrorRate",
+        "diag": "应用视角 11 步",
+        "ticket": "自动建单"
+      }
+    },
+    {
+      "id": "D2",
+      "name": "MySQL 主从延迟",
+      "chain": [
+        "告警中心",
+        "中间件排障",
+        "资源稽核",
+        "工单"
+      ],
+      "appId": "ehome",
+      "appName": "ehome线上版本",
+      "host": "ehome.mysql.ehomeinner.cn",
+      "addr": "ehome.mysql.ehomeinner.cn:3306",
+      "mwType": "mysql",
+      "alert": {
+        "labels": {
+          "alertname": "MySQLReplicationDelay",
+          "instance": "ehome.mysql.ehomeinner.cn:3306",
+          "type": "mysql",
+          "severity": "warning"
+        },
+        "annotations": {
+          "summary": "MySQL 主从延迟",
+          "description": "主从延迟 38s，超过阈值 30s"
+        },
+        "value": "38"
+      },
+      "logs": {
+        "ehome.mysql.ehomeinner.cn": 86
+      },
+      "expect": {
+        "alarm": "MySQLReplicationDelay",
+        "diag": "中间件视角 9 步",
+        "audit": "C1/C4"
+      }
+    },
+    {
+      "id": "D3",
+      "name": "待下线主机失联",
+      "chain": [
+        "巡检 T7",
+        "告警中心",
+        "主机排障",
+        "CMDB 交叉验证"
+      ],
+      "appId": "ehome",
+      "appName": "ehome线上版本",
+      "host": "sdk3a4-detectmessage1.rocketmq.ehome.dlifeinner.cn",
+      "addr": "sdk3a4-detectmessage1.rocketmq.ehome.dlifeinner.cn:9100",
+      "mwType": "rocketmq",
+      "alert": {
+        "labels": {
+          "alertname": "TargetDown",
+          "instance": "sdk3a4-detectmessage1.rocketmq.ehome.dlifeinner.cn:9100",
+          "job": "node_exporter",
+          "severity": "critical"
+        },
+        "annotations": {
+          "summary": "主机失联",
+          "description": "目标已超过 5 分钟未上报指标"
+        },
+        "value": "0"
+      },
+      "logs": {
+        "sdk3a4-detectmessage1.rocketmq.ehome.dlifeinner.cn": 240
+      },
+      "up": 0,
+      "expect": {
+        "inspect": "T7 down",
+        "alarm": "TargetDown",
+        "diag": "host up=0"
+      }
+    },
+    {
+      "id": "D4",
+      "name": "报废主机仍上报指标",
+      "chain": [
+        "资源稽核 C2",
+        "指标巡检 T11",
+        "告警中心",
+        "工单"
+      ],
+      "appId": "ehome-order",
+      "appName": "ehome-order",
+      "host": "public-push3.rocketmq.ehome.dlifeinner.cn",
+      "addr": "public-push3.rocketmq.ehome.dlifeinner.cn:9100",
+      "mwType": "rocketmq",
+      "alert": {
+        "labels": {
+          "alertname": "HostHighCPU",
+          "instance": "public-push3.rocketmq.ehome.dlifeinner.cn:9100",
+          "job": "node_exporter",
+          "severity": "warning"
+        },
+        "annotations": {
+          "summary": "主机 CPU 过高",
+          "description": "CPU 使用率 15 分钟均值 91.2%"
+        },
+        "value": "91.2"
+      },
+      "logs": {
+        "public-push3.rocketmq.ehome.dlifeinner.cn": 45
+      },
+      "hostMetrics": {
+        "cpuUsage": 94.6,
+        "memUsage": 88.3,
+        "load": 14.2,
+        "tcpOverflow": 3,
+        "tcpTotal": 11200,
+        "diskUsage": 82.4
+      },
+      "expect": {
+        "audit": "C2 报废仍 up=1",
+        "inspect": "T11 CPU 阈值",
+        "diag": "host 指标"
+      }
+    },
+    {
+      "id": "D5",
+      "name": "配置引用主机缺失 CMDB",
+      "chain": [
+        "拓扑影响面",
+        "资源稽核 C1",
+        "中间件排障",
+        "工单"
+      ],
+      "appId": "ehome",
+      "appName": "ehome线上版本",
+      "host": "public-push1.rocketmq.ehome.dlifeinner.cn",
+      "addr": "public-push1.rocketmq.ehome.dlifeinner.cn:9876",
+      "mwType": "rocketmq",
+      "alert": null,
+      "logs": {
+        "public-push1.rocketmq.ehome.dlifeinner.cn": 30
+      },
+      "expect": {
+        "audit": "C1 CMDB 缺失",
+        "topo": "影响 11 个应用",
+        "diag": "中间件视角"
+      }
+    }
+  ]
+}

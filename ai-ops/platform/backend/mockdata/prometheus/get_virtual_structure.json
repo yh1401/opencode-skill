@@ -1,0 +1,47 @@
+{
+  "status": "success",
+  "data": {
+    "node": "云公司->贵州4c",
+    "tree": {
+      "name": "贵州4c",
+      "type": "node",
+      "children": [
+        {
+          "name": "mysql-cluster-pro",
+          "type": "mysql",
+          "hostCount": 54
+        },
+        {
+          "name": "redis-cluster-pro",
+          "type": "redis",
+          "hostCount": 38
+        },
+        {
+          "name": "rocketmq-cluster-pro",
+          "type": "rocketmq",
+          "hostCount": 191
+        },
+        {
+          "name": "elasticsearch-cluster-pro",
+          "type": "elasticsearch",
+          "hostCount": 12
+        },
+        {
+          "name": "kafka-cluster-pro",
+          "type": "kafka",
+          "hostCount": 26
+        },
+        {
+          "name": "nacos-cluster-pro",
+          "type": "nacos",
+          "hostCount": 6
+        },
+        {
+          "name": "zookeeper-cluster-pro",
+          "type": "zookeeper",
+          "hostCount": 3
+        }
+      ]
+    }
+  }
+}

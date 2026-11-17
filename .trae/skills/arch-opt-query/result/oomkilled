@@ -1,0 +1,1894 @@
+{
+  "ruleVersion": "V2.3",
+  "rule": "oom_killed",
+  "ruleDesc": "OOM：近期出现 OOMKilled 且存在对应重启证据",
+  "category": "稳定性",
+  "status": "未触发规则",
+  "statusCode": "OK",
+  "summary": "全部目标未触发「OOM：近期出现 OOMKilled 且存在对应重启证据」",
+  "threshold": {
+    "value": "7d",
+    "operator": "oom_combo",
+    "unit": "组合判定",
+    "duration": "7d"
+  },
+  "context": {
+    "node": "云公司->贵州",
+    "env": "生产",
+    "deployment": null,
+    "namespace": null,
+    "window": "15m"
+  },
+  "items": [
+    {
+      "target": {
+        "deployment": "etouch-agile-auth-dep",
+        "pod": "etouch-agile-auth-dep-d4cccc8cd-pkwzf",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-auth-dep",
+        "pod": "etouch-agile-auth-dep-d4cccc8cd-rpcjp",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-etouch-dep",
+        "pod": "etouch-agile-etouch-dep-5895bb797f-m2fjk",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-etouch-dep",
+        "pod": "etouch-agile-etouch-dep-5895bb797f-w796b",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-etouch-dep",
+        "pod": "etouch-agile-etouch-dep-5895bb797f-wfmvc",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-etouch-dep",
+        "pod": "etouch-agile-etouch-dep-5895bb797f-wtk87",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-etouch-dispatch-dep",
+        "pod": "etouch-agile-etouch-dispatch-dep-5f684b49b-4lsb8",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-etouch-dispatch-dep",
+        "pod": "etouch-agile-etouch-dispatch-dep-5f684b49b-9wfd4",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-etouch-gb28181-cluster-dep",
+        "pod": "etouch-agile-etouch-gb28181-cluster-dep-85dbf6594c-gtdkp",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-etouch-gb28181-cluster-dep",
+        "pod": "etouch-agile-etouch-gb28181-cluster-dep-85dbf6594c-jmw67",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-etouch-gb28181-cluster-dep",
+        "pod": "etouch-agile-etouch-gb28181-cluster-dep-85dbf6594c-r67c6",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-etouch-gb28181-cluster-dep",
+        "pod": "etouch-agile-etouch-gb28181-cluster-dep-85dbf6594c-tjftt",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-gateway-dep",
+        "pod": "etouch-agile-gateway-dep-8448b66f4d-jhn4t",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-gateway-dep",
+        "pod": "etouch-agile-gateway-dep-8448b66f4d-vqt2q",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-system-dep",
+        "pod": "etouch-agile-system-dep-d6f5c464-2lg4m",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-system-dep",
+        "pod": "etouch-agile-system-dep-d6f5c464-8tb64",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-system-dep",
+        "pod": "etouch-agile-system-dep-d6f5c464-9drq5",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-agile-system-dep",
+        "pod": "etouch-agile-system-dep-d6f5c464-f5bgd",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-cascade-access-dep",
+        "pod": "etouch-cascade-access-dep-d76fc4f46-b7qt9",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-cascade-access-dep",
+        "pod": "etouch-cascade-access-dep-d76fc4f46-c9nng",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-cascade-access-dep",
+        "pod": "etouch-cascade-access-dep-d76fc4f46-ccjpm",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-cascade-access-dep",
+        "pod": "etouch-cascade-access-dep-d76fc4f46-wsvmf",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-ehome-access-dep",
+        "pod": "etouch-ehome-access-dep-66f5b646bd-9x9d5",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-ehome-access-dep",
+        "pod": "etouch-ehome-access-dep-66f5b646bd-dbqnm",
+        "container": "container0",
+        "namespace": "etouch-cascade-access",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-mdu-dep",
+        "pod": "etouch-mdu-dep-565dbb8d97-2l469",
+        "container": "container0",
+        "namespace": "etouch-mdu-cascade",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-mdu-dep",
+        "pod": "etouch-mdu-dep-565dbb8d97-98vmx",
+        "container": "container0",
+        "namespace": "etouch-mdu-cascade",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-mdu-dep",
+        "pod": "etouch-mdu-dep-565dbb8d97-bqgms",
+        "container": "container0",
+        "namespace": "etouch-mdu-cascade",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-mdu-dep",
+        "pod": "etouch-mdu-dep-565dbb8d97-f4tff",
+        "container": "container0",
+        "namespace": "etouch-mdu-cascade",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-mdu-dep",
+        "pod": "etouch-mdu-dep-565dbb8d97-x4cx9",
+        "container": "container0",
+        "namespace": "etouch-mdu-cascade",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-mdu-udp-dep",
+        "pod": "etouch-mdu-udp-dep-b879ffcf6-dhfj8",
+        "container": "container0",
+        "namespace": "etouch-mdu-cascade",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-mdu-udp-dep",
+        "pod": "etouch-mdu-udp-dep-b879ffcf6-dnkr8",
+        "container": "container0",
+        "namespace": "etouch-mdu-cascade",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-mdu-udp-dep",
+        "pod": "etouch-mdu-udp-dep-b879ffcf6-gjshb",
+        "container": "container0",
+        "namespace": "etouch-mdu-cascade",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-mdu-udp-dep",
+        "pod": "etouch-mdu-udp-dep-b879ffcf6-m2xxr",
+        "container": "container0",
+        "namespace": "etouch-mdu-cascade",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-mdu-udp-dep",
+        "pod": "etouch-mdu-udp-dep-b879ffcf6-zh2gh",
+        "container": "container0",
+        "namespace": "etouch-mdu-cascade",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-pds-dep",
+        "pod": "etouch-pds-dep-675f79c7f-fg2dx",
+        "container": "container0",
+        "namespace": "etouch-pds-cascade",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-pds-dep",
+        "pod": "etouch-pds-dep-675f79c7f-fgkt7",
+        "container": "container0",
+        "namespace": "etouch-pds-cascade",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-pds-dep",
+        "pod": "etouch-pds-dep-675f79c7f-rtq9n",
+        "container": "container0",
+        "namespace": "etouch-pds-cascade",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "etouch-pds-dep",
+        "pod": "etouch-pds-dep-675f79c7f-whrb6",
+        "container": "container0",
+        "namespace": "etouch-pds-cascade",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "edge-cloud-dep",
+        "pod": "edge-cloud-dep-7f877bccd9-mrj5r",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "edge-cloud-dep",
+        "pod": "edge-cloud-dep-7f877bccd9-pwk7x",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "helm-controller-dep",
+        "pod": "helm-controller-dep-866999fd48-gscfs",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "helm-controller-dep",
+        "pod": "helm-controller-dep-5fbf69647b-vn9r2",
+        "container": "container0",
+        "namespace": "simplecloud-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "image-message-rerouter-dep",
+        "pod": "image-message-rerouter-dep-7b86b4cdc5-l6tcw",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "image-message-rerouter-dep",
+        "pod": "image-message-rerouter-dep-7b86b4cdc5-pflfq",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "inspect-fe-dep",
+        "pod": "inspect-fe-dep-86dcf4fd8c-g7xp8",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "inspect-fe-dep",
+        "pod": "inspect-fe-dep-86dcf4fd8c-gfxhc",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "inspect-fe-dep",
+        "pod": "inspect-fe-dep-75767bdf59-57z8f",
+        "container": "container0",
+        "namespace": "simplecloud-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-base-fe-dep",
+        "pod": "mcm-base-fe-dep-7595f95f4b-vj8vg",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-base-fe-dep",
+        "pod": "mcm-base-fe-dep-7595f95f4b-w5r5h",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-base-fe-dep",
+        "pod": "mcm-base-fe-dep-58b85f9bfc-wfgnq",
+        "container": "container0",
+        "namespace": "simplecloud-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-ci-dep",
+        "pod": "mcm-ci-dep-58f6d7bd76-6w6fl",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-ci-dep",
+        "pod": "mcm-ci-dep-58f6d7bd76-9rmps",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-ci-dep",
+        "pod": "mcm-ci-dep-948447d7c-qflzz",
+        "container": "container0",
+        "namespace": "simplecloud-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-knowledge-dep",
+        "pod": "mcm-knowledge-dep-84646f96db-h75p8",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-knowledge-dep",
+        "pod": "mcm-knowledge-dep-84646f96db-vvq5g",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-knowledge-dep",
+        "pod": "mcm-knowledge-dep-656946bf77-pqlrh",
+        "container": "container0",
+        "namespace": "simplecloud-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-knowledge-fe-dep",
+        "pod": "mcm-knowledge-fe-dep-854b557ffc-fvb6m",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-knowledge-fe-dep",
+        "pod": "mcm-knowledge-fe-dep-854b557ffc-rr5jj",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-knowledge-fe-dep",
+        "pod": "mcm-knowledge-fe-dep-6b65f746b6-wcwdw",
+        "container": "container0",
+        "namespace": "simplecloud-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-middleware-dep",
+        "pod": "mcm-middleware-dep-f77f844d-v96sg",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-middleware-dep",
+        "pod": "mcm-middleware-dep-7688cf47d4-r9hqk",
+        "container": "container0",
+        "namespace": "simplecloud-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-msgp-dep",
+        "pod": "mcm-msgp-dep-d9d975484-8wz96",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-msgp-dep",
+        "pod": "mcm-msgp-dep-d9d975484-sg8cz",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-msgp-dep",
+        "pod": "mcm-msgp-dep-64cfdccf7-9sdtm",
+        "container": "container0",
+        "namespace": "simplecloud-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-msgp-web-dep",
+        "pod": "mcm-msgp-web-dep-77794667c-7bcrm",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-msgp-web-dep",
+        "pod": "mcm-msgp-web-dep-77794667c-nfmwn",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-msgp-web-dep",
+        "pod": "mcm-msgp-web-dep-5f65bc6476-wtxjs",
+        "container": "container0",
+        "namespace": "simplecloud-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-openapi-dep",
+        "pod": "mcm-openapi-dep-57f9f6458f-87g5s",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-openapi-dep",
+        "pod": "mcm-openapi-dep-57f9f6458f-xhhqm",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-openapi-dep",
+        "pod": "mcm-openapi-dep-7f59f57494-746xr",
+        "container": "container0",
+        "namespace": "simplecloud-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-web-micro-dep",
+        "pod": "mcm-web-micro-dep-5bccb746bc-lvgk2",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-web-micro-dep",
+        "pod": "mcm-web-micro-dep-5bccb746bc-m9gzm",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "mcm-web-micro-dep",
+        "pod": "mcm-web-micro-dep-76757cd5d9-8mwvz",
+        "container": "container0",
+        "namespace": "simplecloud-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "order-worker-dep",
+        "pod": "order-worker-dep-65f89fc5b4-dnwpp",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "order-worker-dep",
+        "pod": "order-worker-dep-65f89fc5b4-jn246",
+        "container": "container0",
+        "namespace": "simplecloud",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "order-worker-dep",
+        "pod": "order-worker-dep-648d4594b4-k6btb",
+        "container": "container0",
+        "namespace": "simplecloud-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "scai-fe-dep",
+        "pod": "scai-fe-dep-f9c4cfdc6-9jrwc",
+        "container": "container0",
+        "namespace": "simplecloud-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "deployment": "scai-portal-dep",
+        "pod": "scai-portal-dep-ddfd5d49f-sncvn",
+        "container": "container0",
+        "namespace": "simplecloud-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 0,
+      "threshold": "7d",
+      "maxValue": 0,
+      "minValue": 0,
+      "validPoints": 15,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "窗口内未发现 OOMKilled 终止记录，OOM 事件计数亦无增长"
+    },
+    {
+      "target": {
+        "pod": "shardingsphere-test-dep-57d4f65dd6-cspp9",
+        "container": "container0",
+        "namespace": "python",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 7,
+      "threshold": "7d",
+      "maxValue": 7,
+      "minValue": 7,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    },
+    {
+      "target": {
+        "pod": "vcp-tree-service-201722-dep-55cdc9b585-42f8c",
+        "container": "vcp-tree-service-vcp-tree-service",
+        "namespace": "vcp-tree-service-new-gray",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 1,
+      "threshold": "7d",
+      "maxValue": 1,
+      "minValue": 1,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    },
+    {
+      "target": {
+        "pod": "ehome-pro-device-184343-dep-bb6d559f8-jbw7f",
+        "container": "container0",
+        "namespace": "ehome-pro-device",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 1,
+      "threshold": "7d",
+      "maxValue": 1,
+      "minValue": 1,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    },
+    {
+      "target": {
+        "pod": "ehome-pro-device-184343-dep-bb6d559f8-ntvgt",
+        "container": "container0",
+        "namespace": "ehome-pro-device",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 1,
+      "threshold": "7d",
+      "maxValue": 1,
+      "minValue": 1,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    },
+    {
+      "target": {
+        "pod": "vnet-vpaas-auth-dep-844dd749cf-2l9bb",
+        "container": "container0",
+        "namespace": "vnet-vpaas",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 1,
+      "threshold": "7d",
+      "maxValue": 1,
+      "minValue": 1,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    },
+    {
+      "target": {
+        "pod": "vnet-vpaas-auth-dep-844dd749cf-2ltpc",
+        "container": "container0",
+        "namespace": "vnet-vpaas",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 1,
+      "threshold": "7d",
+      "maxValue": 1,
+      "minValue": 1,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    },
+    {
+      "target": {
+        "pod": "vnet-vpaas-auth-dep-844dd749cf-4wsgx",
+        "container": "container0",
+        "namespace": "vnet-vpaas",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 1,
+      "threshold": "7d",
+      "maxValue": 1,
+      "minValue": 1,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    },
+    {
+      "target": {
+        "pod": "vnet-vpaas-auth-dep-844dd749cf-56blm",
+        "container": "container0",
+        "namespace": "vnet-vpaas",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 1,
+      "threshold": "7d",
+      "maxValue": 1,
+      "minValue": 1,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    },
+    {
+      "target": {
+        "pod": "vnet-vpaas-auth-dep-844dd749cf-8467t",
+        "container": "container0",
+        "namespace": "vnet-vpaas",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 1,
+      "threshold": "7d",
+      "maxValue": 1,
+      "minValue": 1,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    },
+    {
+      "target": {
+        "pod": "vnet-vpaas-auth-dep-844dd749cf-nhdz2",
+        "container": "container0",
+        "namespace": "vnet-vpaas",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 1,
+      "threshold": "7d",
+      "maxValue": 1,
+      "minValue": 1,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    },
+    {
+      "target": {
+        "pod": "vnet-vpaas-auth-dep-844dd749cf-q9k42",
+        "container": "container0",
+        "namespace": "vnet-vpaas",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 1,
+      "threshold": "7d",
+      "maxValue": 1,
+      "minValue": 1,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    },
+    {
+      "target": {
+        "pod": "wxvoip-media-server-091414-dep-5bcc7f7688-8t2p6",
+        "container": "container0",
+        "namespace": "wxvoip-media-stream-server",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 3,
+      "threshold": "7d",
+      "maxValue": 3,
+      "minValue": 3,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    },
+    {
+      "target": {
+        "pod": "wxvoip-media-server-091414-dep-5bcc7f7688-qlbz6",
+        "container": "container0",
+        "namespace": "wxvoip-media-stream-server",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 3,
+      "threshold": "7d",
+      "maxValue": 3,
+      "minValue": 3,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    },
+    {
+      "target": {
+        "pod": "dstatus-prod-195938-dep-69cbdd4f8c-5486k",
+        "container": "device-status-service-dstatus-prod",
+        "namespace": "device-status-service",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 1,
+      "threshold": "7d",
+      "maxValue": 1,
+      "minValue": 1,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    },
+    {
+      "target": {
+        "pod": "edrive-trans-gateway-093023-dep-5b9cbc9bb8-vw246",
+        "container": "edrive-trans-gateway-edrive-trans-gateway",
+        "namespace": "edrive-trans-gateway",
+        "endpoint": "https-main"
+      },
+      "status": "未触发规则",
+      "statusCode": "OK",
+      "observedValue": 3,
+      "threshold": "7d",
+      "maxValue": 3,
+      "minValue": 3,
+      "validPoints": 1,
+      "totalPoints": 15,
+      "exceedPoints": 0,
+      "windowSeconds": 0,
+      "reason": "存在重启增长但无 OOMKilled 记录，不构成本规则 OOM 风险（重启原因需另行排查）"
+    }
+  ],
+  "dataQuality": {
+    "samplePoints": 15,
+    "stepSeconds": 60,
+    "windowSeconds": 900,
+    "minCoverage": 0.8,
+    "collectTime": 1793696625,
+    "oldestSampleTs": 1793695785,
+    "failPointCount": 0,
+    "successPointCount": 15
+  },
+  "scope": "容器维度（pod + container）",
+  "notes": "主查询取 kube_pod_container_status_last_terminated_reason 即时值（该 gauge 持久保存最近一次终止原因，无需 7d 子查询回溯）；OOM 证据由该指标与 container_oom_events_total 增量共同提供，任一成立即为 OOM 证据；仍须与重启增长同时成立，仅有历史终止原因不能证明近期 OOM；出现 OOM 应回查 memory_ratio 是否长期贴近 limit。",
+  "collectionStatus": "SUCCESS",
+  "promqls": {
+    "main": "label_replace(kube_pod_container_status_last_terminated_reason{cmdb_node=\"云公司->贵州\", env=\"生产\", pod=~\".+-dep-.*\",pod!~\"(?i).*(?:gray|canary|shadow).*\", reason=\"OOMKilled\", namespace!~\"kube-system|kube-public|kube-node-lease|default|prometheus|grafana|monitoring|loki|tempo|efk|log|ingress-nginx|istio-system|traefik|apigw|rook-ceph|openebs|storage|nfs-ceph-nfs|jenkins|gitlab-runner|argocd|tekton|velero|harbor|registry|etcd|calico-system|cattle-system|cert-manager|kube-bench|trivy|opa|staging|canary\"}, \"deployment\", \"$1\", \"pod\", \"(.+)-[a-z0-9]+-[a-z0-9]+\")",
+    "restart": "increase(kube_pod_container_status_restarts_total{cmdb_node=\"云公司->贵州\", env=\"生产\", pod=~\".+-dep-.*\",pod!~\"(?i).*(?:gray|canary|shadow).*\", namespace!~\"kube-system|kube-public|kube-node-lease|default|prometheus|grafana|monitoring|loki|tempo|efk|log|ingress-nginx|istio-system|traefik|apigw|rook-ceph|openebs|storage|nfs-ceph-nfs|jenkins|gitlab-runner|argocd|tekton|velero|harbor|registry|etcd|calico-system|cattle-system|cert-manager|kube-bench|trivy|opa|staging|canary\"}[7d])",
+    "oom_events": "increase(container_oom_events_total{cmdb_node=\"云公司->贵州\", env=\"生产\", pod=~\".+-dep-.*\",pod!~\"(?i).*(?:gray|canary|shadow).*\", namespace!~\"kube-system|kube-public|kube-node-lease|default|prometheus|grafana|monitoring|loki|tempo|efk|log|ingress-nginx|istio-system|traefik|apigw|rook-ceph|openebs|storage|nfs-ceph-nfs|jenkins|gitlab-runner|argocd|tekton|velero|harbor|registry|etcd|calico-system|cattle-system|cert-manager|kube-bench|trivy|opa|staging|canary\"}[7d])"
+  },
+  "scopeFallback": null,
+  "taskId": "arch-1793696627274-dfe5f2",
+  "collectTime": 1793696627274,
+  "collectTimeIso": "2026-11-03T17:03:47+08:00",
+  "podSelector": {
+    "mode": "not-used"
+  }
+}

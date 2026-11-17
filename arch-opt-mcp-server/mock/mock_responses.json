@@ -1,0 +1,114 @@
+{
+  "getTopologyByProductName": {
+    "code": 0,
+    "msg": "操作成功",
+    "data": [
+      {
+        "deployNode": "云公司->贵州,guizhou,tyyy-guizhou,云公司->广州4d,guangzhou4d-prod",
+        "id": 2,
+        "name": "云公司->贵州",
+        "product": "天翼看家",
+        "topoSign": "tyzh_module_topo1_t",
+        "topologyType": "module",
+        "topologyData": {
+          "edges": [],
+          "nodes": [
+            {
+              "id": 2,
+              "name": "core-ehome",
+              "nameCn": "核心业务API",
+              "objectType": "module",
+              "objSign": "m",
+              "domains": ["ehome.21cn.com"],
+              "projectName": [
+                "ehome-kong",
+                "ehome-api-prod",
+                "ehome-order-prod-022629-dep",
+                "ehome-public-dep",
+                "auth-prod-093803-dep"
+              ]
+            },
+            {
+              "id": 13,
+              "name": "signal-ehome",
+              "nameCn": "设备信令调度",
+              "objectType": "module",
+              "objSign": "m",
+              "domains": ["p2p.ehome.21cn.com"],
+              "projectName": [
+                "signal-core-001133-dep",
+                "signal-dispatch-221011-dep"
+              ]
+            },
+            {
+              "id": 25,
+              "name": "livestream-ehome",
+              "nameCn": "直播服务网关",
+              "objectType": "module",
+              "objSign": "m",
+              "domains": [],
+              "projectName": [
+                "livestream-gw-093012-dep"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "getTopologyByNodeProject": {
+    "code": 0,
+    "msg": "操作成功",
+    "data": {
+      "nodes": [
+        {"id": "ehome-api-prod", "name": "ehome-api-prod", "type": "app"},
+        {"id": "ehome-public-dep", "name": "ehome-public-dep", "type": "app"},
+        {"id": "mysql-main", "name": "mysql-main", "type": "db"},
+        {"id": "redis-cache", "name": "redis-cache", "type": "cache"}
+      ],
+      "edges": [
+        {"from": "ehome-api-prod", "to": "mysql-main", "count": 1200, "errorRate": 0.01, "avgMs": 25},
+        {"from": "ehome-api-prod", "to": "redis-cache", "count": 8800, "errorRate": 0.003, "avgMs": 5},
+        {"from": "ehome-public-dep", "to": "mysql-main", "count": 600, "errorRate": 0.05, "avgMs": 80}
+      ]
+    }
+  },
+  "getNode": {
+    "code": 0,
+    "msg": "操作成功",
+    "data": [
+      {"node": "云公司->贵州", "node_id": "cloud-guizhou", "ctyun_node_code3": "", "flag": "合营", "province_name": "贵州"},
+      {"node": "云公司->海口9", "node_id": "", "ctyun_node_code3": "hi-haikou-9", "flag": "", "province_name": "海南"},
+      {"node": "云公司->广州4d", "node_id": "", "ctyun_node_code3": "", "flag": "合营", "province_name": "广东"},
+      {"node": "市公司->广东深圳", "node_id": "city-gdshenzh", "ctyun_node_code3": "", "flag": "X节点", "province_name": "广东"}
+    ]
+  },
+  "getVirtualStructure": {
+    "code": 0,
+    "msg": "操作成功",
+    "data": {
+      "ipData": {
+        "192.168.211.1": ["192.168.116.100", "192.168.116.101", "192.168.117.68"],
+        "192.168.211.10": ["192.168.116.102", "192.168.116.103"]
+      }
+    }
+  },
+  "getTopologyInfo": {
+    "code": 0,
+    "msg": "操作成功",
+    "data": {
+      "projectData": ["haik9-ehome-connect_province", "haik9-ehome-message"],
+      "projectIpData": {
+        "haik9-ehome-connect_province": ["192.168.116.100", "192.168.116.101", "192.168.117.68"],
+        "haik9-ehome-message": ["192.168.116.102", "192.168.116.103"]
+      },
+      "ipProjectData": {
+        "192.168.116.100": ["haik9-ehome-connect_province"],
+        "192.168.116.101": ["haik9-ehome-connect_province"],
+        "192.168.117.68": ["haik9-ehome-connect_province"],
+        "192.168.116.102": ["haik9-ehome-message"],
+        "192.168.116.103": ["haik9-ehome-message"]
+      }
+    }
+  }
+}

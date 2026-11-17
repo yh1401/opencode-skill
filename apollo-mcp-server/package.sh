@@ -15,7 +15,7 @@ NC='\033[0m'
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-VERSION="3.2.0"
+VERSION="3.2.1"
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 PKG_NAME="apollo-mcp-server-${VERSION}-${TIMESTAMP}.tar.gz"
 DIST_DIR="dist"

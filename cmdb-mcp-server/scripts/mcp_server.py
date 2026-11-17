@@ -146,7 +146,13 @@ class CMDBAPIClient:
         url = endpoint.get('full_url', '')
         method = endpoint.get('method', 'POST').upper()
         description = endpoint.get('description', '')
-        
+
+        # 纯 Mock 模式短路：MCP_USE_MOCK=true 时不请求真实 API，
+        # 避免生产端点不可达时每次调用都经历 2×8s 超时重试（约 35s）。
+        if USE_MOCK:
+            logger.log_warning(f"[API] [{skill_id}] Mock 模式启用，直接返回 Mock 数据（跳过真实 API）")
+            return self._get_mock_response(skill_id)
+
         logger.log_api_request(skill_id, method, url, params)
         
         if not url:
@@ -291,6 +297,96 @@ class CMDBAPIClient:
 
 client = CMDBAPIClient()
 
+def _trim_records_fields(result: dict, fields) -> dict:
+    """按 fields 白名单裁剪 records，减小 agent 上下文体积。fields 不透传给后端"""
+    if not fields or not isinstance(result, dict):
+        return result
+    try:
+        data = result.get("data") or {}
+        records = data.get("records")
+        if not isinstance(records, list):
+            return result
+        keep = [f for f in fields if isinstance(f, str) and f]
+        if not keep:
+            return result
+        data["records"] = [{f: r.get(f) for f in keep if f in r} for r in records]
+        data["_trimmedFields"] = keep
+    except Exception:
+        pass
+    return result
+
+
+def _fetch_product_all_pages(cond: dict, product_id: str, page_size: int = 100, max_pages: int = 200) -> list:
+    """按单个 productId 拉全部分页记录（后端接口 productId 为单选）"""
+    page, records = 1, []
+    while page <= max_pages:
+        resp = client.query_server(**{**cond, "productId": product_id,
+                                      "pageSize": page_size, "currentPage": page})
+        data = resp.get("data") or {}
+        batch = data.get("records") or []
+        records.extend(batch)
+        total = data.get("total") or 0
+        if not batch or page * page_size >= total:
+            break
+        page += 1
+    return records
+
+
+def _query_servers_by_product_list(query_params: dict, product_ids: list, fields) -> dict:
+    """productIdList 内部实现：逐个 productId 查询 → 按服务器 id 去重合并（并集）"""
+    from concurrent.futures import ThreadPoolExecutor
+    try:
+        page = int(query_params.pop("currentPage", 1) or 1)
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        size = int(query_params.pop("pageSize", 100) or 100)
+    except (TypeError, ValueError):
+        size = 100
+    cond = {k: v for k, v in query_params.items() if v is not None}
+
+    # fetch 阶段最小化字段：必须含 id 用于去重；用户 fields 一并取（回传时再精确裁剪）
+    fetch_keep = None
+    if fields:
+        fetch_keep = list(dict.fromkeys(['id'] + [f for f in fields if isinstance(f, str) and f]))
+
+    errors, seen, union = [], set(), []
+
+    def _work(pid):
+        try:
+            recs = _fetch_product_all_pages(cond, pid, page_size=100)
+            if fetch_keep:
+                recs = [{k: r.get(k) for k in fetch_keep if k in r} for r in recs]
+            return pid, recs
+        except Exception as exc:  # noqa: BLE001
+            return pid, exc
+
+    workers = max(1, min(len(product_ids), 6))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for pid, recs in pool.map(_work, product_ids):
+            if isinstance(recs, Exception):
+                errors.append(str(pid))
+                continue
+            for rec in recs:
+                rid = rec.get("id")
+                if rid is not None and rid not in seen:
+                    seen.add(rid)
+                    union.append(rec)
+
+    total = len(union)
+    start = (page - 1) * size
+    records = union[start:start + size] if start < total else []
+    message = f"成功状态（MCP 合并 {len(product_ids)} 个产品，按id去重后共 {total} 台）"
+    if errors:
+        message += f"；{len(errors)} 个产品查询失败: {','.join(errors)}"
+    return {
+        "code": 200, "message": message, "fail": False,
+        "data": {
+            "records": records, "total": total, "size": len(records),
+            "current": page, "pages": (total + size - 1) // size if size else 0,
+        },
+    }
+
 # ============================================================================
 # 标准 MCP 协议定义
 # ============================================================================
@@ -303,6 +399,7 @@ MCP_TOOLS = [
             "type": "object",
             "properties": {
                 "node": {"type": "string", "description": "机房位置，如'云公司->贵州'"},
+                "nodeIpStr": {"type": "string", "description": "复合查询：机房+IP 精确组合，格式为『机房名称 IP地址』（空格分隔），多个组合用换行分隔，如 '云公司-广州 192.168.1.1'。仅当用户同时给出机房和 IP 的组合条件时使用；单独按 IP 或机房查询请分别用 ip / node"},
                 "state": {"type": "string", "description": "服务器状态，0=在线, 1=库存, 2=计划上线, 3=维修中, 4=已报废, 5=待分配, 6=待清退", "enum": ["0", "1", "2", "3", "4", "5", "6"]},
                 "osType": {"type": "string", "description": "操作系统", "enum": ["linux", "windows"]},
                 "type": {"type": "string", "description": "服务器类型，0=物理机, 1=自有虚拟机, 2=第三方云机", "enum": ["0", "1", "2"]},
@@ -313,6 +410,15 @@ MCP_TOOLS = [
                 "belong": {"type": "integer", "description": "归属类型，1=云网, 2=视联"},
                 "isFromOutside": {"type": "string", "description": "信创标识，0=非信创, 1=信创", "enum": ["0", "1"]},
                 "isReplaceForChinaProduction": {"type": "string", "description": "国产化替换状态，0=未替换, 1=已替换", "enum": ["0", "1"]},
+                "productId": {"type": "string", "description": "产品ID（需先将产品名称在 product-options 文档中匹配为ID后传入，单选）。注意：不要传产品名称，传ID才生效。若不确定ID，先查 skill 的 product-options.md"},
+                "productIdList": {"type": "array", "items": {"type": "string"}, "description": "⚠️【产品层】产品ID数组（天翼看家/云眼等产品树节点，与 productId 二选一勿同时传）。注意别与 projectIdList 混淆（那是最细的【项目层】）。后端只支持产品单选，MCP 内部会按每个产品ID分别查询后按服务器id去重合并，total=并集台数；支持分页与 fields 裁剪。示例: [\"产品A的ID\",\"产品B的ID\"]"},
+                "projectIdList": {"type": "array", "items": {"type": "string"}, "description": "⚠️【项目层】项目ID数组（CMDB 最细层：产品>工程>项目，如某个具体项目名匹配到的ID，多选，后端原生支持）。【勿填产品ID】——产品查询请用 productId / productIdList（两参数仅差一字母，填错会返回 total=0）"},
+                "rack": {"type": "string", "description": "机架位置（单选），直接传机架名称，如'龙晖九楼B01机架'"},
+                "operABList": {"type": "array", "items": {"type": "string"}, "description": "【负责人A或B】负责人姓名数组（多选，数组内为或），直接传用户提到的姓名，后端按姓名命中 operA 或 operB 任一即返回。用户只说\"XX负责的服务器\"、不区分主备时优先用这个。与 operAList/operBList 一般三选一，勿重复叠加"},
+                "operAList": {"type": "array", "items": {"type": "string"}, "description": "【负责人A】主负责人姓名数组（多选，数组内为或），仅匹配 operA 字段。仅当用户明确要\"主负责人\"时使用，与 operABList/operBList 一般三选一"},
+                "operBList": {"type": "array", "items": {"type": "string"}, "description": "【负责人B】备/协同负责人姓名数组（多选，数组内为或），仅匹配 operB 字段。仅当用户明确要\"B角负责人\"时使用，与 operABList/operAList 一般三选一"},
+                "contractType": {"type": "integer", "description": "合同类型（单选），传合同类型对应的ID。取值参考 contract-options 可选值文档（当前技能未内置该文档，无法确定ID时不传此参数）"},
+                "fields": {"type": "array", "items": {"type": "string"}, "description": "【性能优化】只返回这些字段，可大幅减小响应体积。不传则返回全部字段。常见字段: hostName,ip,node,type,state,belong,xc,isFromOutside,os,osType,specification,cpuCode,cpuCores,memory,gpus,hardDisk,usingBy,productRate,product1Id,productProjectList,onlineDate,environment,operA。如统计场景只需: [\"hostName\",\"type\",\"cpuCores\",\"gpus\",\"os\",\"usingBy\",\"productProjectList\"]"},
                 "currentPage": {"type": "integer", "description": "页码", "minimum": 1},
                 "pageSize": {"type": "integer", "description": "每页条数", "minimum": 1, "maximum": 100}
             },
@@ -468,8 +574,16 @@ class MCPProtocolHandler:
             raise ValueError(f"工具 {tool_name} 未启用，当前仅支持: {', '.join(ENABLED_TOOLS)}")
 
         if tool_name == "cmdb_server_query":
-            query_params = {k: v for k, v in arguments.items() if v is not None}
-            result = client.query_server(**query_params)
+            fields = arguments.get("fields")
+            query_params = {k: v for k, v in arguments.items() if k != "fields" and v is not None}
+            pid_list = query_params.pop("productIdList", None)
+            if pid_list and isinstance(pid_list, list) and len(pid_list) >= 1:
+                query_params.pop("productId", None)  # 与 productIdList 互斥防呆
+                result = _query_servers_by_product_list(
+                    query_params, [str(p) for p in pid_list], fields)
+            else:
+                result = client.query_server(**query_params)
+            result = _trim_records_fields(result, fields)
         elif tool_name == "server_public_ip_query":
             query_params = {k: v for k, v in arguments.items() if v is not None}
             result = client.query_public_ip(**query_params)
@@ -510,7 +624,7 @@ class MCPProtocolHandler:
                 logger.log_mcp_request(method, request_id)
                 response = self._build_response(request_id, {
                     "name": "cmdb-mcp-server",
-                    "version": "2.0.0",
+                    "version": "2.1.0",
                     "capabilities": MCP_CAPABILITIES
                 })
                 logger.log_mcp_response(method, request_id, True)
@@ -592,7 +706,7 @@ if HAS_FASTAPI:
     app = FastAPI(
         title="cmdb-mcp-server",
         description="企业 CMDB 运维数据综合查询服务 - 标准 MCP 协议实现",
-        version="2.0.0"
+        version="2.1.0"
     )
     
     class ServerQueryParams(BaseModel):
@@ -646,7 +760,7 @@ if HAS_FASTAPI:
     def root():
         return {
             "service": "cmdb-mcp-server",
-            "version": "2.0.0",
+            "version": "2.1.0",
             "description": "企业 CMDB 运维数据综合查询服务 - 标准 MCP 协议实现",
             "mcp_protocol": "standard",
             "capabilities": ["tools/list", "tools/call"],
@@ -673,7 +787,7 @@ if HAS_FASTAPI:
         return {
             "status": "healthy",
             "service": "cmdb-mcp-server",
-            "version": "2.0.0",
+            "version": "2.1.0",
             "mock_enabled": USE_MOCK,
             "protocol": "standard_mcp",
             "sse_clients": len(mcp_handler.sse_clients)
@@ -710,10 +824,15 @@ if HAS_FASTAPI:
         )
     
     @app.post("/messages", tags=["MCP 协议"])
-    async def messages_endpoint(request: dict):
+    def messages_endpoint(request: dict):
         """
         标准 MCP 消息端点（SSE 传输模式配套）
         客户端通过此端点发送 MCP 协议消息（initialize、tools/list、tools/call）
+
+        注意：使用 def（FastAPI 线程池）而非 async def——
+        handle_message 内部是同步 requests 阻塞调用（最长 8s×2 重试≈17s/次），
+        若放 async def 会阻塞整个 uvicorn 事件循环，导致并发 tools/call 全部串行排队，
+        平台分页拉取多页时后到请求超时无响应。
         """
         response, should_broadcast = mcp_handler.handle_message(request)
         
@@ -723,11 +842,15 @@ if HAS_FASTAPI:
         return JSONResponse(content=response)
     
     @app.post("/mcp", tags=["MCP 协议"])
-    async def mcp_endpoint(request: dict):
+    def mcp_endpoint(request: dict):
         """
         标准 MCP 单一入口端点（Streamable HTTP 传输模式）
         所有 MCP 协议消息通过此单一端点发送（initialize、tools/list、tools/call）
         符合 MCP 2025-03-26 规范
+
+        注意：使用 def（FastAPI 线程池）而非 async def——
+        handle_message 内部是同步 requests 阻塞调用，async def 会阻塞事件循环，
+        并发 tools/call 会被串行化（详见 /messages 注释）。
         """
         response, should_broadcast = mcp_handler.handle_message(request)
         

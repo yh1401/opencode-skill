@@ -1,0 +1,15 @@
+*.log
+*.vim
+*.swp
+.vagrant/
+.golangci-lint/
+
+dist/
+/prometheus-mcp-server
+mcp.json
+
+# Generated docs submodule commit hash (created by make submodules / goreleaser)
+cmd/prometheus-mcp-server/external/docs/COMMIT_HASH
+
+# Grafana dashboards synced into Helm chart at build time (source of truth: grafana/)
+charts/prometheus-mcp-server/dashboards/

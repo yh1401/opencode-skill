@@ -9,7 +9,7 @@
       "description": "查询CMDB服务器信息，支持按机房、状态、类型等多条件组合查询（数据来源于 MCP 服务 cmdb-mcp-server）",
       "enabled": true,
       "path": "skills/cmdb-server-query/SKILL.md",
-      "keywords": ["服务器", "主机", "机房", "IP", "公网IP", "配置", "硬件", "CPU", "内存"],
+      "keywords": ["服务器", "主机", "机房", "IP", "公网IP", "配置", "硬件", "CPU", "内存", "统计", "产品", "数量", "非信创", "子孙", "子产品", "明细", "平台"],
       "mcp_tool": "cmdb_server_query",
       "version": "1.0.0",
       "priority": 1

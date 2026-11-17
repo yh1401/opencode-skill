@@ -1,7 +1,7 @@
 {
   "_comment": "Mock 数据文件 — 通过 MCP_USE_MOCK=true 环境变量启用，默认关闭",
   "_usage": "当 MCP_USE_MOCK=true 且 API 调用失败时，使用对应 skill 的 mock 数据返回",
-  "_lastUpdated": "2026-06-24",
+  "_lastUpdated": "2026-09-03",
   "cmdb-server-query": {
     "code": 200,
     "message": "success",
@@ -9,25 +9,51 @@
     "data": {
       "records": [
         {
-          "id": "srv-001",
-          "hostName": "gz-server-01",
-          "ip": "192.168.7.101",
-          "publicIp": "113.12.13.14",
-          "vip": "",
+          "id": "0000ce6886dd4ef1a52195dc4ac0056f",
+          "hostName": "ecs-72e0-1226340",
+          "ip": "192.168.3.173,",
+          "publicIp": null,
+          "vip": "192.168.3.191",
           "node": "云公司->贵州",
-          "state": "0",
-          "serverType": "物理机",
-          "cpuCores": "32",
-          "memory": "128",
-          "os": "CentOS 7.9",
+          "state": 0,
+          "type": 2,
+          "belong": 2,
+          "xc": 0,
+          "isFromOutside": 0,
+          "osType": "linux",
+          "os": "CentOS Linux 7.3.1611 Core",
           "environment": "生产",
-          "productName": "规则引擎平台",
-          "projectName": "guizh-rules-api",
-          "operA": "张三",
-          "operB": "李四",
-          "assetNo": "SN2024001",
-          "rack": "R01-A01",
-          "bandWidth": "100Mbps"
+          "specification": "8C32GSAS(600G)",
+          "cpuCores": 8,
+          "memory": 32,
+          "serverId": "ecs-72e0-1226340",
+          "usingBy": "haproxy,mysql",
+          "onlineDate": "2019-12-30 12:21:04",
+          "operA": "余良彬",
+          "operB": "余良彬,傅翔,廖明礼,梁晨,王伟杰",
+          "productRate": "天翼看家:100",
+          "productProjectList": [
+            {
+              "productId": "1661fea29df44946ab2ff2bb9577179f",
+              "productName": "天翼看家",
+              "projectBasisList": [
+                {
+                  "projectBasisId": "6cac566e4d35461593d3fe4f4eca11ba",
+                  "projectBasisName": "tykj-conf-direct-mysql-db",
+                  "projectBasisChineseName": "tykj-conf-direct-mysql-db",
+                  "projectList": [
+                    {
+                      "projectId": "ae3a205c2c644582934e0f94a030cf75",
+                      "projectName": "guizh-tykj-conf-direct-mysql-db",
+                      "projectServerType": "生产"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "assetNo": null,
+          "rack": null
         },
         {
           "id": "srv-002",
@@ -36,19 +62,45 @@
           "publicIp": "113.12.13.15",
           "vip": "10.0.0.1",
           "node": "云公司->贵州",
-          "state": "0",
-          "serverType": "虚拟机",
-          "cpuCores": "16",
-          "memory": "64",
+          "state": 0,
+          "type": 1,
+          "belong": 2,
+          "xc": 0,
+          "isFromOutside": 0,
+          "osType": "linux",
           "os": "Ubuntu 20.04",
           "environment": "测试",
-          "productName": "天翼看家",
-          "projectName": "tykj-kafka-test",
+          "specification": "16C64G",
+          "cpuCores": 16,
+          "memory": 64,
+          "serverId": "ecs-002",
+          "usingBy": "kafka",
+          "onlineDate": "2022-03-15 10:00:00",
           "operA": "王五",
           "operB": "赵六",
+          "productRate": "天翼看家:100",
+          "productProjectList": [
+            {
+              "productId": "1661fea29df44946ab2ff2bb9577179f",
+              "productName": "天翼看家",
+              "projectBasisList": [
+                {
+                  "projectBasisId": "pb-0002",
+                  "projectBasisName": "tykj-kafka",
+                  "projectBasisChineseName": "看家kafka工程",
+                  "projectList": [
+                    {
+                      "projectId": "prj-0002",
+                      "projectName": "guizh-tykj-kafka-test",
+                      "projectServerType": "测试"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
           "assetNo": "SN2024002",
-          "rack": "R01-A02",
-          "bandWidth": "50Mbps"
+          "rack": "R01-A02"
         },
         {
           "id": "srv-003",
@@ -57,19 +109,45 @@
           "publicIp": "114.25.36.47",
           "vip": "",
           "node": "省公司->上海",
-          "state": "0",
-          "serverType": "物理机",
-          "cpuCores": "48",
-          "memory": "256",
+          "state": 0,
+          "type": 0,
+          "belong": 1,
+          "xc": 1,
+          "isFromOutside": 1,
+          "osType": "linux",
           "os": "CentOS 8.2",
           "environment": "生产",
-          "productName": "5G工业视宽平台",
-          "projectName": "5g-industry-api",
+          "specification": "48C256G",
+          "cpuCores": 48,
+          "memory": 256,
+          "serverId": "sh-server-01",
+          "usingBy": "api",
+          "onlineDate": "2021-07-01 09:00:00",
           "operA": "钱七",
           "operB": "孙八",
+          "productRate": "天翼云眼:100",
+          "productProjectList": [
+            {
+              "productId": "0bd177f3a1654780abb77de8bfc3cc5e",
+              "productName": "天翼云眼",
+              "projectBasisList": [
+                {
+                  "projectBasisId": "pb-0003",
+                  "projectBasisName": "tyyy-video-api",
+                  "projectBasisChineseName": "云眼视频接口工程",
+                  "projectList": [
+                    {
+                      "projectId": "prj-0003",
+                      "projectName": "sh-tyyy-video-api",
+                      "projectServerType": "生产"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
           "assetNo": "SN2024003",
-          "rack": "R02-B01",
-          "bandWidth": "200Mbps"
+          "rack": "R02-B01"
         },
         {
           "id": "srv-004",
@@ -78,19 +156,37 @@
           "publicIp": "115.36.47.58",
           "vip": "10.0.0.2",
           "node": "省公司->新疆乌鲁木齐",
-          "state": "1",
-          "serverType": "物理机",
-          "cpuCores": "24",
-          "memory": "64",
+          "state": 1,
+          "type": 0,
+          "belong": 2,
+          "xc": 0,
+          "isFromOutside": 0,
+          "osType": "linux",
           "os": "CentOS 7.9",
           "environment": "灰度",
-          "productName": "边缘计算平台",
-          "projectName": "edge-compute",
+          "specification": "24C64G",
+          "cpuCores": 24,
+          "memory": 64,
+          "serverId": "xj-server-01",
+          "usingBy": "edge",
+          "onlineDate": "2020-01-20 08:30:00",
           "operA": "周九",
           "operB": "吴十",
+          "productRate": "天翼看家:50,规则引擎平台:50",
+          "productProjectList": [
+            {
+              "productId": "1661fea29df44946ab2ff2bb9577179f",
+              "productName": "天翼看家",
+              "projectBasisList": []
+            },
+            {
+              "productId": "02b970e590224317b7231766f22f6190",
+              "productName": "规则引擎平台",
+              "projectBasisList": []
+            }
+          ],
           "assetNo": "SN2024004",
-          "rack": "R03-C01",
-          "bandWidth": "100Mbps"
+          "rack": "R03-C01"
         }
       ],
       "total": 4,

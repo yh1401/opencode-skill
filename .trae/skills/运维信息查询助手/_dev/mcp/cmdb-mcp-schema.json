@@ -10,6 +10,7 @@
     "type": "object",
     "properties": {
       "node": {"type": "string", "description": "机房位置"},
+      "nodeIpStr": {"type": "string", "description": "复合查询：机房+IP 精确组合，格式为『机房名称 IP地址』（空格分隔），多个组合用换行分隔，如 '云公司-广州 192.168.1.1'"},
       "state": {"type": "string", "description": "服务器状态", "enum": ["0", "1", "2", "3", "4", "5", "6"]},
       "osType": {"type": "string", "description": "操作系统", "enum": ["linux", "windows"]},
       "type": {"type": "string", "description": "服务器类型", "enum": ["0", "1", "2"]},
@@ -20,6 +21,11 @@
       "belong": {"type": "integer", "description": "归属类型"},
       "isFromOutside": {"type": "string", "description": "信创标识", "enum": ["0", "1"]},
       "isReplaceForChinaProduction": {"type": "string", "description": "国产化替换状态", "enum": ["0", "1"]},
+      "rack": {"type": "string", "description": "机架位置（单选），直接传机架名称"},
+      "operABList": {"type": "array", "items": {"type": "string"}, "description": "负责人A或B姓名数组（多选）：不区分主备时优先用，与 operAList/operBList 三选一"},
+      "operAList": {"type": "array", "items": {"type": "string"}, "description": "负责人A（主负责人）姓名数组（多选），仅匹配 operA 字段"},
+      "operBList": {"type": "array", "items": {"type": "string"}, "description": "负责人B（备/协同负责人）姓名数组（多选），仅匹配 operB 字段"},
+      "contractType": {"type": "integer", "description": "合同类型（单选），传合同类型ID（contract-options 未内置，无法确定时不传）"},
       "currentPage": {"type": "integer", "description": "页码", "minimum": 1},
       "pageSize": {"type": "integer", "description": "每页条数", "minimum": 1, "maximum": 100}
     },

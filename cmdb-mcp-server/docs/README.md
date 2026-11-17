@@ -230,7 +230,7 @@ Agent 平台                  MCP 服务器
   "id": 1,
   "result": {
     "name": "cmdb-mcp-server",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "capabilities": {
       "tools/list": {},
       "tools/call": {}
@@ -315,11 +315,43 @@ Agent 平台                  MCP 服务器
 
 | 工具名 | 说明 | 参数示例 |
 |--------|------|---------|
-| `cmdb_server_query` | 查询 CMDB 服务器信息 | `ip`, `hostName`, `node`, `state` |
+| `cmdb_server_query` | 查询 CMDB 服务器信息 | `ip`, `hostName`, `node`, `state`, `operABList` |
 | `server_public_ip_query` | 查询服务器公网 IP | `ip`, `hostName`, `node` |
 | `project_deployment_query` | 查询项目部署记录 | `projectName`, `environment`, `deploymentStatus` |
 | `product_query` | 查询产品信息 | `productName`, `department` |
 | `project_basis_query` | 查询项目基础信息 | `projectName`, `productName`, `projectType` |
+
+### cmdb_server_query 参数说明
+
+以下为 MCP inputSchema 暴露的全部入参（完整取值/名称匹配规则见 skill 侧 `references/cmdb-param-guide.md`）：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| node | string | 机房位置，如 `云公司->贵州` |
+| nodeIpStr | string | 复合查询：机房+IP 精确组合，格式『机房名称 IP地址』（空格分隔），多个用换行分隔，如 `云公司-广州 192.168.1.1`；单独按 IP/机房查请用 `ip` / `node` |
+| state | string | 服务器状态：0=在线, 1=库存, 2=计划上线, 3=维修中, 4=已报废, 5=待分配, 6=待清退 |
+| osType | string | 操作系统：linux / windows |
+| type | string | 服务器类型：0=物理机, 1=自有虚拟机, 2=第三方云机 |
+| hostName | string | 主机名（模糊匹配） |
+| ip | string | 内网IP/公网IP（模糊匹配） |
+| assetNo | string | 资产编号 |
+| serial | string | 序列号 |
+| belong | integer | 归属类型：1=云网, 2=视联 |
+| isFromOutside | string | 信创标识：0=非信创, 1=信创 |
+| isReplaceForChinaProduction | string | 国产化替换状态：0=未替换, 1=已替换 |
+| productId | string | 产品ID（单选，需先按名称匹配为ID） |
+| productIdList | array | 产品ID数组（多选，与 productId 二选一） |
+| projectIdList | array | 项目ID数组（多选，需先按名称匹配为ID） |
+| rack | string | 机架位置（单选），如 `龙晖九楼B01机架` |
+| operABList | array | 负责人A或B姓名数组（多选），不区分主备时优先用 |
+| operAList | array | 负责人A（主负责人）姓名数组（多选） |
+| operBList | array | 负责人B（备/协同负责人）姓名数组（多选） |
+| contractType | integer | 合同类型ID（单选） |
+| fields | array | 只返回指定字段，减小响应体积 |
+| currentPage | integer | 页码，默认 1 |
+| pageSize | integer | 每页条数，1~100，默认 15 |
+
+> `operABList` / `operAList` / `operBList` 是同一组负责人的三种筛法（A或B / 仅A / 仅B），一般三选一，勿叠加传参。
 
 ## Agent 平台配置
 

@@ -172,7 +172,7 @@ author: Skill Agent Team
 | **应用模糊匹配** | 用户描述匹配到多个应用 | 列出候选 | [话术 2](#2-应用名模糊匹配到多个) |
 | **范围过大** | 用户只说了 appId，没具体查什么 | 查默认 namespace 配置，结果多时提示收窄 | [话术 3](#3-范围过大-仅指定应用) |
 | **查询模式不明** | 无法判断查配置/应用列表/全局搜索 | 默认 config，提示其他模式；检测到"全局/哪些应用/全部/所有"等关键词→用全局搜索 | [话术 4](#4-查询模式不确定) |
-| **全局配置搜索** | 用户要"全局查/全部应用/哪些应用用到了/比对配置/搜某个地址或关键词在哪些应用的配置里" | 调用 apollo_config_global_search(keyword, searchField, env, maxResults) | [话术 8](#8-全局配置搜索) |
+| **全局配置搜索** | 用户要"全局查/全部应用/哪些应用用到了/比对配置/搜某个地址或关键词在哪些应用的配置里" | 大范围先摸底再精查：明确套则带 apolloHostIds；默认先跑摸底档 apollo_config_global_search(keyword, searchField, env, maxResults≈200, scanBudget≈15) 拿命中样本，需要完整覆盖再跑全量档；详见 [话术 8/8a](#8-全局配置搜索) | [话术 8](#8-全局配置搜索) |
 | **无查询结果** | API 返回空或 404 | 提示检查条件 | [话术 5](#5-无查询结果) |
 | **结果过多** | 配置项 > 15 条 | 提示搜索收窄 | [话术 6](#6-结果过多) |
 | **API 调用失败-超时** | 工具返回 code=504 / errorType=timeout / 消息含"超时" | 不要重试！建议换环境/缩小范围/稍后再试 | [话术 7a](#7a-查询超时) |
@@ -343,8 +343,9 @@ MCP 自动切换到 {usedHostId}（{hostName}）完成查询。
 ⚠️ 结果可能不全（超预算提前终止），以下应用/套未完成扫描：
 {unfinishedApps 前 5 个}
 
-**建议下一步**：
-- 缩小范围：指定 apolloHostId 缩小到某一套再搜
+**建议下一步**（结果已有效，先展示；需要更全再往下收敛）：
+- 缩小范围：带 apolloHostIds 只扫用户关注的那几套（如天翼云眼 [3, 14]）
+- 换摸底档续扫：用 scanBudget=15-20 对未完成部分分片再扫，每片一批结果，避免一次干等 60s
 - 指定 namespaceName：避免自动扩展扫 5 个 namespace
 - 缩小 maxResults：减少返回量、加快响应
 ```
@@ -377,11 +378,24 @@ MCP 自动切换到 {usedHostId}（{hostName}）完成查询。
 💡 您可以说："只看 VALUE 匹配" / "搜索 DEV 环境" / "限制在 50 条以内" 来缩小范围
 ```
 
-> **工具调用**示例：
+> **工具调用**示例（摸底档：短预算快速拿命中，范围明确就带 apolloHostIds）：
 > ```json
-> {"tool_name": "apollo_config_global_search", "parameters": {"keyword": "vcpinner.cn:13302", "searchField": "value", "env": "PRO", "maxResults": 50}}
+> {"tool_name": "apollo_config_global_search", "parameters": {"keyword": "vcpinner.cn:13302", "searchField": "value", "env": "PRO", "maxResults": 200, "scanBudget": 15, "apolloHostIds": [3, 14]}}
 > ```
-> 预计耗时 30-60 秒（并发遍历 10+ 套 × 700+ 应用）。建议在回复前先告知用户"正在全局搜索，可能需要几十秒"。
+> **全量收尾档**（需要"没有遗漏"时，去掉 scanBudget 走默认 60s）：
+> ```json
+> {"tool_name": "apollo_config_global_search", "parameters": {"keyword": "vcpinner.cn:13302", "searchField": "value", "env": "PRO", "maxResults": 200}}
+> ```
+
+#### 8a. 全局搜索分阶段策略（范围大/数据量大时必走，先摸后精）
+
+全局搜索耗时本质 = **套数 × 应用数 × namespace 数** 次代理请求，与关键词命中多少无关。范围越大越可能 partial/超时（30-60s+）。**不要一上来全量跑满 60s**，按下面节奏走，每步都先给用户可看的结果：
+
+1. **摸底档（10-20s）**：`apolloHostIds`（用户明确套就带，未明确先出 host 列表让用户选）+ `scanBudget=10-20` + `maxResults≈200` → 返回 partial 也照常展示 matches（命中已有效），用 summary/unfinishedApps 判断规模与缺口；
+2. **精查档（秒级）**：对命中候选 appId 用 `apollo_config_query` 补查其余 namespace（datasource/redis/common/logging）确认精确值（5 分钟缓存，连续查很快）；
+3. **收尾档（30-60s+）**：确实要"没有遗漏"时才对未完成部分分片（更大 scanBudget / 缩小 apolloHostIds 定向补扫）或全量收尾，partial 先展示再标未完成。
+
+> 详细策略与示例见子技能 apollo-config-search 的"全局搜索分阶段执行策略"。
 
 ### ⚠️ 执行纪律（必须遵守，否则用户会卡住/等超时）
 
@@ -391,7 +405,7 @@ MCP 自动切换到 {usedHostId}（{hostName}）完成查询。
 |---|---|---|
 | **🔴 禁止盲目重试** | 收到 `errorType: timeout/unavailable` 或 `retryable: false` 的错误后，**绝不**用相同参数重试同一个工具 | 用户等超时 → 体验极差 |
 | **🔴 禁止连续调同一工具** | 即使参数微调（如换 appId），如果上游错误显示是 EasyOps 代理整体不可用，全部工具都会失败 | 白跑多轮 |
-| **🟡 长操作前先给进度提示** | 调 `apollo_config_global_search` 前，**必须先回复用户**："正在全局搜索，预计 30-60 秒，请稍等" | 用户以为卡住了 |
+| **🟡 长操作前先给进度提示** | 调 `apollo_config_global_search` 前，**必须先回复用户**预计时长：摸底档（scanBudget=10-20）说"约 10-20 秒"，全量档说"约 30-60 秒+，可能返回部分结果" | 用户以为卡住了 |
 | **🟡 优先缩小范围而非重试** | 查询失败时，优先建议用户"缩小到某一套再搜"、"换个关键词过滤"，而不是重新跑一遍 | 重试大概率还是超时 |
 | **🟡 partial 结果先展示再建议** | 全局搜索返回 `partial=true` 时，**先展示已找到的匹配项**，再标注"部分未完成"，不要等超时就返回空错 | 结果丢了 |
 | **🟢 fallback 正常展示** | 查询返回 `data.fallback=true` 时，正常展示配置 + 标注"已自动切换套"，用户不关心内部套 ID 差异 | 正常行为 |
@@ -413,8 +427,9 @@ MCP 自动切换到 {usedHostId}（{hostName}）完成查询。
   ├─ 判定查询意图（关键词匹配优先级）：
   │    │
   │    ├─ 全局配置搜索（"全局/哪些应用/全部/所有/比对/搜...在哪些/用到了/全局查...配置"）
-  │    │    → 调 apollo_config_global_search(keyword, searchField='both', env='PRO', maxResults=100)
-  │    │    → 输出[话术8]（带 summary 统计 + matches 表格，标注 partial 未完成提示）
+  │    │    → 范围明确先带 apolloHostIds；**先跑摸底档** apollo_config_global_search(keyword, searchField='both', env='PRO', maxResults=200, scanBudget=15)
+  │    │    → 输出[话术8]（带 summary 统计 + matches 表格，partial 时先展示已有命中再标注未完成）
+  │    │    → 需要"没有遗漏"时再跑收尾档（去 scanBudget 走默认 60s / 对未完成套定向补扫），见[话术8a]
   │    │    → 用户可能提到"搜地址 X 在哪些应用"→ keyword 填地址；"搜所有 timeout 配置"→ keyword='timeout'
   │    │
   │    ├─ 查服务实例（"有哪些 Apollo"/"哪套"）→ 调 apollo_host_list（探活展示）→ 输出[话术0]

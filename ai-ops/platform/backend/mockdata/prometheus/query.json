@@ -1,0 +1,20 @@
+{
+  "_comment": "动态工具：up{instance=~\"host.*\"} 查 _up_table；其余 promql 返回本文件形态",
+  "status": "success",
+  "data": {
+    "resultType": "vector",
+    "result": [
+      {
+        "metric": {
+          "__name__": "node_load1",
+          "instance": "vcp-pro.tidb.vcpinner.cn:9100",
+          "job": "node_exporter"
+        },
+        "value": [
+          1793353030,
+          "0.42"
+        ]
+      }
+    ]
+  }
+}

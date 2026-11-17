@@ -1,0 +1,202 @@
+{
+  "code": 200,
+  "message": "success",
+  "fail": false,
+  "data": {
+    "records": [
+      {
+        "projectName": "ehome-pro-server",
+        "appId": "apollo-ehome-pro",
+        "productName": "天翼云眼",
+        "deployEnv": "生产",
+        "node": "云公司->贵州4c",
+        "hosts": [
+          {
+            "hostName": "ecs-4362c3",
+            "ip": "ehome-pro.mysql.ehomeinner.cn"
+          },
+          {
+            "hostName": "ecs-4362c3",
+            "ip": "ehome-pro.mysql.ehomeinner.cn"
+          },
+          {
+            "hostName": "ecs-4362c3",
+            "ip": "ehome-pro.mysql.ehomeinner.cn"
+          }
+        ],
+        "lastDeployTime": "2026-10-29 21:14:00",
+        "version": "v2.14.0",
+        "operator": "zn_huangt"
+      },
+      {
+        "projectName": "adapter-task-api",
+        "appId": "adapter-task-api",
+        "productName": "天翼云眼",
+        "deployEnv": "生产",
+        "node": "云公司->贵州4c",
+        "hosts": [
+          {
+            "hostName": "ecs-e0eabb",
+            "ip": "open-portal1.redis-cluster.vcp.ctseelinkinner.cn"
+          },
+          {
+            "hostName": "ecs-529ff0",
+            "ip": "open-portal.redis-cluster.camellia.vcp.ctseelinkinner.cn"
+          },
+          {
+            "hostName": "ecs-e0eabb",
+            "ip": "open-portal1.redis-cluster.vcp.ctseelinkinner.cn"
+          }
+        ],
+        "lastDeployTime": "2026-10-29 21:14:00",
+        "version": "v2.13.1",
+        "operator": "apollo"
+      },
+      {
+        "projectName": "area",
+        "appId": "area",
+        "productName": "天翼云眼",
+        "deployEnv": "生产",
+        "node": "云公司->贵州4c",
+        "hosts": [
+          {
+            "hostName": "ecs-edc229",
+            "ip": "areacode.mysql.vcpinner.cn"
+          },
+          {
+            "hostName": "ecs-4d6cce",
+            "ip": "areacode.mysql.ehomeinner.cn"
+          },
+          {
+            "hostName": "ecs-1ae34b",
+            "ip": "common.redis-cluster.camellia.ehome.ctseelinkinner.cn"
+          }
+        ],
+        "lastDeployTime": "2026-10-29 21:14:00",
+        "version": "v2.12.2",
+        "operator": "gaoshj"
+      },
+      {
+        "projectName": "ehome-auth",
+        "appId": "auth",
+        "productName": "天翼云眼",
+        "deployEnv": "生产",
+        "node": "云公司->贵州4c",
+        "hosts": [
+          {
+            "hostName": "ecs-a68242",
+            "ip": "vcp-common.mysql.vcpinner.cn"
+          },
+          {
+            "hostName": "ecs-18277c",
+            "ip": "auth.mysql.ehomeinner.cn"
+          },
+          {
+            "hostName": "ecs-1ae34b",
+            "ip": "common.redis-cluster.camellia.ehome.ctseelinkinner.cn"
+          }
+        ],
+        "lastDeployTime": "2026-10-29 21:14:00",
+        "version": "v2.11.3",
+        "operator": "zn_chenshy"
+      },
+      {
+        "projectName": "cloud-ehome-server",
+        "appId": "cloud-ehome",
+        "productName": "天翼云眼",
+        "deployEnv": "生产",
+        "node": "云公司->贵州4c",
+        "hosts": [
+          {
+            "hostName": "ecs-1f1990",
+            "ip": "vcp-common-local.codis.vcpinner.cn"
+          },
+          {
+            "hostName": "ecs-a21d5f",
+            "ip": "cloudservice-v2-1.rocketmq.vcpinner.cn"
+          },
+          {
+            "hostName": "ecs-68ed17",
+            "ip": "cloudservice-v2-2.rocketmq.vcpinner.cn"
+          }
+        ],
+        "lastDeployTime": "2026-10-29 21:14:00",
+        "version": "v2.10.4",
+        "operator": "maoyn"
+      },
+      {
+        "projectName": "cloud-video",
+        "appId": "cloud-video",
+        "productName": "天翼云眼",
+        "deployEnv": "生产",
+        "node": "云公司->贵州4c",
+        "hosts": [
+          {
+            "hostName": "ecs-e30312",
+            "ip": "vcp-common.codis-gw.vcpinner.cn"
+          },
+          {
+            "hostName": "ecs-0df95e",
+            "ip": "cloudservice.redis-gw.ehome.dlifeinner.cn"
+          },
+          {
+            "hostName": "ecs-e30312",
+            "ip": "vcp-common.codis-gw.vcpinner.cn"
+          }
+        ],
+        "lastDeployTime": "2026-10-29 21:14:00",
+        "version": "v2.14.5",
+        "operator": "maoyn"
+      },
+      {
+        "projectName": "ddnsmgr",
+        "appId": "ddnsmgr",
+        "productName": "天翼云眼",
+        "deployEnv": "生产",
+        "node": "云公司->贵州4c",
+        "hosts": [
+          {
+            "hostName": "ecs-25a50b",
+            "ip": "ddns-mgr.redis.vcpinner.cn"
+          },
+          {
+            "hostName": "ecs-3759a5",
+            "ip": "ddns-mgr.redis.ehomeinner.cn"
+          },
+          {
+            "hostName": "ecs-25a50b",
+            "ip": "ddns-mgr.redis.vcpinner.cn"
+          }
+        ],
+        "lastDeployTime": "2026-10-29 21:14:00",
+        "version": "v2.13.6",
+        "operator": "maoyn"
+      },
+      {
+        "projectName": "门铃告警消息推送服务-视频云网",
+        "appId": "detect",
+        "productName": "天翼云眼",
+        "deployEnv": "生产",
+        "node": "云公司->贵州4c",
+        "hosts": [
+          {
+            "hostName": "ecs-a9614e",
+            "ip": "vcp-pro.tidb.vcpinner.cn"
+          },
+          {
+            "hostName": "ecs-8d89a0",
+            "ip": "detect1.rocketmq.vcpinner.cn"
+          },
+          {
+            "hostName": "ecs-dc23ed",
+            "ip": "detect2.rocketmq.vcpinner.cn"
+          }
+        ],
+        "lastDeployTime": "2026-10-29 21:14:00",
+        "version": "v2.12.7",
+        "operator": "chenbx"
+      }
+    ],
+    "total": 8
+  }
+}

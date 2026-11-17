@@ -1,0 +1,22 @@
+services:
+  arch-opt-mcp-server:
+    build: .
+    image: arch-opt-mcp-server:2.0.0
+    container_name: arch-opt-mcp-server
+    ports:
+      - "8062:8062"
+    environment:
+      - MCP_USE_MOCK=${MCP_USE_MOCK:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_TO_FILE=false
+      - ARCH_PROXY_URL=${ARCH_PROXY_URL:-https://easyviews.tech.ctseelink.cn/api/third/thirdAuth/getTykjProvince}
+      - ARCH_APP_ID=${ARCH_APP_ID:-}
+      - ARCH_APP_SECRET=${ARCH_APP_SECRET:-}
+      - ARCH_PROVINCE=${ARCH_PROVINCE:-大模型}
+      - ARCH_PROMETHEUS_URL=${ARCH_PROMETHEUS_URL:-http://183.56.210.90:8082}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8062/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

@@ -1,0 +1,33 @@
+{
+  "total": 12,
+  "projects": [
+    "ehome-pro-server",
+    "adapter-task-api",
+    "area",
+    "ehome-auth",
+    "cloud-ehome-server",
+    "cloud-video",
+    "ddnsmgr",
+    "门铃告警消息推送服务-视频云网",
+    "device-access",
+    "device-status-service",
+    "ehome线上版本",
+    "ehome-account"
+  ],
+  "filtered": [
+    "ehome-pro-server",
+    "adapter-task-api",
+    "area",
+    "ehome-auth",
+    "cloud-ehome-server",
+    "cloud-video",
+    "ddnsmgr",
+    "门铃告警消息推送服务-视频云网",
+    "device-access",
+    "device-status-service",
+    "ehome线上版本",
+    "ehome-account"
+  ],
+  "suffixOnly": null,
+  "suffix": null
+}
