@@ -1,0 +1,25 @@
+{
+  "status": "success",
+  "data": {
+    "nodes": [
+      {
+        "node": "云公司->贵州4c",
+        "nodeCode": "GZ4C",
+        "hostCount": 186,
+        "appCount": 68
+      },
+      {
+        "node": "云公司->贵州4多AZ",
+        "nodeCode": "GZ4AZ",
+        "hostCount": 92,
+        "appCount": 25
+      },
+      {
+        "node": "省公司->上海",
+        "nodeCode": "SH",
+        "hostCount": 54,
+        "appCount": 9
+      }
+    ]
+  }
+}

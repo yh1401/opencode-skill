@@ -1,0 +1,13 @@
+{
+  "server": "cmdb",
+  "tool": "cmdb_server_query",
+  "args": {
+    "currentPage": 1,
+    "ip": "192.168.3.173",
+    "pageSize": 1
+  },
+  "ok": false,
+  "error": "Post \"http://127.0.0.1:8061/mcp\": context deadline exceeded",
+  "latencyMs": 8002,
+  "at": "2026-10-28T16:35:21.880077+08:00"
+}

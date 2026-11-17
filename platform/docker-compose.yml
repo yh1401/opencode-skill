@@ -1,0 +1,164 @@
+# 一体化本地编排：mock 上游 + 平台后端 + 前端 + Postgres。
+#
+# 默认 `./scripts/docker_up.sh` 即启动全链路（它会先造数、交叉编译 linux 二进制、构建前端 dist）：
+#   mock-mcp  8888(pinpoint) / 8090(prometheus) / 8061(cmdb) / 9201(es)
+#   backend   8080  →  PINPOINT_MCP_URL 等指向 mock-mcp
+#   frontend  5173  →  nginx 静态站 + /api 反代 backend
+#
+# 若要对真实环境，使用 --profile real-mcp 启动仓库外的 pinpoint-mcp / prometheus-mcp，
+# 并把 backend 的 *_MCP_URL 改成对应地址（该 profile 与 mock-mcp 端口冲突，不可同时启用）。
+#
+# 后端连接串（可选，接 Postgres 备份镜像）：
+#   POSTGRES_DSN=postgres://aiops:aiops@postgres:5432/aiops?sslmode=disable
+
+name: aiops-platform
+
+x-backend: &backend
+  build:
+    context: ./backend
+  image: aiops-platform/backend:local
+  restart: unless-stopped
+  environment:
+    TZ: Asia/Shanghai
+
+services:
+  # Mock MCP 上游：单进程四端口，数据来自 ./backend/mockdata（可直接改仓库文件，重启后生效）
+  mock-mcp:
+    <<: *backend
+    container_name: aiops-mock-mcp
+    command: ["/app/mockmcp"]
+    environment:
+      TZ: Asia/Shanghai
+      MOCKDATA_DIR: /app/mockdata
+    volumes:
+      - ./backend/mockdata:/app/mockdata
+    ports:
+      - "8888:8888"
+      - "8090:8090"
+      - "8061:8061"
+      - "9201:9201"
+
+  # 平台后端：拓扑读 ../topo/tprel/data 快照，状态落 ./backend/data
+  backend:
+    <<: *backend
+    container_name: aiops-backend
+    depends_on:
+      - mock-mcp
+    command: ["/app/aiops-server"]
+    environment:
+      TZ: Asia/Shanghai
+      HTTP_ADDR: ":8080"
+      TOPO_MODE: file
+      TOPO_DATA_DIR: /data/tprel
+      STORE_DIR: /app/data
+      PINPOINT_MCP_URL: http://mock-mcp:8888/mcp
+      PROMETHEUS_MCP_URL: http://mock-mcp:8090/mcp
+      CMDB_MCP_URL: http://mock-mcp:8061/mcp
+      ES_MCP_URL: http://mock-mcp:9201/mcp
+      # 演示时不跑巡检定时任务，避免每 20s 产生的 RISK 告警占满自动排障名额；
+      # 需要时可在页面上手动触发巡检。
+      INSPECT_CRON_ENABLED: "false"
+      ALARM_POLL_INTERVAL_SEC: "60"
+      # 外部日志分析服务（log_analyzer，宿主机 :8020）：
+      # /log-analysis 页的健康探测与排障日志取证共用此地址；服务没起时该页展示降级提示，不影响其他功能。
+      # 本机 8000 被 prometheus-mcp-server 占用，故统一改用 8020。
+      LOG_ANALYZER_URL: ${LOG_ANALYZER_URL:-http://host.docker.internal:8020}
+      POSTGRES_DSN: ${POSTGRES_DSN:-}
+      # 登录鉴权：首次启动用此账号创建管理员，务必在正式环境通过环境变量覆盖默认口令。
+      AUTH_ENABLED: ${AUTH_ENABLED:-true}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      AUTH_TOKEN_TTL_HOURS: "8"
+      AUTH_INIT_ADMIN_USER: ${AUTH_INIT_ADMIN_USER:-admin}
+      AUTH_INIT_ADMIN_PASSWORD: ${AUTH_INIT_ADMIN_PASSWORD:-admin12345}
+      # 演示账号 username:password:role，逗号分隔；已存在的账号不会被覆盖。正式环境置空。
+      AUTH_DEMO_USERS: ${AUTH_DEMO_USERS:-ops1:ops12345678:ops,viewer1:view12345678:viewer}
+      AUTH_ALLOWED_ORIGINS: ${AUTH_ALLOWED_ORIGINS:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./backend/data:/app/data
+      - ../topo/tprel/data:/data/tprel:ro
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+
+  frontend:
+    build:
+      context: ./frontend
+    image: aiops-platform/frontend:local
+    container_name: aiops-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: aiops-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aiops
+      POSTGRES_PASSWORD: aiops
+      POSTGRES_DB: aiops
+      TZ: Asia/Shanghai
+    ports:
+      - "55432:5432"
+    volumes:
+      - aiops-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiops -d aiops"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # 可选：Prometheus MCP（镜像内置 Dockerfile，暴露 8080，映射到本机 8090）
+  prometheus-mcp:
+    profiles: ["real-mcp"]
+    build:
+      context: ../../promthus-mcp
+      args:
+        # 国内网络走 goproxy.cn，避免 proxy.golang.org 超时
+        GOPROXY: https://goproxy.cn,direct
+    container_name: aiops-prometheus-mcp
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    environment:
+      PROMETHEUS_MCP_SERVER_MCP_TRANSPORT: http
+      PROMETHEUS_MCP_SERVER_WEB_LISTEN_ADDRESS: ":8080"
+      PROMETHEUS_MCP_SERVER_MCP_STATELESS: "true"
+      # 宿主机上的 Prometheus；也可换成内网地址
+      PROMETHEUS_MCP_SERVER_PROMETHEUS_URL: http://host.docker.internal:9090
+      PROMETHEUS_MCP_SERVER_PROMETHEUS_TIMEOUT: 1m
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 可选：Pinpoint MCP（Python FastMCP / streamable-http，监听 8888）
+  pinpoint-mcp:
+    profiles: ["real-mcp"]
+    image: python:3.12-slim
+    container_name: aiops-pinpoint-mcp
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements.txt && python server.py"
+    volumes:
+      - ../../pinpoint-mcp:/app
+    ports:
+      - "8888:8888"
+    environment:
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8888"
+      # 宿主机 Pinpoint Web 地址
+      WEB_BASE_URL: http://host.docker.internal:8080
+      TZ: Asia/Shanghai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  aiops-pg-data:

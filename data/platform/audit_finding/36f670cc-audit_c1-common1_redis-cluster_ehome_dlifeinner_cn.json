@@ -1,0 +1,15 @@
+{
+  "id": "36f670cc-audit_c1-common1_redis-cluster_ehome_dlifeinner_cn",
+  "runId": "36f670cc-940d-4978-a630-017f9294f43c",
+  "checkCode": "AUDIT_C1",
+  "objectType": "middleware",
+  "objectKey": "common1.redis-cluster.ehome.dlifeinner.cn",
+  "severity": "P3",
+  "verdict": "NO_DATA",
+  "detail": "CMDB 查询失败，无法对账",
+  "evidence": {
+    "error": "Post \"http://127.0.0.1:8061/mcp\": context deadline exceeded",
+    "middlewareType": "redis"
+  },
+  "createdAt": "2026-10-28T16:36:17.911987+08:00"
+}

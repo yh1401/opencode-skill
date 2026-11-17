@@ -1,0 +1,113 @@
+2026-06-24 10:16:57,126 - root - ERROR - 分析失败: 核心模块导入失败: No module named 'parser.log_parser'; 'parser' is not a package
+Traceback (most recent call last):
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/analyze_log.py", line 88, in main
+    handler = LogAnalysisHandler(config)
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/handler.py", line 44, in __init__
+    self._init_components()
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/handler.py", line 53, in _init_components
+    raise ImportError(f"核心模块导入失败: {_IMPORT_ERROR}")
+ImportError: 核心模块导入失败: No module named 'parser.log_parser'; 'parser' is not a package
+2026-06-24 10:18:24,491 - root - ERROR - 分析失败: 核心模块导入失败: No module named 'aiofiles'
+Traceback (most recent call last):
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/analyze_log.py", line 87, in main
+    handler = LogAnalysisHandler(config)
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/handler.py", line 42, in __init__
+    self._init_components()
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/handler.py", line 51, in _init_components
+    raise ImportError(f"核心模块导入失败: {_IMPORT_ERROR}")
+ImportError: 核心模块导入失败: No module named 'aiofiles'
+2026-06-24 10:18:33,490 - root - ERROR - 分析失败: 核心模块导入失败: No module named 'llm'
+Traceback (most recent call last):
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/analyze_log.py", line 87, in main
+    handler = LogAnalysisHandler(config)
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/handler.py", line 42, in __init__
+    self._init_components()
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/handler.py", line 51, in _init_components
+    raise ImportError(f"核心模块导入失败: {_IMPORT_ERROR}")
+ImportError: 核心模块导入失败: No module named 'llm'
+2026-06-24 10:19:47,125 - root - ERROR - 分析失败: 核心模块导入失败: No module named 'httpx'
+Traceback (most recent call last):
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/analyze_log.py", line 87, in main
+    handler = LogAnalysisHandler(config)
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/handler.py", line 42, in __init__
+    self._init_components()
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/handler.py", line 51, in _init_components
+    raise ImportError(f"核心模块导入失败: {_IMPORT_ERROR}")
+ImportError: 核心模块导入失败: No module named 'httpx'
+2026-06-24 10:19:56,124 - root - ERROR - 分析失败: 核心模块导入失败: No module named 'config'
+Traceback (most recent call last):
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/analyze_log.py", line 87, in main
+    handler = LogAnalysisHandler(config)
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/handler.py", line 42, in __init__
+    self._init_components()
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/handler.py", line 51, in _init_components
+    raise ImportError(f"核心模块导入失败: {_IMPORT_ERROR}")
+ImportError: 核心模块导入失败: No module named 'config'
+2026-06-24 10:20:29,796 - root - ERROR - 分析失败: 核心模块导入失败: No module named 'markdown'
+Traceback (most recent call last):
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/analyze_log.py", line 87, in main
+    handler = LogAnalysisHandler(config)
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/handler.py", line 42, in __init__
+    self._init_components()
+  File "/Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/log-analyzer/src/handler.py", line 51, in _init_components
+    raise ImportError(f"核心模块导入失败: {_IMPORT_ERROR}")
+ImportError: 核心模块导入失败: No module named 'markdown'
+2026-06-24 10:20:45,967 - report.rule_based_analyzer - INFO - [report.rule_based_analyzer] [logger.py:114] [RuleBasedAnalyzer] 初始化完成
+2026-06-24 10:20:45,967 - checkpoint.manager - INFO - CheckpointManager 初始化，目录: ./checkpoints
+2026-06-24 10:20:45,967 - processor.chunk_processor - INFO - ======================================== [ChunkProcessor] 初始化完成 ========================================
+2026-06-24 10:20:45,967 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Chunk Size: 1000000
+2026-06-24 10:20:45,967 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Checkpoint Enabled: True
+2026-06-24 10:20:45,967 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Parallel Workers: 4
+2026-06-24 10:20:45,967 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Parallel Processing: True
+2026-06-24 10:20:45,967 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Merge Threshold: 5
+2026-06-24 10:20:45,967 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Use LLM: False
+2026-06-24 10:20:45,967 - processor.chunk_processor - WARNING - [processor.chunk_processor] [logger.py:114]   ⚠️  警告: 使用规则模式，不调用LLM
+2026-06-24 10:20:45,967 - handler - INFO - 开始分析日志文件: /Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/test-file/logfile/error/error.2026-05-26.49-5kline.txt
+2026-06-24 10:20:45,968 - processor.chunk_processor - INFO - ======================================== [Process File] 开始处理文件 ========================================
+2026-06-24 10:20:45,968 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   File Path: /Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/test-file/logfile/error/error.2026-05-26.49-5kline.txt
+2026-06-24 10:20:45,968 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Resume: True, Force Restart: False
+2026-06-24 10:20:45,970 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [Process File] File Hash: b484cae2c3def3480933f9ffde6a0ced
+2026-06-24 10:20:45,970 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [File Stats] 开始统计文件行数: /Users/a666/Documents/trae_projects/opencode_skill/.trae/skills/test-file/logfile/error/error.2026-05-26.49-5kline.txt
+2026-06-24 10:20:45,982 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [File Stats] 文件行数统计完成: 5,038 行 (耗时: 0.01s)
+2026-06-24 10:20:45,982 - processor.chunk_processor - INFO - ======================================== 统计信息 ========================================
+2026-06-24 10:20:45,982 - processor.chunk_processor - INFO -   Total Lines: 5038
+2026-06-24 10:20:45,982 - processor.chunk_processor - INFO -   Chunk Size: 1000000
+2026-06-24 10:20:45,982 - processor.chunk_processor - INFO -   Total Chunks: 1
+2026-06-24 10:20:45,982 - processor.chunk_processor - INFO - ================================================================================
+2026-06-24 10:20:45,982 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [Process File] 检查是否存在有效检查点...
+2026-06-24 10:20:45,982 - checkpoint.manager - WARNING - Checkpoint 不存在: 790e92107a8b4b9c46c8867e47fedf01
+2026-06-24 10:20:45,982 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [Process File] 检查点无效或文件已变更，将重新处理
+2026-06-24 10:20:45,982 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [Process File] 创建新检查点
+2026-06-24 10:20:45,984 - checkpoint.manager - INFO - Checkpoint 保存成功: 790e92107a8b4b9c46c8867e47fedf01
+2026-06-24 10:20:45,984 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [Process File] 开始流式解析文件...
+2026-06-24 10:20:45,997 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [Process File] 文件解析完成，共 1 个块 (耗时: 0.01s)
+2026-06-24 10:20:45,997 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [Process File] 使用规则模式处理 1 个分块
+2026-06-24 10:20:45,998 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [Processor] 使用规则模式处理 Chunk #0
+2026-06-24 10:20:45,998 - report.rule_based_analyzer - INFO - [report.rule_based_analyzer] [logger.py:114] [RuleBasedAnalyzer] 初始化完成
+2026-06-24 10:20:45,998 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [Processor] 规则分析器初始化完成
+2026-06-24 10:20:45,998 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Error Entries: 162
+2026-06-24 10:20:45,998 - report.rule_based_analyzer - INFO - [report.rule_based_analyzer] [logger.py:114] [RuleBasedAnalyzer] 开始分析 Chunk #0, 条目数: 162
+2026-06-24 10:20:45,998 - report.rule_based_analyzer - INFO - [report.rule_based_analyzer] [logger.py:114] [RuleBasedAnalyzer] 错误条目数: 162
+2026-06-24 10:20:46,004 - report.rule_based_analyzer - INFO - [report.rule_based_analyzer] [logger.py:114] [RuleBasedAnalyzer] 分析完成, 识别出 2 种错误类型
+2026-06-24 10:20:46,004 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [Processor] Chunk #0 规则分析完成
+2026-06-24 10:20:46,004 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Summary: 共发现 162 条错误记录，涉及 2 种错误类型。 最频繁的错误是 BaseBackRuntimeException，出现 141 次。...
+2026-06-24 10:20:46,005 - checkpoint.manager - INFO - Checkpoint 保存成功: 790e92107a8b4b9c46c8867e47fedf01
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [Checkpoint] 批量更新完成
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [Process File] 所有块处理完成
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114] [Process File] 标记检查点为完成
+2026-06-24 10:20:46,005 - checkpoint.manager - INFO - Checkpoint 保存成功: 790e92107a8b4b9c46c8867e47fedf01
+2026-06-24 10:20:46,005 - checkpoint.manager - INFO - [Checkpoint] 标记完成: 790e92107a8b4b9c46c8867e47fedf01
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - ======================================== [Process File] 文件处理完成! ========================================
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Status: completed
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Total Lines: 5,038
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Processed Lines: 5,038
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Total Chunks: 1
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Completed Chunks: 1
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Total Errors Found: 162
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]   Performance Metrics:
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]     - Total Time: 0.04s
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]     - Parse Time: 0.01s
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]     - Parsing Time: 0.01s
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]     - LLM Time: 0.01s
+2026-06-24 10:20:46,005 - processor.chunk_processor - INFO - [processor.chunk_processor] [logger.py:114]     - Lines/Sec: 135099.44
+2026-06-24 10:20:46,006 - handler - INFO - 报告已保存: ./output/analysis_report_20260624_102046.md

@@ -1,0 +1,99 @@
+{
+  "_comment": "动态工具：按 rule/node 从 _arch.json 生成检查结果",
+  "rule": "dep_concentration",
+  "node": "云公司->贵州4c",
+  "env": "PRO",
+  "passed": false,
+  "violations": [
+    {
+      "rule": "dep_concentration",
+      "host": "vcp-pro.tidb.vcpinner.cn",
+      "type": "mysql",
+      "appCount": 18,
+      "apps": [
+        "ehome-pro-viidmg-server",
+        "ehome线上版本",
+        "sl-center-device-access",
+        "sl-center-device-control",
+        "sl-center-device-sync",
+        "sl-center-device-tree",
+        "vcp-cascade-manage",
+        "vcp-gather"
+      ],
+      "threshold": 10,
+      "risk": true
+    },
+    {
+      "rule": "dep_concentration",
+      "host": "ehome.mysql.ehomeinner.cn",
+      "type": "mysql",
+      "appCount": 13,
+      "apps": [
+        "cameraInfo",
+        "ehome-command",
+        "ehome-pro-device",
+        "ehome-prof-device",
+        "ehome-public",
+        "ehome线上版本",
+        "file",
+        "push-pro"
+      ],
+      "threshold": 10,
+      "risk": true
+    },
+    {
+      "rule": "dep_concentration",
+      "host": "public-push1.rocketmq.ehome.dlifeinner.cn",
+      "type": "rocketmq",
+      "appCount": 11,
+      "apps": [
+        "ehome-order",
+        "ehome-public",
+        "ehome-public-push",
+        "ehome-public-transmit",
+        "ehome-security",
+        "ehome线上版本",
+        "push-pro",
+        "push-sdk"
+      ],
+      "threshold": 10,
+      "risk": true
+    },
+    {
+      "rule": "dep_concentration",
+      "host": "public-push2.rocketmq.ehome.dlifeinner.cn",
+      "type": "rocketmq",
+      "appCount": 11,
+      "apps": [
+        "ehome-order",
+        "ehome-public",
+        "ehome-public-push",
+        "ehome-public-transmit",
+        "ehome-security",
+        "ehome线上版本",
+        "push-pro",
+        "push-sdk"
+      ],
+      "threshold": 10,
+      "risk": true
+    },
+    {
+      "rule": "dep_concentration",
+      "host": "public-push3.rocketmq.ehome.dlifeinner.cn",
+      "type": "rocketmq",
+      "appCount": 11,
+      "apps": [
+        "ehome-order",
+        "ehome-public",
+        "ehome-public-push",
+        "ehome-public-transmit",
+        "ehome-security",
+        "ehome线上版本",
+        "push-pro",
+        "push-sdk"
+      ],
+      "threshold": 10,
+      "risk": true
+    }
+  ]
+}

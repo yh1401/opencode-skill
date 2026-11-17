@@ -1,0 +1,138 @@
+{
+  "version": "1.0",
+  "lastUpdated": "2026-06-18",
+  "description": "技能代理参数映射配置",
+  "node_mapping": {
+    "贵州": "云公司->贵州",
+    "贵阳": "云公司->贵州",
+    "贵州机房": "云公司->贵州",
+    "北京": "云公司->北京",
+    "北京机房": "云公司->北京",
+    "上海": "省公司->上海",
+    "上海机房": "省公司->上海",
+    "广州": "云公司->广州",
+    "广州机房": "云公司->广州",
+    "朝阳": "云公司->朝阳1",
+    "朝阳机房": "云公司->朝阳1"
+  },
+  "state_mapping": {
+    "在线": "0",
+    "在用": "0",
+    "使用中": "0",
+    "库存": "1",
+    "空闲": "1",
+    "未用": "1",
+    "计划上线": "2",
+    "维修中": "3",
+    "维修": "3",
+    "已报废": "4",
+    "待分配": "5",
+    "待清退": "6"
+  },
+  "env_mapping": {
+    "测试": 1,
+    "测试环境": 1,
+    "灰度": 2,
+    "灰度环境": 2,
+    "生产": 3,
+    "生产环境": 3,
+    "研发": 4,
+    "研发环境": 4
+  },
+  "type_mapping": {
+    "物理机": "0",
+    "实体机": "0",
+    "虚拟机": "1",
+    "自有虚拟机": "1",
+    "第三方云机": "2",
+    "云机": "2",
+    "云服务器": "2"
+  },
+  "belong_mapping": {
+    "视联": 2,
+    "云网": 1
+  },
+  "xc_mapping": {
+    "信创": "1",
+    "XC": "1",
+    "国产化": "1",
+    "非信创": "0",
+    "非XC": "0",
+    "非国产": "0"
+  },
+  "count_rules": {
+    "single": ["一台", "一个"],
+    "few": ["几台", "一些", "几个"],
+    "all": ["所有", "全部"],
+    "latest": ["最新的", "最近的"],
+    "default_few": 15,
+    "default_all": 100,
+    "default_latest": 10
+  },
+  "routing_rules": {
+    "skill_priority": {
+      "server-public-ip-query": 1,
+      "project-deployment-query": 2,
+      "product-query": 3,
+      "project-basis-query": 4,
+      "cmdb-server-query": 5
+    },
+    "keywords": {
+      "cmdb-server-query": ["服务器", "主机", "机房", "IP", "配置", "硬件", "CPU", "内存"],
+      "server-public-ip-query": ["公网IP", "外网IP", "带宽", "出口IP", "网络类型", "公网IP列表"],
+      "project-deployment-query": ["部署", "部署记录", "部署状态", "部署历史", "部署版本", "部署时间", "发布", "上线"],
+      "product-query": ["产品", "产品信息", "产品名称", "产品ID", "产品列表", "产品线"],
+      "project-basis-query": ["项目", "工程项目", "项目基础信息", "SVN", "GIT", "项目代码", "项目路径"]
+    },
+    "core_intent_keywords": {
+      "cmdb-server-query": ["服务器", "主机"],
+      "server-public-ip-query": ["公网IP", "外网IP", "出口IP"],
+      "project-deployment-query": ["部署", "发布", "上线"],
+      "product-query": ["产品"],
+      "project-basis-query": ["项目", "SVN", "GIT"]
+    },
+    "modifier_keywords": {
+      "product": ["产品", "产品线"],
+      "project": ["项目"],
+      "server": ["服务器", "主机"]
+    },
+    "exclusive_keywords": {
+      "cmdb-server-query": ["公网IP", "外网", "带宽", "部署", "发布", "上线", "SVN", "GIT"],
+      "server-public-ip-query": [],
+      "project-deployment-query": [],
+      "product-query": ["部署", "发布", "上线", "SVN", "GIT"],
+      "project-basis-query": ["部署", "发布", "上线"]
+    },
+    "exclusive_skills": {
+      "cmdb-server-query": ["server-public-ip-query", "project-deployment-query", "project-basis-query"],
+      "server-public-ip-query": [],
+      "project-deployment-query": [],
+      "product-query": ["project-deployment-query", "project-basis-query"],
+      "project-basis-query": ["project-deployment-query"]
+    },
+    "intent_conflict_rules": {
+      "产品的服务器": "cmdb-server-query",
+      "项目的服务器": "cmdb-server-query",
+      "服务器的公网IP": "server-public-ip-query",
+      "服务器的部署": "project-deployment-query",
+      "产品的部署": "project-deployment-query",
+      "项目的部署": "project-deployment-query",
+      "项目的代码": "project-basis-query",
+      "产品的项目": "project-basis-query"
+    }
+  },
+  "skill_names": {
+    "cmdb-server-query": "CMDB服务器查询",
+    "server-public-ip-query": "服务器公网IP查询",
+    "project-deployment-query": "项目部署查询",
+    "product-query": "产品查询",
+    "project-basis-query": "项目基础信息查询"
+  },
+  "api_endpoints": {
+    "cmdb-server-query": "https://oss.tech.ctseelink.cn/api/v2/cmdbServer/getCmdbServerPageList",
+    "project-deployment-query": "https://oss.tech.ctseelink.cn/a/cmdb/baseProject/",
+    "server-public-ip-query": "https://oss.tech.ctseelink.cn/api/v2/cmdbServer/getCmdbServerPageList",
+    "product-query": "https://oss.tech.ctseelink.cn/api/v2/product/getProductList",
+    "project-basis-query": "https://oss.tech.ctseelink.cn/api/v2/projectBasis/getProjectBasisList"
+  }
+}

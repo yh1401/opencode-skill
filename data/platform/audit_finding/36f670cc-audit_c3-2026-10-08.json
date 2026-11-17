@@ -1,0 +1,11 @@
+{
+  "id": "36f670cc-audit_c3-2026-10-08",
+  "runId": "36f670cc-940d-4978-a630-017f9294f43c",
+  "checkCode": "AUDIT_C3",
+  "objectType": "snapshot",
+  "objectKey": "2026-10-08",
+  "severity": "P3",
+  "verdict": "NO_DATA",
+  "detail": "CMDB 在线服务器抽样失败: Post \"http://127.0.0.1:8061/mcp\": context deadline exceeded",
+  "createdAt": "2026-10-28T16:36:33.91557+08:00"
+}

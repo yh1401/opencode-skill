@@ -1,0 +1,52 @@
+[
+  {
+    "name": "list_indices",
+    "description": "List all available Elasticsearch indices",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "index_pattern": { "type": "string", "description": "Index pattern of Elasticsearch indices to list" }
+      },
+      "required": ["index_pattern"]
+    }
+  },
+  {
+    "name": "search",
+    "description": "Perform an Elasticsearch search with the provided query DSL.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "index": { "type": "string" },
+        "fields": { "type": "array", "items": { "type": "string" } },
+        "query_body": { "type": "object" }
+      },
+      "required": ["index", "query_body"]
+    }
+  },
+  {
+    "name": "esql",
+    "description": "Perform an Elasticsearch ES|QL query.",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "query": { "type": "string" } },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "get_mappings",
+    "description": "Get field mappings for a specific Elasticsearch index",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "index": { "type": "string" } },
+      "required": ["index"]
+    }
+  },
+  {
+    "name": "get_shards",
+    "description": "Get shard information",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "index": { "type": "string" } }
+    }
+  }
+]

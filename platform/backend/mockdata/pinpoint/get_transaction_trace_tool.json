@@ -1,0 +1,21 @@
+{
+  "_comment": "动态工具：mock server 按 trace_id 哈希生成调用栈，本文件为形态示例",
+  "traceId": "mock-trace-0001",
+  "startTime": 1793353030000,
+  "elapsed": 238,
+  "callStack": [
+    {
+      "spanId": 0,
+      "parentId": -1,
+      "application": "IMS通话服务",
+      "serviceType": 1200,
+      "rpc": "GET /api/v1/orders",
+      "destination": "tomcat-01",
+      "agentId": "agent-1",
+      "begin": 0,
+      "end": 238,
+      "executionMilliseconds": 238,
+      "exception": 0
+    }
+  ]
+}

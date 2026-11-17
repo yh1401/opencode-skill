@@ -1,0 +1,88 @@
+{
+  "analysis_time": "2026-06-24T22:10:06.459117",
+  "file_path": "/var/folders/bv/_j9rt21x1pn36v4cql6w28kc0000gq/T/tmp3aebb0ab.log",
+  "file_size": 528990,
+  "file_size_formatted": "516.59 KB",
+  "total_lines_processed": 10000,
+  "parsed_records": 10000,
+  "format_distribution": {
+    "java_app": 10000
+  },
+  "parse_rate": 31560.66,
+  "stats": {
+    "summary": {
+      "INFO": 9900,
+      "ERROR": 100
+    },
+    "total_lines": 10000,
+    "error_lines": 100,
+    "error_rate": 1.0,
+    "by_module": {},
+    "by_hour": {
+      "2026-06-14 10:00": 10000
+    },
+    "top_errors": [
+      {
+        "message": "Message {num}",
+        "count": 100,
+        "severity": "ERROR"
+      }
+    ],
+    "time_range": {
+      "first": "2026-06-14 10:00:00.000",
+      "last": "2026-06-14 10:59:59.599"
+    },
+    "error_types": {},
+    "exceptions": {},
+    "http_status": {},
+    "http_errors": {}
+  },
+  "trend": {
+    "trend_type": "stable",
+    "description": "日志量保持稳定，无明显波动",
+    "peak_hours": [
+      "2026-06-14 10:00"
+    ],
+    "low_hours": [
+      "2026-06-14 10:00"
+    ],
+    "avg_count": 10000.0,
+    "max_count": 10000,
+    "min_count": 10000
+  },
+  "severity": {
+    "critical": 0,
+    "high": 100,
+    "medium": 0,
+    "low": 9900,
+    "ratios": {
+      "critical": 0.0,
+      "high": 1.0,
+      "medium": 0.0,
+      "low": 99.0
+    },
+    "health_score": 95
+  },
+  "root_cause": {
+    "analysis_version": "1.0",
+    "total_errors_analyzed": 100,
+    "patterns_matched": 0,
+    "findings": {
+      "critical": [],
+      "high": [],
+      "medium": [],
+      "low": []
+    },
+    "recommendations": [],
+    "summary": {
+      "overall_severity": "healthy",
+      "critical_issues": 0,
+      "high_issues": 0,
+      "medium_issues": 0,
+      "low_issues": 0,
+      "description": "未检测到明显的错误模式，系统运行正常"
+    }
+  },
+  "elapsed_time": 0.32,
+  "elapsed_time_formatted": "316 ms"
+}

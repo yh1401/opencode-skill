@@ -1,0 +1,14 @@
+{
+  "id": "task-default-topo",
+  "name": "全量拓扑巡检（默认）",
+  "scene": "topo",
+  "scope": {
+    "appIds": null,
+    "mwTypes": null,
+    "env": "PRO"
+  },
+  "ruleSetVersion": "topo-t1-t6@v1",
+  "cron": "",
+  "enabled": true,
+  "createdAt": "2026-10-28T16:35:06.486606+08:00"
+}

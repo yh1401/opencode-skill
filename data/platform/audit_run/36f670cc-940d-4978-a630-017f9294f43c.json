@@ -1,0 +1,21 @@
+{
+  "id": "36f670cc-940d-4978-a630-017f9294f43c",
+  "date": "2026-10-08",
+  "env": "PRO",
+  "status": "succeeded",
+  "stats": {
+    "items": 9,
+    "risk": 0,
+    "notTriggered": 0,
+    "noData": 9,
+    "notApplicable": 0
+  },
+  "message": "稽核完成：对账 8 个中间件主机，发现 0 项风险",
+  "sources": [
+    "topo",
+    "cmdb",
+    "prometheus"
+  ],
+  "startedAt": "2026-10-28T16:35:21.897341+08:00",
+  "finishedAt": "2026-10-28T16:36:33.920869+08:00"
+}

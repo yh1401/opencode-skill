@@ -1,0 +1,67 @@
+{
+  "version": "2.0",
+  "lastUpdated": "2026-06-18",
+  "description": "技能元数据注册中心",
+  "skills": [
+    {
+      "id": "cmdb-server-query",
+      "name": "CMDB服务器查询",
+      "description": "查询CMDB服务器信息，支持按机房、状态、类型等多条件组合查询",
+      "enabled": true,
+      "path": "skills/cmdb-server-query/SKILL.md",
+      "keywords": ["服务器", "主机", "机房", "IP", "配置", "硬件", "CPU", "内存"],
+      "version": "2.0.0",
+      "priority": 5,
+      "exclusive_keywords": ["公网IP", "外网", "带宽", "部署", "发布", "上线", "SVN", "GIT"],
+      "exclusive_skills": ["server-public-ip-query", "project-deployment-query", "project-basis-query"]
+    },
+    {
+      "id": "project-deployment-query",
+      "name": "项目部署查询",
+      "description": "查询项目部署信息、部署状态、部署环境等，支持结果分析和Excel导出",
+      "enabled": true,
+      "path": "skills/project-deployment-query/SKILL.md",
+      "keywords": ["部署", "部署记录", "部署状态", "部署环境", "部署历史", "部署版本", "部署时间", "发布", "上线"],
+      "version": "2.0.0",
+      "priority": 2,
+      "exclusive_keywords": [],
+      "exclusive_skills": []
+    },
+    {
+      "id": "server-public-ip-query",
+      "name": "服务器公网IP查询",
+      "description": "查询服务器公网IP信息，包括公网IP、内网IP、带宽等",
+      "enabled": true,
+      "path": "skills/server-public-ip-query/SKILL.md",
+      "keywords": ["公网IP", "外网IP", "出口IP", "服务器带宽", "网络类型", "公网IP列表"],
+      "version": "2.0.0",
+      "priority": 1,
+      "exclusive_keywords": [],
+      "exclusive_skills": []
+    },
+    {
+      "id": "product-query",
+      "name": "产品查询",
+      "description": "查询产品信息，包括产品名称、ID、启用状态等",
+      "enabled": true,
+      "path": "skills/product-query/SKILL.md",
+      "keywords": ["产品", "产品信息", "产品名称", "产品ID", "产品列表", "产品线"],
+      "version": "2.0.0",
+      "priority": 3,
+      "exclusive_keywords": ["部署", "发布", "上线", "SVN", "GIT"],
+      "exclusive_skills": ["project-deployment-query", "project-basis-query"]
+    },
+    {
+      "id": "project-basis-query",
+      "name": "工程项目查询",
+      "description": "查询工程项目信息，包括项目名称、所属产品、SVN/GIT路径等",
+      "enabled": true,
+      "path": "skills/project-basis-query/SKILL.md",
+      "keywords": ["项目", "工程项目", "项目基础信息", "SVN", "GIT", "项目代码", "项目路径"],
+      "version": "2.0.0",
+      "priority": 4,
+      "exclusive_keywords": ["部署", "发布", "上线"],
+      "exclusive_skills": ["project-deployment-query"]
+    }
+  ]
+}

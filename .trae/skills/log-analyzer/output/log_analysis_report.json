@@ -1,0 +1,187 @@
+{
+  "analysis_time": "2026-06-29T11:39:32.158654",
+  "file_path": "test.log",
+  "file_size": 962,
+  "file_size_formatted": "962 B",
+  "total_lines_processed": 10,
+  "parsed_records": 10,
+  "format_distribution": {
+    "iso": 10
+  },
+  "parse_rate": 588.82,
+  "stats": {
+    "summary": {
+      "INFO": 4,
+      "ERROR": 4,
+      "WARN": 2
+    },
+    "total_lines": 10,
+    "error_lines": 4,
+    "error_rate": 40.0,
+    "by_module": {
+      "main": 3,
+      "pool-1-thread-1": 2,
+      "pool-1-thread-3": 1
+    },
+    "by_hour": {
+      "2026-06-29 10:00": 10
+    },
+    "top_errors": [
+      {
+        "message": "com.example.Database - SQLException: Connection refused",
+        "count": 1,
+        "severity": "ERROR"
+      },
+      {
+        "message": "com.example.Database - NullPointerException at com.example.Service.process(Service.java:{num})",
+        "count": 1,
+        "severity": "ERROR"
+      },
+      {
+        "message": "com.example.Network - SocketTimeoutException: Read timed out",
+        "count": 1,
+        "severity": "ERROR"
+      },
+      {
+        "message": "com.example.Security - Authentication failed for user admin",
+        "count": 1,
+        "severity": "ERROR"
+      }
+    ],
+    "time_range": {
+      "first": "2026-06-29 10:00:01.234",
+      "last": "2026-06-29 10:00:10.123"
+    },
+    "error_types": {
+      "SQLException": 1,
+      "SocketTimeoutException": 1
+    },
+    "exceptions": {},
+    "http_status": {},
+    "http_errors": {}
+  },
+  "trend": {
+    "trend_type": "stable",
+    "description": "日志量保持稳定，无明显波动",
+    "peak_hours": [
+      "2026-06-29 10:00"
+    ],
+    "low_hours": [
+      "2026-06-29 10:00"
+    ],
+    "avg_count": 10.0,
+    "max_count": 10,
+    "min_count": 10
+  },
+  "severity": {
+    "critical": 0,
+    "high": 4,
+    "medium": 2,
+    "low": 4,
+    "ratios": {
+      "critical": 0.0,
+      "high": 40.0,
+      "medium": 20.0,
+      "low": 40.0
+    },
+    "health_score": 0
+  },
+  "root_cause": {
+    "analysis_version": "1.0",
+    "total_errors_analyzed": 4,
+    "patterns_matched": 2,
+    "findings": {
+      "critical": [
+        {
+          "id": "db_connection_failed",
+          "name": "数据库连接失败",
+          "severity": "critical",
+          "patterns": [
+            "Connection refused.*database|DB.*connection.*failed",
+            "Cannot.*connect.*to.*database",
+            "DatabaseConnectionException|SQLException.*connection",
+            "MySQLNonTransientConnectionException",
+            "PostgreSQL.*connection.*timeout",
+            "OracleConnectionException"
+          ],
+          "cause": "数据库服务未启动、网络不通或连接池耗尽",
+          "remediation": [
+            "检查数据库服务是否正常运行",
+            "验证数据库连接配置（主机、端口、用户名、密码）",
+            "检查网络连通性（防火墙、安全组）",
+            "查看数据库连接池配置，考虑增加最大连接数",
+            "检查数据库磁盘空间是否充足"
+          ],
+          "impact": "所有依赖数据库的功能不可用",
+          "sample_message": "com.example.Database - SQLException: Connection refused",
+          "matched_regex": "DatabaseConnectionException|SQLException.*connection"
+        }
+      ],
+      "high": [
+        {
+          "id": "network_timeout",
+          "name": "网络超时",
+          "severity": "high",
+          "patterns": [
+            "SocketTimeoutException|ConnectTimeoutException",
+            "Connection.*timeout|Read.*timeout",
+            "Timed.*out.*while.*connecting",
+            "netty.*timeout",
+            "HTTP.*timeout"
+          ],
+          "cause": "网络延迟过高、目标服务响应慢或不可达",
+          "remediation": [
+            "检查网络链路状态和延迟",
+            "增加超时时间配置",
+            "检查目标服务是否正常响应",
+            "考虑引入重试和熔断机制",
+            "查看DNS解析是否正常"
+          ],
+          "impact": "部分请求失败，用户体验下降",
+          "sample_message": "com.example.Network - SocketTimeoutException: Read timed out",
+          "matched_regex": "SocketTimeoutException|ConnectTimeoutException"
+        }
+      ],
+      "medium": [],
+      "low": []
+    },
+    "recommendations": [
+      {
+        "priority": "critical",
+        "issue": "数据库连接失败",
+        "cause": "数据库服务未启动、网络不通或连接池耗尽",
+        "actions": [
+          "检查数据库服务是否正常运行",
+          "验证数据库连接配置（主机、端口、用户名、密码）",
+          "检查网络连通性（防火墙、安全组）",
+          "查看数据库连接池配置，考虑增加最大连接数",
+          "检查数据库磁盘空间是否充足"
+        ],
+        "impact": "所有依赖数据库的功能不可用"
+      },
+      {
+        "priority": "high",
+        "issue": "网络超时",
+        "cause": "网络延迟过高、目标服务响应慢或不可达",
+        "actions": [
+          "检查网络链路状态和延迟",
+          "增加超时时间配置",
+          "检查目标服务是否正常响应",
+          "考虑引入重试和熔断机制",
+          "查看DNS解析是否正常"
+        ],
+        "impact": "部分请求失败，用户体验下降"
+      }
+    ],
+    "summary": {
+      "overall_severity": "critical",
+      "critical_issues": 1,
+      "high_issues": 1,
+      "medium_issues": 0,
+      "low_issues": 0,
+      "description": "检测到 1 个严重问题，需要立即处理"
+    }
+  },
+  "elapsed_time": 0.02,
+  "elapsed_time_formatted": "16 ms"
+}

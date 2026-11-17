@@ -1,0 +1,290 @@
+[
+  {
+    "name": "query",
+    "description": "对 Prometheus 数据源执行瞬时查询",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "range_query",
+    "description": "对 Prometheus 数据源执行范围查询",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "exemplar_query",
+    "description": "查询与指标样本关联的跟踪示例",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "series",
+    "description": "通过标签匹配查找序列",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "label_names",
+    "description": "返回时间范围内存在的唯一标签名称",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "label_values",
+    "description": "查询给定标签的值",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "metric_metadata",
+    "description": "返回指标的元数据",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "targets_metadata",
+    "description": "返回目标的元数据",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "alertmanagers",
+    "description": "获取 Alertmanager 发现概览",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "flags",
+    "description": "获取运行时标志",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "list_alerts",
+    "description": "列出所有活动告警",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "tsdb_stats",
+    "description": "获取 TSDB 使用情况和基数统计",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "build_info",
+    "description": "获取 Prometheus 构建信息",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "config",
+    "description": "获取 Prometheus 配置",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "runtime_info",
+    "description": "获取运行时信息",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "list_rules",
+    "description": "列出所有告警规则和记录规则",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "list_targets",
+    "description": "获取目标发现概览",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "wal_replay_status",
+    "description": "获取当前 WAL 重放状态",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "clean_tombstones",
+    "description": "从磁盘删除已删除的数据并清理墓碑（管理操作）",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "delete_series",
+    "description": "删除指定时间范围内的序列数据（管理操作）",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "snapshot",
+    "description": "创建当前所有数据的快照（管理操作）",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "healthy",
+    "description": "检查 Prometheus 健康状态",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "ready",
+    "description": "检查 Prometheus 是否就绪",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "reload",
+    "description": "触发配置和规则文件重新加载（管理操作）",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "quit",
+    "description": "触发 Prometheus 优雅关闭（管理操作）",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "docs_list",
+    "description": "列出官方 Prometheus 文档文件",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "docs_read",
+    "description": "读取指定的文档文件",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "docs_search",
+    "description": "搜索文档内容",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "list_stores",
+    "description": "列出所有存储 API 服务器",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "host_metrics_realtime",
+    "description": "获取指定节点或 IP 的实时主机性能指标（12 项）",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "host_metrics_trend",
+    "description": "获取指定节点或 IP 在时间范围内的主机性能趋势",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "get_module_topology",
+    "description": "获取指定节点的业务模块拓扑与应用归属",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "get_chain_topology",
+    "description": "获取指定节点与项目列表的应用调用链路拓扑",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "get_node_list",
+    "description": "获取节点列表及节点标识映射",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "get_virtual_structure",
+    "description": "获取节点虚拟化结构",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "get_project_topology",
+    "description": "获取节点内项目部署拓扑",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+]

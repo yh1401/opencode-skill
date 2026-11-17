@@ -1,0 +1,8 @@
+{
+  "status": "success",
+  "data": {
+    "file": "querying/basics.md",
+    "size": 42100,
+    "content": "# Querying basics\n\nPrometheus provides a functional query language called PromQL...\n\n## Instant vector selectors\n\n```\nup{instance=~\"10.214.*\"}\n```\n"
+  }
+}

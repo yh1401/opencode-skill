@@ -1,0 +1,13 @@
+{
+  "server": "cmdb",
+  "tool": "cmdb_server_query",
+  "args": {
+    "currentPage": 1,
+    "ip": "public-push2.rocketmq.ehome.dlifeinner.cn",
+    "pageSize": 5
+  },
+  "ok": false,
+  "error": "Post \"http://127.0.0.1:8061/mcp\": context deadline exceeded",
+  "latencyMs": 8001,
+  "at": "2026-10-28T16:35:53.906327+08:00"
+}

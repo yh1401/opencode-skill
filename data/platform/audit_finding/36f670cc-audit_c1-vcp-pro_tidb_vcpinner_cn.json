@@ -1,0 +1,15 @@
+{
+  "id": "36f670cc-audit_c1-vcp-pro_tidb_vcpinner_cn",
+  "runId": "36f670cc-940d-4978-a630-017f9294f43c",
+  "checkCode": "AUDIT_C1",
+  "objectType": "middleware",
+  "objectKey": "vcp-pro.tidb.vcpinner.cn",
+  "severity": "P3",
+  "verdict": "NO_DATA",
+  "detail": "CMDB 查询失败，无法对账",
+  "evidence": {
+    "error": "Post \"http://127.0.0.1:8061/mcp\": context deadline exceeded",
+    "middlewareType": "mysql"
+  },
+  "createdAt": "2026-10-28T16:35:29.901703+08:00"
+}

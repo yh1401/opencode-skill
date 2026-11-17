@@ -1,0 +1,79 @@
+{
+  "analysis_time": "2026-06-25T10:22:15.449633",
+  "file_path": "/tmp/test.csv",
+  "file_size": 368,
+  "file_size_formatted": "368 B",
+  "total_lines_processed": 5,
+  "parsed_records": 5,
+  "format_distribution": {
+    "csv": 5
+  },
+  "parse_rate": 391.54,
+  "stats": {
+    "summary": {
+      "INFO": 2,
+      "DEBUG": 1,
+      "ERROR": 1,
+      "WARN": 1
+    },
+    "total_lines": 5,
+    "error_lines": 1,
+    "error_rate": 20.0,
+    "by_module": {
+      "service": 1,
+      "database": 1
+    },
+    "by_hour": {},
+    "top_errors": [
+      {
+        "message": "NullPointerException: Cannot invoke method on null object",
+        "count": 1,
+        "severity": "ERROR"
+      }
+    ],
+    "time_range": {},
+    "error_types": {},
+    "exceptions": {},
+    "http_status": {},
+    "http_errors": {}
+  },
+  "trend": {
+    "trend_type": "unknown",
+    "description": "No time data available"
+  },
+  "severity": {
+    "critical": 0,
+    "high": 1,
+    "medium": 1,
+    "low": 3,
+    "ratios": {
+      "critical": 0.0,
+      "high": 20.0,
+      "medium": 20.0,
+      "low": 60.0
+    },
+    "health_score": 0
+  },
+  "root_cause": {
+    "analysis_version": "1.0",
+    "total_errors_analyzed": 1,
+    "patterns_matched": 0,
+    "findings": {
+      "critical": [],
+      "high": [],
+      "medium": [],
+      "low": []
+    },
+    "recommendations": [],
+    "summary": {
+      "overall_severity": "healthy",
+      "critical_issues": 0,
+      "high_issues": 0,
+      "medium_issues": 0,
+      "low_issues": 0,
+      "description": "未检测到明显的错误模式，系统运行正常"
+    }
+  },
+  "elapsed_time": 0.01,
+  "elapsed_time_formatted": "12 ms"
+}

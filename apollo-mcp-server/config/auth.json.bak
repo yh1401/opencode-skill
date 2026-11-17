@@ -1,0 +1,5 @@
+{
+  "openapi_token": "",
+  "description": "Apollo OpenAPI Token 配置。获取方式：登录 Apollo Portal -> 管理员工具 -> 开放平台授权",
+  "note": "ConfigService (8080端口) 无需 Token，OpenAPI (8070端口) 需要在此配置 Token"
+}
