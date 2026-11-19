@@ -505,6 +505,8 @@ author: Skill Agent Team
 | onlineDate | string | 上线时间 |
 | assetNo / serial / rack | string/null | 资产编号/序列号/机架位置 |
 
+> **规格字段说明**：`specification`（规格，如 `8C32GSAS(600G)`）因取值与实际磁盘信息不一致，已停止返回。用户询问"规格/配置"时，用 `cpuCores` + `memory` + `hardDisk` 组合回答，不要编造或引用历史值。
+
 ## 状态码映射
 
 | 状态码 | 中文 | 含义 |
