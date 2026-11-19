@@ -310,7 +310,7 @@ author: Skill Agent Team
 | GPU(卡数) | `gpus`(int，可空) | 逐台求和，null 计 0 |
 | 操作系统(套) | `os`(string) | 每台 1 套 → 按 os 版本分组输出 |
 | 内存 | `memory`(int,GB) | 求和 → 输出"共 X GB" |
-| 磁盘 | `hardDisk`/`specification` | 字符串不规整，先看是否可解析，不可靠则如实说明未统计 |
+| 磁盘 | `hardDisk` | 字符串不规整，不可靠则如实说明未统计 |
 | 数据库(套) | **记录无实例字段** | 仅 `usingBy`(如 "haproxy,mysql") 可做**承载台数近似**（mysql/oracle/redis/…），并注明"近似口径，非实例数"；实例级需另行数据源 |
 | 产品归属 | `productProjectList[].productName` | 需要按产品分组时使用（多归属可能重复） |
 
@@ -425,7 +425,6 @@ author: Skill Agent Team
         "osType": "linux",
         "os": "CentOS Linux 7.3.1611 Core",
         "environment": "生产",
-        "specification": "8C32GSAS(600G)",
         "cpuCores": 8,
         "memory": 32,
         "serverId": "ecs-72e0-1226340",
@@ -499,7 +498,6 @@ author: Skill Agent Team
 | memory | int | 内存大小（GB） |
 | gpus | int/null | GPU 卡数（盘点 GPU 用，null 计 0） |
 | usingBy | string | 承载用途（如 "haproxy,mysql"——数据库近似统计唯一线索） |
-| specification | string | 规格（如 "8C32GSAS(600G)"） |
 | hardDisk | string/null | 磁盘（字符串描述，盘点磁盘不可靠） |
 | productRate | string | 产品占比，如 `"天翼看家:100"`，多产品 `"A:50,B:50"` |
 | productProjectList | array | **产品归属列表**：`productId/productName` + `projectBasisList[]`（工程）内含 `projectList[]`（项目） |
